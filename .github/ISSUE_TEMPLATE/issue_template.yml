@@ -1,0 +1,69 @@
+name: "Report a bug."
+description: "Report a bug, crash, or undesired behaviour."
+labels: ["fix"]
+projects: ["BredaUniversityGames/50"]
+body:
+  - type: input
+    id: engine-version
+    attributes:
+      label: "Version/Branch of the Kudzu Engine:"
+      description: "(please specify if you have made substantial modifications to your copy)"
+      value: "Version X.XX, Branch: XXX (main/etc.)"
+      placeholder: "Version X.XX, Branch: XXX (main/etc.)"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: "Platform:"
+      placeholder: "e.g. Windows, PS5, etc."
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: "Hardware:"
+      placeholder: "(if relevant) e.g. AMD, NVIDIA, etc."
+    validations:
+      required: false
+  - type: textarea
+    id: description
+    attributes:
+      label: "Details:"
+      description: "Explain the bug, and what you've already tried to solve the bug."
+      value: |
+        **My Issue:**
+
+        XXX _(please provide as much context as possible)_
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Expected Behaviour:"
+      description: "Explain what the expected behaviour is."
+      value: |
+        **Expected:**
+
+        XXX _(please be as clear as possible)_
+    validations:
+      required: false
+  - type: textarea
+    id: visuals
+    attributes:
+      label: "Screenshots/Video:"
+      description: "Attach screenshots or gif/videos to clarify the context. They often convey useful information that is omitted by the description."
+      placeholder: "(You can drag files here)"
+    validations:
+      required: false
+  - type: textarea
+    id: repro-code
+    attributes:
+      label: "Reproduction steps:"
+      description: "Write down in steps *(with code snippets if relevant)* how to reproduce the bug/crash."
+      value: |
+        1. Step 1
+        2. Step 2
+        3. Step 3
+    validations:
+      required: false
