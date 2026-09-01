@@ -2,4 +2,4 @@ blank_issues_enabled: true
 
 template:
   - task.md
-  - user_story.md
+  - bug.md
