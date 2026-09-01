@@ -1,8 +1,10 @@
 ---
 name: Task
-about: A task for a user story
+about: Task template
 title: "[FEATURE NAME]"
-label: feature
+labels: ''
+assignees: ''
+
 ---
 
 ## Description
