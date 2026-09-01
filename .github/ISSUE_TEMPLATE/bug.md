@@ -1,25 +1,22 @@
 ---
-name: User story
-about: A user story
-title: "[FEATURE TEAM] - [FEATURE NAME]"
-label: user-story
+name: Bug
+about: Bug report template
+title: "[BUG]"
+labels: ''
+assignees: ''
+type: Bug
+
 ---
 
-## User Story
+## Bug
 
-As a ___, I want to ___, so that I can ___.
+*Describe the issue*
 
-## Description
+## Reproduction Steps
 
-*Write a description*
+- Do this first
+- Then do this
 
-### Acceptance Criteria / Sub-Issues
+## Proposed Solution
 
-- [ ] Criteria 1
-- [ ] Criteria 2
-- [ ] Criteria 3
-
-## Notes / Dependencies
-
-*Add any additional context or notes here. Include links to relevant documents or resources.*
-Depends on: #_.
+*How to fix the bug (probably)*
