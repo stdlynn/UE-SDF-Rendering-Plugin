@@ -1,0 +1,22 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "{36E9263F-43A9-6F68-CDEC-DA9C3A90290F}",
+	"Category": "",
+	"Description": "",
+	"Modules": [
+		{
+			"Name": "SDF_Renderer",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "ModelingToolsEditorMode",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		}
+	]
+}
