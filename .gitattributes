@@ -2,4 +2,4 @@
 * text=auto
 
 # Example folder using LFS
-Content/FPWeapon/** filter=lfs diff=lfs merge=lfs -text
+Content/** filter=lfs diff=lfs merge=lfs -text
