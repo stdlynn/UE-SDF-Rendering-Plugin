@@ -10,7 +10,7 @@
 void UTemplateSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	CustomSceneViewExtension = FSceneViewExtensions::NewExtension<FCustomSceneViewExtension>();
-	UE_LOG(LogTemp, Log, TEXT("SceneViewExtensionTemplate: Subsystem initialized & SceneViewExtension created"));
+	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Subsystem initialized & SceneViewExtension created"));
 }
 
 void UTemplateSubsystem::Deinitialize()

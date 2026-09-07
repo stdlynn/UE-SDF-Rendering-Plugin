@@ -34,7 +34,7 @@ public:
 
 
 // Custom Post Process Shader
-class SDF_PLUGIN_API FCustomShader : public FGlobalShader
+class SDFPLUGIN_API FCustomShader : public FGlobalShader
 {
 public:
 	DECLARE_GLOBAL_SHADER(FCustomShader)

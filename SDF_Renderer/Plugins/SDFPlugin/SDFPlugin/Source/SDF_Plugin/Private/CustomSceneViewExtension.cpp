@@ -5,12 +5,12 @@
 
 #include "CustomSceneViewExtension.h"
 
-IMPLEMENT_GLOBAL_SHADER(FCustomShader, "/Plugins/SDF_Plugin/PostProcessCS.usf", "MainCS", SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FCustomShader, "/Plugins/SDFPlugin/PostProcessCS.usf", "MainCS", SF_Compute);
 
 namespace
 {
 	TAutoConsoleVariable<int32> CVarShaderOn(
-		TEXT("r.SDF_Plugin"),
+		TEXT("r.SDFPlugin"),
 		1,
 		TEXT("Enable SDF Plugin \n")
 		TEXT(" 0: OFF;")
@@ -20,7 +20,7 @@ namespace
 
 FCustomSceneViewExtension::FCustomSceneViewExtension(const FAutoRegister& AutoRegister) : FSceneViewExtensionBase(AutoRegister)
 {
-	UE_LOG(LogTemp, Log, TEXT("SDF_Plugin: Custom SceneViewExtension registered"));
+	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Custom SceneViewExtension registered"));
 }
 
 void FCustomSceneViewExtension::SubscribeToPostProcessingPass(EPostProcessingPass PassId, const FSceneView& View, FAfterPassCallbackDelegateArray& InOutPassCallbacks, bool bIsPassEnabled)

@@ -9,7 +9,7 @@
     "Modules": [
 
         {
-            "Name": "SDF_Plugin",
+            "Name": "SDFPlugin",
             "Type": "Runtime",
             "LoadingPhase": "PostConfigInit",
             "WhitelistPlatforms": ["Win64"]

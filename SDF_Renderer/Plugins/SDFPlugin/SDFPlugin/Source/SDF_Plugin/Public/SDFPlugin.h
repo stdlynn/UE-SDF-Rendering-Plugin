@@ -10,7 +10,7 @@
 #include "Modules/ModuleInterface.h"
 #include "Interfaces/IPluginManager.h"
 
-class FSceneViewExtensionTemplate : public IModuleInterface
+class FSDFPlugin : public IModuleInterface
 {
 public:
 

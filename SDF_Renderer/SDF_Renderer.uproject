@@ -19,7 +19,7 @@
 			]
 		},
 		{
-			"Name": "SDF_Plugin",
+			"Name": "SDFPlugin",
 			"Enabled": true
 		}
 	]

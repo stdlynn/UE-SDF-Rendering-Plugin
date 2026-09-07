@@ -4,9 +4,9 @@
 using UnrealBuildTool;
 using System.IO;
 
-public class SDF_Plugin : ModuleRules
+public class SDFPlugin : ModuleRules
 {
-    public SDF_Plugin(ReadOnlyTargetRules Target) : base(Target)
+    public SDFPlugin(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
