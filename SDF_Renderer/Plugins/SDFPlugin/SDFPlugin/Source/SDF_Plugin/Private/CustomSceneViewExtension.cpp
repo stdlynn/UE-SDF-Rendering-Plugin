@@ -77,6 +77,8 @@ FScreenPassTexture FCustomSceneViewExtension::CustomPostProcessing(FRDGBuilder& 
 		// Use ScreenPassTextureViewportParameters so we don't need to calculate these ourselves
 		PassParameters->SceneColorViewport = GetScreenPassTextureViewportParameters(SceneColorViewport);
 
+		PassParameters->View = SceneView.ViewUniformBuffer;
+
 		FIntPoint PassViewSize = SceneColor.ViewRect.Size();
 		
 		// Create UAV from Target Texture
