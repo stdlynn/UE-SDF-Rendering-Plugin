@@ -11,13 +11,12 @@ namespace
 {
 	TAutoConsoleVariable<int32> CVarShaderOn(
 		TEXT("r.SDF_Plugin"),
-		0,
+		1,
 		TEXT("Enable SDF Plugin \n")
 		TEXT(" 0: OFF;")
 		TEXT(" 1: ON."),
 		ECVF_RenderThreadSafe);
 }
-
 
 FCustomSceneViewExtension::FCustomSceneViewExtension(const FAutoRegister& AutoRegister) : FSceneViewExtensionBase(AutoRegister)
 {
@@ -32,7 +31,6 @@ void FCustomSceneViewExtension::SubscribeToPostProcessingPass(EPostProcessingPas
 		InOutPassCallbacks.Add(FAfterPassCallbackDelegate::CreateRaw(this, &FCustomSceneViewExtension::CustomPostProcessing));
 	}
 }
-
 
 FScreenPassTexture FCustomSceneViewExtension::CustomPostProcessing(FRDGBuilder& GraphBuilder, const FSceneView& SceneView, const FPostProcessMaterialInputs& Inputs)
 {

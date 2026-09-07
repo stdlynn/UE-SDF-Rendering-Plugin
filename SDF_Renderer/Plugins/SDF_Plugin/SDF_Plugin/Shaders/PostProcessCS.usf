@@ -35,7 +35,7 @@ void MainCS(uint2 DispatchThreadId : SV_DispatchThreadID)
     float4 OriginalColor = OriginalSceneColor.SampleLevel(GlobalPointClampedSampler, sampleUV, 0);
 
     // To test that everything is working, switch Red and Blue
-    float4 OutputColor = float4(OriginalColor.z, OriginalColor.y, OriginalColor.x, OriginalColor.w);
+    float4 OutputColor = float4(OriginalColor.x, OriginalColor.x, OriginalColor.x, OriginalColor.w);
 
     // Write output
     Output[SceneColorViewport_ViewportMin + DispatchThreadId] = OutputColor;

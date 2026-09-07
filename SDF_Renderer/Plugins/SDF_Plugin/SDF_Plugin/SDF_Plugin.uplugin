@@ -5,14 +5,14 @@
     "FriendlyName": "SDF Renderer Plugin",
     "Description": "SDF primitive renderer",
     "Category": "Code Tools",
-    "CreatedBy": "Ossi Luoto",
+    "CreatedBy": "Lynn van Birgelen, Remi Adriaensen",
     "Modules": [
 
         {
             "Name": "SDF_Plugin",
             "Type": "Runtime",
             "LoadingPhase": "PostConfigInit",
-            "WhitelistPlatforms": [ "Win64"]
+            "WhitelistPlatforms": ["Win64"]
         }
     ],
     "EnabledByDefault": false
