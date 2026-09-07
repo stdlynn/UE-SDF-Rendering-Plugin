@@ -14,9 +14,20 @@ SCREEN_PASS_TEXTURE_VIEWPORT(SceneColorViewport)
 // Output
 RWTexture2D<float4> Output;
 
-float sdfSphere( float3 p, float3 c, float r )
+float sdfSphere(float3 p, float3 c, float r)
 {
-  return length(p - c) - r;
+	return length(p - c) - r;
+}
+
+// https://iquilezles.org/articles/normalsSDF/
+float3 getSphereNormal(float3 p, float3 c, float r)
+{
+    const float h = 0.001; // magic value, read linked article for details
+    const float2 k = float2(1,-1);
+    return normalize(k.xyy*sdfSphere(p + k.xyy*h, c , r) + 
+		             k.yyx*sdfSphere(p + k.yyx*h, c , r) + 
+		             k.yxy*sdfSphere(p + k.yxy*h, c , r) + 
+		             k.xxx*sdfSphere(p + k.xxx*h, c , r));
 }
 
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
@@ -58,7 +69,7 @@ void MainCS(uint2 DispatchThreadId : SV_DispatchThreadID)
 
     if (hit)
     {
-	    color = float3(1, 0, 0);
+	    color = (getSphereNormal(rayPosition, sphereCenter, sphereRadius) + 1) * 0.5;
     }
     
     // We do have to write *something* here, otherwise we get garbage data from previously used textures.
