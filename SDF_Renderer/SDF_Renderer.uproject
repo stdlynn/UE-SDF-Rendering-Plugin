@@ -17,6 +17,10 @@
 			"TargetAllowList": [
 				"Editor"
 			]
+		},
+		{
+			"Name": "SDF_Plugin",
+			"Enabled": true
 		}
 	]
 }
