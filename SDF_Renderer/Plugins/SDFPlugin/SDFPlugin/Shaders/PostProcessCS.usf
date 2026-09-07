@@ -1,13 +1,9 @@
 // Custom SceneViewExtension Template for Unreal Engine
 // Copyright 2023 - 2025 Ossi Luoto
-// 
-// Custom CS PostProcessing Shader
 
 #include "/Engine/Public/Platform.ush"
 #include "/Engine/Private/Common.ush"
 #include "/Engine/Private/ScreenPass.ush"
-
-// Shader parameters
 
 // SceneColor texture
 Texture2D OriginalSceneColor;
@@ -18,48 +14,53 @@ SCREEN_PASS_TEXTURE_VIEWPORT(SceneColorViewport)
 // Output
 RWTexture2D<float4> Output;
 
-float3 PinholeCamera(float2 uv, float3 )
+float sdfSphere( float3 p, float3 c, float r )
 {
-    float2 ndc = (uv * 2.0f) - 1.0f;
-    float2 resolution = DispatchRaysDimensions().xy;
-    float aspectRatio = resolution.x / resolution.y;
-
-    // hardcoded FOV of 60 degrees
-    float x = ndc.x * aspectRatio * tan(radians(60.0) * 0.5);
-    float y = -ndc.y * tan(radians(60.0) * 0.5);
-
-    float3 rayDir = normalize(float3(x, y, 1.0));
-    float3 rotatedRayDir = rayDir.x * camera.right + rayDir.y * camera.up + rayDir.z * camera.forward;
-
-    return normalize(rotatedRayDir);
+  return length(p - c) - r;
 }
 
-// Compute Shader code
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
 void MainCS(uint2 DispatchThreadId : SV_DispatchThreadID)
 {
-	// Check that we are in scope
+	// Exit if thread is outside the viewport
     if (any(DispatchThreadId >= SceneColorViewport_ViewportMax))
     {
         return;
     }
-	
-    // Calculate SampleUV with viewport parameters
+
     float2 viewportUv = (float2(SceneColorViewport_ViewportMin) + (DispatchThreadId + 0.5)) * SceneColorViewport_ExtentInverse;
 	float2 ndc = viewportUv * float2(2, -2) + float2(-1, 1);
-
-    // sample OriginalColor
+    
     float4 OriginalColor = OriginalSceneColor.SampleLevel(GlobalPointClampedSampler, viewportUv, 0);
+	float3 color = OriginalColor;
 	
 	float4 p = mul(float4(ndc, 0.5, 1), View.ClipToTranslatedWorld);
-
-    float3 origin = float3(0, 0, 0);
+    float3 origin = View.ViewOriginHigh;
     float3 direction = normalize(p.xyz / p.w);
-	float3 color = saturate(direction);
+    float3 rayPosition = origin;
+	float distanceTraveled = 0.0;
 
-    // To test that everything is working, switch Red and Blue
-    float4 OutputColor = float4(color, OriginalColor.w);
+	const float surfaceEpsilon = 0.01;
+	const float maxDistance = 100000.0;
+	const float sphereCenter = float3(0, 0, 0);
+	const float sphereRadius = 100.0;
 
-    // Write output
-    Output[SceneColorViewport_ViewportMin + DispatchThreadId] = OutputColor;
+    bool hit = false;
+    for (int i = 0; i < 64; i++)
+    {
+	    float closestDistance = sdfSphere(rayPosition, sphereCenter, sphereRadius);
+        distanceTraveled += closestDistance;
+
+		if (closestDistance < surfaceEpsilon) { hit = true; break; }
+        rayPosition += direction * closestDistance;
+	    if (distanceTraveled > maxDistance) break;
+    }
+
+    if (hit)
+    {
+	    color = float3(1, 0, 0);
+    }
+    
+    // We do have to write *something* here, otherwise we get garbage data from previously used textures.
+	Output[SceneColorViewport_ViewportMin + DispatchThreadId] = float4(color, OriginalColor.w);
 }
