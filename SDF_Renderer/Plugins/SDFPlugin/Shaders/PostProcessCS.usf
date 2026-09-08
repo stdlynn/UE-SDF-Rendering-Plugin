@@ -69,7 +69,8 @@ void MainCS(uint2 DispatchThreadId : SV_DispatchThreadID)
 
     if (hit)
     {
-	    color = (getSphereNormal(rayPosition, sphereCenter, sphereRadius) + 1) * 0.5;
+        float3 normal = getSphereNormal(rayPosition, sphereCenter, sphereRadius) + 1;
+        color = saturate(dot(normal, normalize(float3(-1, 0, 1)))) * float3(0.7, 0.6, 0.4) + float3(0.05, 0.1, 0.1) * saturate(dot(normal, float3(0, 0, 1)));
     }
     
     // We do have to write *something* here, otherwise we get garbage data from previously used textures.
