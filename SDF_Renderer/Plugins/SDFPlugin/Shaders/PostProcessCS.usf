@@ -3,16 +3,9 @@
 
 #include "/Engine/Public/Platform.ush"
 #include "/Engine/Private/Common.ush"
-#include "/Engine/Private/ScreenPass.ush"
-
-// SceneColor texture
-Texture2D OriginalSceneColor;
-
-// SceneColor Viewport parameters
-SCREEN_PASS_TEXTURE_VIEWPORT(SceneColorViewport)
-
-// Output
-RWTexture2D<float4> Output;
+//#include "/Engine/Private/Compute.ush"
+#include "/Engine/Private/DeferredShadingCommon.ush"
+#include "/Engine/Private/SceneTexturesCommon.ush"
 
 float sdfSphere(float3 p, float3 c, float r)
 {
@@ -40,49 +33,126 @@ float3 getLighting(float3 normal)
     return saturate(NdotL) * sunColor + ambientColor * ((NdotSky + 1) * 0.5);
 }
 
-[numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
-void MainCS(uint2 DispatchThreadId : SV_DispatchThreadID)
-{
-	// Exit if thread is outside the viewport
-    if (any(DispatchThreadId >= SceneColorViewport_ViewportMax))
-    {
-        return;
-    }
 
-    float2 viewportUv = (float2(SceneColorViewport_ViewportMin) + (DispatchThreadId + 0.5)) * SceneColorViewport_ExtentInverse;
-	float2 ndc = viewportUv * float2(2, -2) + float2(-1, 1);
-    
-    float4 OriginalColor = OriginalSceneColor.SampleLevel(GlobalPointClampedSampler, viewportUv, 0);
-	float3 color = OriginalColor;
+
+void MainPS(
+    float4 SvPosition : SV_POSITION,
+    out float4 OutTarget0 : SV_Target0, // SceneColor (emissive)
+    out float4 OutTarget1 : SV_Target1, // world normal
+    out float4 OutTarget2 : SV_Target2, // metallic/spec/rough/shadingmodel
+    out float4 OutTarget3 : SV_Target3, // basecolor + AO
+    out float4 OutTarget4 : SV_Target4, // custom data
+    out float  OutDepth   : SV_DEPTH)
+{
+    float3 color = float3(0, 0, 0);
 	
-	float4 p = mul(float4(ndc, 0.5, 1), View.ClipToTranslatedWorld);
+    float2 BufferUV = SvPosition.xy * View.BufferSizeAndInvSize.zw;
+    float2 ViewportUV = (SvPosition.xy - View.ViewRectMin.xy) * View.ViewSizeAndInvSize.zw;
+    float2 ndc = ViewportUV * float2(2, -2) + float2(-1, 1);
+
+    float4 p = mul(float4(ndc, 0.5, 1), View.ClipToTranslatedWorld);
     float3 origin = View.ViewOriginHigh;
     float3 direction = normalize(p.xyz / p.w);
     float3 rayPosition = origin;
-	float distanceTraveled = 0.0;
+    float distanceTraveled = 0.0;
 
-	const float surfaceEpsilon = 0.01;
-	const float maxDistance = 100000.0;
-	const float sphereCenter = float3(0, 0, 0);
-	const float sphereRadius = 100.0;
+    const float surfaceEpsilon = 0.01;
+    const float maxDistance = 100000.0;
+    const float sphereCenter = float3(0, 0, 0);
+    const float sphereRadius = 100.0;
 
     bool hit = false;
     for (int i = 0; i < 64; i++)
     {
-	    float closestDistance = sdfSphere(rayPosition, sphereCenter, sphereRadius);
+        float closestDistance = sdfSphere(rayPosition, sphereCenter, sphereRadius);
         distanceTraveled += closestDistance;
 
-		if (closestDistance < surfaceEpsilon) { hit = true; break; }
+        if (closestDistance < surfaceEpsilon)
+        {
+            hit = true;
+            break;
+        }
         rayPosition += direction * closestDistance;
-	    if (distanceTraveled > maxDistance) break;
+        if (distanceTraveled > maxDistance)
+            break;
     }
 
     if (hit)
     {
         float3 normal = getSphereNormal(rayPosition, sphereCenter, sphereRadius) + 1;
         color = getLighting(normal);
+        float ViewZ = mul(float4(rayPosition, 1.0), View.TranslatedWorldToView).z;
+        //OutDepth = ConvertToDeviceZ(ViewZ);
+        OutDepth = 1.0;
+
+    	FGBufferData GBuffer = (FGBufferData) 0;
+        GBuffer.WorldNormal = normal;
+        GBuffer.BaseColor = float3(0.6, 0.6, 0.6);
+        GBuffer.Metallic = 0.0;
+        GBuffer.Specular = 0.5;
+        GBuffer.Roughness = 0.3;
+        GBuffer.ShadingModelID = SHADINGMODELID_DEFAULT_LIT;
+        GBuffer.GBufferAO = 1.0;
+        GBuffer.PerObjectGBufferData = 1.0;
+        
+        float4 GA, GB, GC, GD, GE, GV;
+        EncodeGBuffer(GBuffer, GA, GB, GC, GD, GE, GV);
+
+        OutTarget0 = float4(GBuffer.CustomData.rgb, 0);
+        OutTarget1 = GA;
+        OutTarget2 = GB;
+        OutTarget3 = GC;
+        OutTarget4 = GD;
     }
-    
-    // We do have to write *something* here, otherwise we get garbage data from previously used textures.
-	Output[SceneColorViewport_ViewportMin + DispatchThreadId] = float4(color, OriginalColor.w);
+    else
+    {
+        discard;
+    }
 }
+	
+//[numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
+//void MainCS(uint2 DispatchThreadId : SV_DispatchThreadID)
+//{
+//	// Exit if thread is outside the viewport
+//    if (any(DispatchThreadId >= SceneColorViewport_ViewportMax))
+//    {
+//        return;
+//    }
+
+//    float2 viewportUv = (float2(SceneColorViewport_ViewportMin) + (DispatchThreadId + 0.5)) * SceneColorViewport_ExtentInverse;
+//	float2 ndc = viewportUv * float2(2, -2) + float2(-1, 1);
+    
+//    float4 OriginalColor = OriginalSceneColor.SampleLevel(GlobalPointClampedSampler, viewportUv, 0);
+//	float3 color = OriginalColor;
+	
+//	float4 p = mul(float4(ndc, 0.5, 1), View.ClipToTranslatedWorld);
+//    float3 origin = View.ViewOriginHigh;
+//    float3 direction = normalize(p.xyz / p.w);
+//    float3 rayPosition = origin;
+//	float distanceTraveled = 0.0;
+
+//	const float surfaceEpsilon = 0.01;
+//	const float maxDistance = 100000.0;
+//	const float sphereCenter = float3(0, 0, 0);
+//	const float sphereRadius = 100.0;
+
+//    bool hit = false;
+//    for (int i = 0; i < 64; i++)
+//    {
+//	    float closestDistance = sdfSphere(rayPosition, sphereCenter, sphereRadius);
+//        distanceTraveled += closestDistance;
+
+//		if (closestDistance < surfaceEpsilon) { hit = true; break; }
+//        rayPosition += direction * closestDistance;
+//	    if (distanceTraveled > maxDistance) break;
+//    }
+
+//    if (hit)
+//    {
+//        float3 normal = getSphereNormal(rayPosition, sphereCenter, sphereRadius) + 1;
+//        color = getLighting(normal);
+//    }
+    
+//    // We do have to write *something* here, otherwise we get garbage data from previously used textures.
+//	Output[SceneColorViewport_ViewportMin + DispatchThreadId] = float4(color, OriginalColor.w);
+//}

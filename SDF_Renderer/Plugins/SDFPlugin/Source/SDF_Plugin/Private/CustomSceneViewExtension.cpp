@@ -4,8 +4,9 @@
 // Custom SceneViewExtension implementation
 
 #include "CustomSceneViewExtension.h"
+#include "PostProcess/SceneRenderTargets.h"
 
-IMPLEMENT_GLOBAL_SHADER(FCustomShader, "/Plugins/SDFPlugin/PostProcessCS.usf", "MainCS", SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FCustomShader, "/Plugins/SDFPlugin/PostProcessCS.usf", "MainPS", SF_Pixel);
 
 namespace
 {
@@ -23,90 +24,78 @@ FCustomSceneViewExtension::FCustomSceneViewExtension(const FAutoRegister& AutoRe
 	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Custom SceneViewExtension registered"));
 }
 
-void FCustomSceneViewExtension::SubscribeToPostProcessingPass(EPostProcessingPass PassId, const FSceneView& View, FAfterPassCallbackDelegateArray& InOutPassCallbacks, bool bIsPassEnabled)
+void FCustomSceneViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
 {
-	// Define to what Post Processing stage to hook the SceneViewExtension into. See SceneViewExtension.h and PostProcessing.cpp for more info
-	if (PassId == EPostProcessingPass::MotionBlur)
+	FRDGTextureRef Depth = RenderTargets.DepthStencil.GetTexture();
+	if (!Depth)
 	{
-		InOutPassCallbacks.Add(FAfterPassCallbackDelegate::CreateRaw(this, &FCustomSceneViewExtension::CustomPostProcessing));
+		UE_LOG(LogTemp, Error, TEXT("No Depth Stencil texture available for Rendering"));
+		return;
 	}
-}
 
-//void FCustomSceneViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
-//{
-//	
-//}
+	const FViewInfo& View = static_cast<const FViewInfo&>(InView);
 
-FScreenPassTexture FCustomSceneViewExtension::CustomPostProcessing(FRDGBuilder& GraphBuilder, const FSceneView& SceneView, const FPostProcessMaterialInputs& Inputs)
-{
-	// SceneViewExtension gives SceneView, not ViewInfo so we need to setup some basics
-	const FSceneViewFamily& ViewFamily = *SceneView.Family;
-
-	const FScreenPassTexture& SceneColor = FScreenPassTexture::CopyFromSlice(GraphBuilder, Inputs.GetInput(EPostProcessMaterialInput::SceneColor));
-
-	if (!SceneColor.IsValid() || CVarShaderOn.GetValueOnRenderThread() == 0)
-	{
-		return SceneColor;
-	}
-	
-	const FScreenPassTextureViewport SceneColorViewport(SceneColor);
-	
 	// Here starts the RDG stuff
-	RDG_EVENT_SCOPE(GraphBuilder, "Custom Postprocess Effect");
+	RDG_EVENT_SCOPE(GraphBuilder, "SDF_Trace");
 	{
-		// Accesspoint to our Shaders
-		FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(ViewFamily.GetFeatureLevel());
-
-		// Setup all the descriptors to create a target texture
-		FRDGTextureDesc OutputDesc;
+		int32 NumTargets = 0;
+		for (int32 i = 0; i < MaxSimultaneousRenderTargets; ++i)
 		{
-			OutputDesc = SceneColor.Texture->Desc;
-
-			OutputDesc.Reset();
-			OutputDesc.Flags |= TexCreate_UAV;
-			OutputDesc.Flags &= ~(TexCreate_RenderTargetable | TexCreate_FastVRAM);
-
-			FLinearColor ClearColor(0., 0., 0., 0.);
-			OutputDesc.ClearValue = FClearValueBinding(ClearColor);
+			if (RenderTargets.Output[i].GetTexture())
+			{
+				NumTargets = i + 1;
+			}
 		}
 
-		// Create target texture
-		FRDGTextureRef OutputTexture = GraphBuilder.CreateTexture(OutputDesc, TEXT("Custom Effect Output Texture"));
+		bool bGBufferHasClearCoat = (NumTargets >= 6);
+		bool bWriteVelocity = (NumTargets >= 5) && 
+			FCString::Strifind(RenderTargets.Output[NumTargets - 1].GetTexture()->Name, 
+			TEXT("Velocity")) != nullptr;
 
-		// Set the shader parameters
 		FCustomShader::FParameters* PassParameters = GraphBuilder.AllocParameters<FCustomShader::FParameters>();
+		PassParameters->View = InView.ViewUniformBuffer;
+		PassParameters->RenderTargets = RenderTargets;
+		PassParameters->RenderTargets.DepthStencil = FDepthStencilBinding(
+			Depth,
+			ERenderTargetLoadAction::ELoad, // depth
+			ERenderTargetLoadAction::ELoad, // stencil
+			FExclusiveDepthStencil::DepthWrite_StencilWrite);
 
-		// Input is the SceneColor from PostProcess Material Inputs
-		PassParameters->OriginalSceneColor = SceneColor.Texture;
+		FRHIDepthStencilState* DepthStencilState = TStaticDepthStencilState<
+			true,
+			CF_DepthNearOrEqual,
+			true,
+			CF_Always, SO_Keep, SO_Keep, SO_Replace,
+			false,
+			CF_Always, SO_Keep, SO_Keep, SO_Keep,
+			0x0,
+			0x0>::GetRHI();
 
-		// Use ScreenPassTextureViewportParameters so we don't need to calculate these ourselves
-		PassParameters->SceneColorViewport = GetScreenPassTextureViewportParameters(SceneColorViewport);
+		// If we need shader permutations for different GBuffer setups
+		//TShaderMapRef<FCustomShader> PixelShader(
+		//	View.ShaderMap,
+		//	[&] {
+		//		FCustomShader::FPermutationDomain Perm;
+		//		Perm.Set<FCustomShader::FWriteVelocity>(bWriteVelocity);
+		//		Perm.Set<FCustomShader::FHasGBufferE>(bHasGBufferE);
+		//		return Perm;
+		//	}());
+		TShaderMapRef<FCustomShader> PixelShader(View.ShaderMap);
 
-		PassParameters->View = SceneView.ViewUniformBuffer;
+		const uint32 StencilRef =
+			GET_STENCIL_BIT_MASK(RECEIVE_DECAL, 1) |
+			STENCIL_LIGHTING_CHANNELS_MASK(0x1);
 
-		FIntPoint PassViewSize = SceneColor.ViewRect.Size();
-		
-		// Create UAV from Target Texture
-		PassParameters->Output = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(OutputTexture));
-
-		// Set Compute Shader and execute
-		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(PassViewSize, FComputeShaderUtils::kGolden2DGroupSize);
-
-		TShaderMapRef<FCustomShader> ComputeShader(GlobalShaderMap);
-
-		FComputeShaderUtils::AddPass(
+		FPixelShaderUtils::AddFullscreenPass(
 			GraphBuilder,
-			RDG_EVENT_NAME("Custom SceneViewExtension Post Processing CS Shader %dx%d", PassViewSize.X, PassViewSize.Y),
-			ComputeShader,
+			View.ShaderMap,
+			RDG_EVENT_NAME("SDF_Trace"),
+			PixelShader,
 			PassParameters,
-			GroupCount);
-
-		// Copy the output texture back to SceneColor
-		// Returning the new texture as ScreenPassTexture doesn't work, so this is pretty fast alternative
-		// Also with f.ex 'PrePostProcessPass_RenderThread' you get only input and something similar needs to be implemented then
-		AddCopyTexturePass(GraphBuilder, OutputTexture, SceneColor.Texture);
+			View.ViewRect,
+			TStaticBlendState<>::GetRHI(),
+			TStaticRasterizerState<FM_Solid, CM_None>::GetRHI(),
+			DepthStencilState,
+			StencilRef);
 	}
-
-	// The call expects ScreenPassTexture as a return, we return with the same texture as we started with, see AddCopyTexturePass above 
-	return SceneColor;
 }
