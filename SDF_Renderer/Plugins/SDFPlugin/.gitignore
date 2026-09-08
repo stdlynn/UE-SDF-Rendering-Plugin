@@ -74,5 +74,5 @@ Plugins/*/Intermediate/*
 DerivedDataCache/*
 
 # Specific binary and intermediate files
-SDF_Plugin/Binaries/*
-SDF_Plugin/Intermediate/*
+Binaries/*
+Intermediate/*
