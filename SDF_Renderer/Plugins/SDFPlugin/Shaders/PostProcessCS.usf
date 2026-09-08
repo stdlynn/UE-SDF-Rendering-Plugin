@@ -30,6 +30,16 @@ float3 getSphereNormal(float3 p, float3 c, float r)
 		             k.xxx*sdfSphere(p + k.xxx*h, c , r));
 }
 
+float3 getLighting(float3 normal)
+{
+    static const float3 sunColor = float3(0.7, 0.6, 0.4);
+    static const float3 ambientColor = float3(0.05, 0.08, 0.1);
+    static const float3 sunDirection = normalize(float3(-1, 0, 1));
+    float NdotL = dot(normal, sunDirection);
+    float NdotSky = dot(normal, float3(0, 0, 1));
+    return saturate(NdotL) * sunColor + ambientColor * ((NdotSky + 1) * 0.5);
+}
+
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
 void MainCS(uint2 DispatchThreadId : SV_DispatchThreadID)
 {
@@ -70,7 +80,7 @@ void MainCS(uint2 DispatchThreadId : SV_DispatchThreadID)
     if (hit)
     {
         float3 normal = getSphereNormal(rayPosition, sphereCenter, sphereRadius) + 1;
-        color = saturate(dot(normal, normalize(float3(-1, 0, 1)))) * float3(0.7, 0.6, 0.4) + float3(0.05, 0.1, 0.1) * saturate(dot(normal, float3(0, 0, 1)));
+        color = getLighting(normal);
     }
     
     // We do have to write *something* here, otherwise we get garbage data from previously used textures.

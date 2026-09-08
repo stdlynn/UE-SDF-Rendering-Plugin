@@ -32,6 +32,11 @@ void FCustomSceneViewExtension::SubscribeToPostProcessingPass(EPostProcessingPas
 	}
 }
 
+//void FCustomSceneViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
+//{
+//	
+//}
+
 FScreenPassTexture FCustomSceneViewExtension::CustomPostProcessing(FRDGBuilder& GraphBuilder, const FSceneView& SceneView, const FPostProcessMaterialInputs& Inputs)
 {
 	// SceneViewExtension gives SceneView, not ViewInfo so we need to setup some basics
