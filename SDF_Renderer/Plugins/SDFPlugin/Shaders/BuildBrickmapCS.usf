@@ -1,0 +1,13 @@
+// Custom SceneViewExtension Template for Unreal Engine
+// Copyright 2023 - 2025 Ossi Luoto
+
+#include "/Engine/Public/Platform.ush"
+
+RWTexture3D<float> BrickAtlas;
+
+[numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
+void BuildBrickmapCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+
+	BrickAtlas[ThreadId] = 0.5;
+}

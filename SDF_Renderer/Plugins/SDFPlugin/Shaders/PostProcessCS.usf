@@ -3,9 +3,10 @@
 
 #include "/Engine/Public/Platform.ush"
 #include "/Engine/Private/Common.ush"
-//#include "/Engine/Private/Compute.ush"
 #include "/Engine/Private/DeferredShadingCommon.ush"
-#include "/Engine/Private/SceneTexturesCommon.ush"
+
+Texture3D<float> BrickAtlas;
+SamplerState BrickSampler;
 
 float SDFSphere(float3 Point, float3 Center, float Radius)
 {
@@ -23,8 +24,8 @@ float3 GetSphereNormal(float3 Point, float3 Center, float Radius)
 					 K.xxx * SDFSphere(Point + K.xxx * H, Center , Radius));
 }
 
-void MainPS(
-	float4 SvPosition : SV_POSITION,
+void TraversePS(
+	float4	   InPosition	 : SV_POSITION,
 	out float4 OutSceneColor : SV_Target0, // SceneColor (emissive)
 	out float4 OutGBufferA   : SV_Target1, // World normal
 	out float4 OutGBufferB   : SV_Target2, // Metallic/spec/rough/shadingmodel
@@ -33,9 +34,9 @@ void MainPS(
 	out float  OutDepth		 : SV_DEPTH)   // Depth
 {
 	// UV for GBuffer
-	float2 BufferUV = SvPosition.xy * View.BufferSizeAndInvSize.zw;
+	float2 BufferUV = InPosition.xy * View.BufferSizeAndInvSize.zw;
 	// Screen UV
-	float2 ViewportUV = (SvPosition.xy - View.ViewRectMin.xy) * View.ViewSizeAndInvSize.zw;
+	float2 ViewportUV = (InPosition.xy - View.ViewRectMin.xy) * View.ViewSizeAndInvSize.zw;
 	float2 NDC = ViewportUV * float2(2, -2) + float2(-1, 1);
 
     float4 TranslatedWorldPosH = mul(float4(NDC, 0.5, 1), View.ClipToTranslatedWorld);
@@ -73,6 +74,9 @@ void MainPS(
 		float ViewZ = mul(float4(RayPosition - Origin, 1.0), View.TranslatedWorldToView).z;
 		OutDepth = ConvertToDeviceZ(ViewZ);
 
+		bool bDebugCheck = false;
+		//if (BrickAtlas.SampleLevel(BrickSampler, float3(0.0, 0.0, 0.0), 0) >= 0.49) bDebugCheck = true;
+
 		FGBufferData GBuffer = (FGBufferData) 0;
 		GBuffer.BaseColor = float3(0.6, 0.6, 0.6);
 		GBuffer.WorldNormal = Normal;
@@ -88,7 +92,7 @@ void MainPS(
 		// Write to the packed GBuffer channels
 		float4 GA, GB, GC, GD, GE, GV;
 		EncodeGBuffer(GBuffer, GA, GB, GC, GD, GE, GV);
-		OutSceneColor = float4(0,0,0,0);
+		OutSceneColor = float4(100 * bDebugCheck,0,0,0);
 		OutGBufferA = GA;
 		OutGBufferB = GB;
 		OutGBufferC = GC;
