@@ -7,42 +7,30 @@
 #include "/Engine/Private/DeferredShadingCommon.ush"
 #include "/Engine/Private/SceneTexturesCommon.ush"
 
-float SDFSphere(float3 P, float3 C, float R)
+float SDFSphere(float3 Point, float3 Center, float Radius)
 {
-	return length(P - C) - R;
+	return length(Point - Center) - Radius;
 }
 
 // https://iquilezles.org/articles/normalsSDF/
-float3 GetSphereNormal(float3 P, float3 Center, float Radius)
+float3 GetSphereNormal(float3 Point, float3 Center, float Radius)
 {
-	const float H = 0.001; // magic value for now, read linked article for details
+	const float H = 0.004; // magic value for now, read linked article for details
 	const float2 K = float2(1, -1);
-	return normalize(K.xyy * SDFSphere(P + K.xyy * H, Center , Radius) + 
-					 K.yyx * SDFSphere(P + K.yyx * H, Center , Radius) + 
-					 K.yxy * SDFSphere(P + K.yxy * H, Center , Radius) + 
-					 K.xxx * SDFSphere(P + K.xxx * H, Center , Radius));
+	return normalize(K.xyy * SDFSphere(Point + K.xyy * H, Center , Radius) + 
+					 K.yyx * SDFSphere(Point + K.yyx * H, Center , Radius) + 
+					 K.yxy * SDFSphere(Point + K.yxy * H, Center , Radius) + 
+					 K.xxx * SDFSphere(Point + K.xxx * H, Center , Radius));
 }
-
-float3 GetLighting(float3 Normal)
-{
-	const float3 SunColor = float3(0.7, 0.6, 0.4);
-	const float3 AmbientColor = float3(0.05, 0.08, 0.1);
-	const float3 SunDirection = normalize(float3(-1, 0, 1));
-	float NdotL = dot(Normal, SunDirection);
-	float NdotSky = dot(Normal, float3(0, 0, 1));
-	return saturate(NdotL) * SunColor + AmbientColor * ((NdotSky + 1) * 0.5);
-}
-
-
 
 void MainPS(
 	float4 SvPosition : SV_POSITION,
-	out float4 OutTarget0 : SV_Target0, // SceneColor (emissive)
-	out float4 OutTarget1 : SV_Target1, // world normal
-	out float4 OutTarget2 : SV_Target2, // metallic/spec/rough/shadingmodel
-	out float4 OutTarget3 : SV_Target3, // basecolor + AO
-	out float4 OutTarget4 : SV_Target4, // custom data
-	out float  OutDepth   : SV_DEPTH)
+	out float4 OutSceneColor : SV_Target0, // SceneColor (emissive)
+	out float4 OutGBufferA   : SV_Target1, // World normal
+	out float4 OutGBufferB   : SV_Target2, // Metallic/spec/rough/shadingmodel
+	out float4 OutGBufferC   : SV_Target3, // Basecolor + AO
+	out float4 OutGBufferD   : SV_Target4, // Custom data
+	out float  OutDepth		 : SV_DEPTH)   // Depth
 {
 	// UV for GBuffer
 	float2 BufferUV = SvPosition.xy * View.BufferSizeAndInvSize.zw;
@@ -50,8 +38,8 @@ void MainPS(
 	float2 ViewportUV = (SvPosition.xy - View.ViewRectMin.xy) * View.ViewSizeAndInvSize.zw;
 	float2 NDC = ViewportUV * float2(2, -2) + float2(-1, 1);
 
-	float4 P = mul(float4(NDC, 0.5, 1), View.ClipToTranslatedWorld);
-	float3 Direction = normalize(P.xyz / P.w);
+    float4 TranslatedWorldPosH = mul(float4(NDC, 0.5, 1), View.ClipToTranslatedWorld);
+	float3 Direction = normalize(TranslatedWorldPosH.xyz / TranslatedWorldPosH.w);
 	float3 Origin = View.ViewOriginHigh;
 	float3 RayPosition = Origin;
 	float DistanceTraveled = 0.0;
@@ -90,7 +78,7 @@ void MainPS(
 		GBuffer.WorldNormal = Normal;
 		GBuffer.Metallic = 0.0;
 		GBuffer.Specular = 0.5;
-		GBuffer.Roughness = 0.3;
+		GBuffer.Roughness = 0.6;
 		GBuffer.PerObjectGBufferData = 0.0; // 0 means we don't have distance or height field for this mesh
 		GBuffer.SelectiveOutputMask = 0; // No selective output (we don't need this)
 		GBuffer.GBufferAO = 1.0; // No occlusion
@@ -100,11 +88,11 @@ void MainPS(
 		// Write to the packed GBuffer channels
 		float4 GA, GB, GC, GD, GE, GV;
 		EncodeGBuffer(GBuffer, GA, GB, GC, GD, GE, GV);
-		OutTarget0 = float4(0,0,0,0);
-		OutTarget1 = GA;
-		OutTarget2 = GB;
-		OutTarget3 = GC;
-		OutTarget4 = GD;
+		OutSceneColor = float4(0,0,0,0);
+		OutGBufferA = GA;
+		OutGBufferB = GB;
+		OutGBufferC = GC;
+		OutGBufferD = GD;
 		// Uncomment to add functionality for clear coat and velocity if needed
 		//OutTarget5 = GE;
 		//OutTarget6 = GV;
