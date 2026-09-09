@@ -4,12 +4,12 @@
 // Subsystem to keep custom SceneViewExtension alive
 
 #include "TemplateSubsystem.h"
-#include "CustomSceneViewExtension.h"
+#include "SDFSceneViewExtension.h"
 #include "SceneViewExtension.h"
 
 void UTemplateSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
-	CustomSceneViewExtension = FSceneViewExtensions::NewExtension<FCustomSceneViewExtension>();
+	CustomSceneViewExtension = FSceneViewExtensions::NewExtension<FSDFSceneViewExtension>();
 	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Subsystem initialized & SceneViewExtension created"));
 }
 

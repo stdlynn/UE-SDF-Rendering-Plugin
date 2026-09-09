@@ -3,75 +3,103 @@
 
 #include "/Engine/Public/Platform.ush"
 #include "/Engine/Private/Common.ush"
-#include "/Engine/Private/ScreenPass.ush"
+//#include "/Engine/Private/Compute.ush"
+#include "/Engine/Private/DeferredShadingCommon.ush"
+#include "/Engine/Private/SceneTexturesCommon.ush"
 
-// SceneColor texture
-Texture2D OriginalSceneColor;
-
-// SceneColor Viewport parameters
-SCREEN_PASS_TEXTURE_VIEWPORT(SceneColorViewport)
-
-// Output
-RWTexture2D<float4> Output;
-
-float sdfSphere(float3 p, float3 c, float r)
+float SDFSphere(float3 Point, float3 Center, float Radius)
 {
-	return length(p - c) - r;
+	return length(Point - Center) - Radius;
 }
 
 // https://iquilezles.org/articles/normalsSDF/
-float3 getSphereNormal(float3 p, float3 c, float r)
+float3 GetSphereNormal(float3 Point, float3 Center, float Radius)
 {
-    const float h = 0.001; // magic value, read linked article for details
-    const float2 k = float2(1,-1);
-    return normalize(k.xyy*sdfSphere(p + k.xyy*h, c , r) + 
-		             k.yyx*sdfSphere(p + k.yyx*h, c , r) + 
-		             k.yxy*sdfSphere(p + k.yxy*h, c , r) + 
-		             k.xxx*sdfSphere(p + k.xxx*h, c , r));
+	const float H = 0.004; // magic value for now, read linked article for details
+	const float2 K = float2(1, -1);
+	return normalize(K.xyy * SDFSphere(Point + K.xyy * H, Center , Radius) + 
+					 K.yyx * SDFSphere(Point + K.yyx * H, Center , Radius) + 
+					 K.yxy * SDFSphere(Point + K.yxy * H, Center , Radius) + 
+					 K.xxx * SDFSphere(Point + K.xxx * H, Center , Radius));
 }
 
-[numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
-void MainCS(uint2 DispatchThreadId : SV_DispatchThreadID)
+void MainPS(
+	float4 SvPosition : SV_POSITION,
+	out float4 OutSceneColor : SV_Target0, // SceneColor (emissive)
+	out float4 OutGBufferA   : SV_Target1, // World normal
+	out float4 OutGBufferB   : SV_Target2, // Metallic/spec/rough/shadingmodel
+	out float4 OutGBufferC   : SV_Target3, // Basecolor + AO
+	out float4 OutGBufferD   : SV_Target4, // Custom data
+	out float  OutDepth		 : SV_DEPTH)   // Depth
 {
-	// Exit if thread is outside the viewport
-    if (any(DispatchThreadId >= SceneColorViewport_ViewportMax))
-    {
-        return;
-    }
+	// UV for GBuffer
+	float2 BufferUV = SvPosition.xy * View.BufferSizeAndInvSize.zw;
+	// Screen UV
+	float2 ViewportUV = (SvPosition.xy - View.ViewRectMin.xy) * View.ViewSizeAndInvSize.zw;
+	float2 NDC = ViewportUV * float2(2, -2) + float2(-1, 1);
 
-    float2 viewportUv = (float2(SceneColorViewport_ViewportMin) + (DispatchThreadId + 0.5)) * SceneColorViewport_ExtentInverse;
-	float2 ndc = viewportUv * float2(2, -2) + float2(-1, 1);
-    
-    float4 OriginalColor = OriginalSceneColor.SampleLevel(GlobalPointClampedSampler, viewportUv, 0);
-	float3 color = OriginalColor;
-	
-	float4 p = mul(float4(ndc, 0.5, 1), View.ClipToTranslatedWorld);
-    float3 origin = View.ViewOriginHigh;
-    float3 direction = normalize(p.xyz / p.w);
-    float3 rayPosition = origin;
-	float distanceTraveled = 0.0;
+    float4 TranslatedWorldPosH = mul(float4(NDC, 0.5, 1), View.ClipToTranslatedWorld);
+	float3 Direction = normalize(TranslatedWorldPosH.xyz / TranslatedWorldPosH.w);
+	float3 Origin = View.ViewOriginHigh;
+	float3 RayPosition = Origin;
+	float DistanceTraveled = 0.0;
 
-	const float surfaceEpsilon = 0.01;
-	const float maxDistance = 100000.0;
-	const float sphereCenter = float3(0, 0, 0);
-	const float sphereRadius = 100.0;
+	const float SurfaceEpsilon = 0.01;
+	const float MaxDistance = 100000.0;
+	const float SphereRadius = 100.0;
+	const float3 SphereCenter = float3(0, 0, 0);
 
-    bool hit = false;
-    for (int i = 0; i < 64; i++)
-    {
-	    float closestDistance = sdfSphere(rayPosition, sphereCenter, sphereRadius);
-        distanceTraveled += closestDistance;
+	bool bHit = false;
+	for (int i = 0; i < 64; i++)
+	{
+		float ClosestDistance = abs(SDFSphere(RayPosition, SphereCenter, SphereRadius));
+		if (ClosestDistance < SurfaceEpsilon)
+		{
+			bHit = true;
+			break;
+		}
+		RayPosition += Direction * ClosestDistance;
+		DistanceTraveled += ClosestDistance;
+		if (DistanceTraveled > MaxDistance)
+		{
+			break;
+		}
+	}
 
-		if (closestDistance < surfaceEpsilon) { hit = true; break; }
-        rayPosition += direction * closestDistance;
-	    if (distanceTraveled > maxDistance) break;
-    }
+	if (bHit)
+	{
+		float3 Normal = GetSphereNormal(RayPosition, SphereCenter, SphereRadius);
 
-    if (hit)
-    {
-	    color = (getSphereNormal(rayPosition, sphereCenter, sphereRadius) + 1) * 0.5;
-    }
-    
-    // We do have to write *something* here, otherwise we get garbage data from previously used textures.
-	Output[SceneColorViewport_ViewportMin + DispatchThreadId] = float4(color, OriginalColor.w);
+		float ViewZ = mul(float4(RayPosition - Origin, 1.0), View.TranslatedWorldToView).z;
+		OutDepth = ConvertToDeviceZ(ViewZ);
+
+		FGBufferData GBuffer = (FGBufferData) 0;
+		GBuffer.BaseColor = float3(0.6, 0.6, 0.6);
+		GBuffer.WorldNormal = Normal;
+		GBuffer.Metallic = 0.0;
+		GBuffer.Specular = 0.5;
+		GBuffer.Roughness = 0.6;
+		GBuffer.PerObjectGBufferData = 0.0; // 0 means we don't have distance or height field for this mesh
+		GBuffer.SelectiveOutputMask = 0; // No selective output (we don't need this)
+		GBuffer.GBufferAO = 1.0; // No occlusion
+		GBuffer.PrecomputedShadowFactors = 1.0; // no shadowing
+		GBuffer.ShadingModelID = SHADINGMODELID_DEFAULT_LIT; // Normal lighting
+		
+		// Write to the packed GBuffer channels
+		float4 GA, GB, GC, GD, GE, GV;
+		EncodeGBuffer(GBuffer, GA, GB, GC, GD, GE, GV);
+		OutSceneColor = float4(0,0,0,0);
+		OutGBufferA = GA;
+		OutGBufferB = GB;
+		OutGBufferC = GC;
+		OutGBufferD = GD;
+		// Uncomment to add functionality for clear coat and velocity if needed
+		//OutTarget5 = GE;
+		//OutTarget6 = GV;
+	}
+	else
+	{
+		// Discard this fragment, keep whatever was already in the GBuffer
+		discard;
+	}
 }
