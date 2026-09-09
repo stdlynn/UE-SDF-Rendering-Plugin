@@ -10,14 +10,13 @@
 void FSDFPlugin::StartupModule()
 {
 	// Set up the Shader Directories
-	FString PluginShaderDir = FPaths::Combine(IPluginManager::Get().FindPlugin(TEXT("SDFPlugin"))->GetBaseDir(), TEXT("Shaders"));
-	AddShaderSourceDirectoryMapping(TEXT("/Plugins/SDFPlugin"), PluginShaderDir);
+	const FString BaseDir = IPluginManager::Get().FindPlugin( TEXT( "SDFPlugin" ) )->GetBaseDir();
+	const FString PluginShaderDir = FPaths::Combine( BaseDir, TEXT( "Shaders" ) );
+	AddShaderSourceDirectoryMapping( TEXT( "/Plugins/SDFPlugin" ), PluginShaderDir );
 }
 
-void FSDFPlugin::ShutdownModule()
-{
-}
+void FSDFPlugin::ShutdownModule() {}
 
 #undef LOCTEXT_NAMESPACE
 
-IMPLEMENT_MODULE(FSDFPlugin, SDFPlugin);
+IMPLEMENT_MODULE( FSDFPlugin, SDFPlugin );

@@ -18,15 +18,19 @@ namespace
 }
 
 // Extension initialization
-FSDFSceneViewExtension::FSDFSceneViewExtension(const FAutoRegister& AutoRegister) : FSceneViewExtensionBase(AutoRegister)
+FSDFSceneViewExtension::FSDFSceneViewExtension(const FAutoRegister& AutoRegister) 
+	: FSceneViewExtensionBase(AutoRegister)
 {
 	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Custom SceneViewExtension registered"));
 }
 
 // PostRenderBasePassDeferred is called after rendering but before deferred lighting
-void FSDFSceneViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
+void FSDFSceneViewExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphBuilder, 
+																	  FSceneView& InView, 
+																	  const FRenderTargetBindingSlots& RenderTargets, 
+																	  TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
 {
-	FRDGTextureRef Depth = RenderTargets.DepthStencil.GetTexture();
+	const FRDGTextureRef Depth = RenderTargets.DepthStencil.GetTexture();
 	if (!Depth)
 	{
 		UE_LOG(LogTemp, Error, TEXT("No Depth Stencil texture available for Rendering"));
@@ -57,10 +61,10 @@ void FSDFSceneViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder
 			0x0, // StencilReadMask
 			0x0>::GetRHI();
 
-		TShaderMapRef<FSDFTraverseShader> PixelShader(View.ShaderMap);
+		const TShaderMapRef<FSDFTraverseShader> PixelShader(View.ShaderMap);
 
 		// For if we ever need to write to the stencil buffer
-		const uint32 StencilRef =
+		constexpr uint32 StencilRef =
 			GET_STENCIL_BIT_MASK(RECEIVE_DECAL, 1) |
 			STENCIL_LIGHTING_CHANNELS_MASK(0x1);
 

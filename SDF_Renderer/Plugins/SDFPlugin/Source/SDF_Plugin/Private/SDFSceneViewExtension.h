@@ -25,7 +25,6 @@ public:
 	virtual void PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures) override;
 };
 
-
 // Custom Shader
 class SDFPLUGIN_API FSDFTraverseShader : public FGlobalShader
 {
@@ -51,5 +50,3 @@ public:
 		//OutEnvironment.SetDefine(TEXT("SOME_VAR"), 1);
 	}
 };
-
-

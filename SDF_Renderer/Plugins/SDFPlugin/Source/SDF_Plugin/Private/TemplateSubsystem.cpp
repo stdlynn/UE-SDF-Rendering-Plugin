@@ -9,14 +9,14 @@
 
 void UTemplateSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
-	CustomSceneViewExtension = FSceneViewExtensions::NewExtension<FSDFSceneViewExtension>();
+	SDFSceneViewExtension = FSceneViewExtensions::NewExtension<FSDFSceneViewExtension>();
 	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Subsystem initialized & SceneViewExtension created"));
 }
 
 void UTemplateSubsystem::Deinitialize()
 {
 	{
-		CustomSceneViewExtension->IsActiveThisFrameFunctions.Empty();
+		SDFSceneViewExtension->IsActiveThisFrameFunctions.Empty();
 
 		FSceneViewExtensionIsActiveFunctor IsActiveFunctor;
 
@@ -25,9 +25,9 @@ void UTemplateSubsystem::Deinitialize()
 			return TOptional<bool>(false);
 		};
 
-		CustomSceneViewExtension->IsActiveThisFrameFunctions.Add(IsActiveFunctor);
+		SDFSceneViewExtension->IsActiveThisFrameFunctions.Add(IsActiveFunctor);
 	}
 
-	CustomSceneViewExtension.Reset();
-	CustomSceneViewExtension = nullptr;
+	SDFSceneViewExtension.Reset();
+	SDFSceneViewExtension = nullptr;
 }
