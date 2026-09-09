@@ -1,10 +1,16 @@
 // Custom SceneViewExtension Template for Unreal Engine
 // Copyright 2023 - 2025 Ossi Luoto
 
+// Plugin
 #include "SDFSceneViewExtension.h"
 #include "PostProcess/SceneRenderTargets.h"
+#include "SDFObjectActor.h"
 
-IMPLEMENT_GLOBAL_SHADER(FSDFTraverseShader, "/Plugins/SDFPlugin/PostProcessCS.usf", "MainPS", SF_Pixel);
+// UE
+#include "EngineUtils.h"
+#include "SDFObject.h"
+
+IMPLEMENT_GLOBAL_SHADER( FSDFTraverseShader, "/Plugins/SDFPlugin/PostProcessCS.usf", "MainPS", SF_Pixel );
 
 namespace
 {
@@ -22,6 +28,36 @@ FSDFSceneViewExtension::FSDFSceneViewExtension(const FAutoRegister& AutoRegister
 	: FSceneViewExtensionBase(AutoRegister)
 {
 	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Custom SceneViewExtension registered"));
+}
+
+void FSDFSceneViewExtension::BeginRenderViewFamily(FSceneViewFamily& InViewFamily)
+{
+	// We call this from here so it runs on the Game Thread
+	UploadSDFs( InViewFamily.Scene->GetWorld() );
+};
+
+void FSDFSceneViewExtension::UploadSDFs( const UWorld* World )
+{
+	// Go over all actors with SDF objects
+	TArray<FVector4f> SDFRenderData;
+	for (TActorIterator<ASDFObjectActor> it{ World }; it; ++it)
+	{
+		// Grab the SDF object component
+		if (const USDFObject* Obj{ it->GetComponentByClass<USDFObject>() })
+		{
+			// Gather the necessary data for rendering
+			const FVector3f Pos{ Obj->GetComponentTransform().GetLocation() };
+			SDFRenderData.Add( { Pos, Obj->GetRadius() } );
+		}
+	}
+
+	// Queue some work for the render thread
+	// Move the render data, since it will go out of scope before this is executed
+	ENQUEUE_RENDER_COMMAND( SDFDataThreadTransfer )( [this, Data{ MoveTemp( SDFRenderData ) }] ( FRHICommandList& ) mutable
+	{
+		// On the render thread, set the SDF render data
+		SDFRenderData_RenderThread = MoveTemp( Data );
+	} );
 }
 
 // PostRenderBasePassDeferred is called after rendering but before deferred lighting
