@@ -26,6 +26,6 @@ protected:
 
 private:
 
-	class USDFObject* sdf_object;
+	class USDFComponent* sdf_object;
 
 };

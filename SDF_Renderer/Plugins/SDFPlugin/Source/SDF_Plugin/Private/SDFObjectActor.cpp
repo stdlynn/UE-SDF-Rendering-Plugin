@@ -3,11 +3,11 @@
 #include "SDFObjectActor.h"
 
 // Plugin
-#include "SDFObject.h"
+#include "SDFComponent.h"
 
 // Sets default values
 ASDFObjectActor::ASDFObjectActor()
-	: sdf_object{ CreateDefaultSubobject<USDFObject>( TEXT( "SDFObject" ) ) }
+	: sdf_object{ CreateDefaultSubobject<USDFComponent>( TEXT( "SDFObject" ) ) }
 {
 	sdf_object->SetupAttachment( RootComponent );
 

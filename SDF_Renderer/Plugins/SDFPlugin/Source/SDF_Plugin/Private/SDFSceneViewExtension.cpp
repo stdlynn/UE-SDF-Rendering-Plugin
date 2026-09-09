@@ -8,7 +8,7 @@
 
 // UE
 #include "EngineUtils.h"
-#include "SDFObject.h"
+#include "SDFComponent.h"
 
 IMPLEMENT_GLOBAL_SHADER( FSDFTraverseShader, "/Plugins/SDFPlugin/PostProcessCS.usf", "MainPS", SF_Pixel );
 
@@ -32,6 +32,16 @@ FSDFSceneViewExtension::FSDFSceneViewExtension(const FAutoRegister& AutoRegister
 
 void FSDFSceneViewExtension::BeginRenderViewFamily(FSceneViewFamily& InViewFamily)
 {
+	// TODO: plan
+	// TODO: Remove the SDFRenderParams_RenderThread from the subsystem
+	// TODO: Grab the game thread version through here
+	// TODO: Do the ENQUEUE_RENDER_COMMAND here (like before)
+	// TODO:
+	// TODO: Find out the intention of BeginRenderViewFamily to see if this
+	// TODO: architecture makes sense
+	// TODO:
+	InViewFamily.Scene->GetWorld()->GetSubsystem<USDFSubsystem>()->GetRenderParams();
+
 	// We call this from here so it runs on the Game Thread
 	UploadSDFs( InViewFamily.Scene->GetWorld() );
 };
@@ -43,7 +53,7 @@ void FSDFSceneViewExtension::UploadSDFs( const UWorld* World )
 	for (TActorIterator<ASDFObjectActor> it{ World }; it; ++it)
 	{
 		// Grab the SDF object component
-		if (const USDFObject* Obj{ it->GetComponentByClass<USDFObject>() })
+		if (const USDFComponent* Obj{ it->GetComponentByClass<USDFComponent>() })
 		{
 			// Gather the necessary data for rendering
 			const FVector3f Pos{ Obj->GetComponentTransform().GetLocation() };
