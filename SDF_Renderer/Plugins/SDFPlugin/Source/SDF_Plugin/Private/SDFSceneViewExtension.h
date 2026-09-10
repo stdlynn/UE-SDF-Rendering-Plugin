@@ -43,6 +43,10 @@ BEGIN_UNIFORM_BUFFER_STRUCT(FPtrBuffer, )
 	SHADER_PARAMETER(uint32, Idx)
 END_UNIFORM_BUFFER_STRUCT()
 
+BEGIN_UNIFORM_BUFFER_STRUCT(FAtomicCounter, )
+	SHADER_PARAMETER(uint32, Counter)
+END_UNIFORM_BUFFER_STRUCT()
+
 // Traversal Shader
 class SDFPLUGIN_API FSDFTraverseShader : public FGlobalShader
 {
@@ -82,7 +86,8 @@ public:
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(Texture3D<float>, BrickAtlas) // Brick Atlas
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, PtrBuffer)	   // Pointer Buffer
+		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint>, PtrBuffer)	   // Pointer Buffer
+		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint>, FAtomicCounter)  // Atomic Counter
 		SHADER_PARAMETER(FIntVector, GridSize)
 		SHADER_PARAMETER(FIntVector, AtlasSize)
 	END_SHADER_PARAMETER_STRUCT()

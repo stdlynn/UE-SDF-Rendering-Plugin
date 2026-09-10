@@ -9,6 +9,7 @@ IMPLEMENT_GLOBAL_SHADER(FSDFTraverseShader, "/Plugins/SDFPlugin/PostProcessCS.us
 IMPLEMENT_GLOBAL_SHADER(FBuildBrickmapShader, "/Plugins/SDFPlugin/BuildBrickmapCS.usf", "BuildBrickmapCS", SF_Compute);
 
 IMPLEMENT_UNIFORM_BUFFER_STRUCT(FPtrBuffer, "PtrBuffer");
+IMPLEMENT_UNIFORM_BUFFER_STRUCT(FAtomicCounter, "AtomicCounter");
 
 static const FIntVector GridSize = FIntVector(64, 64, 64);
 
@@ -68,6 +69,9 @@ void FSDFSceneViewExtension::AllocateBrickmap()
 	BrickmapResources.BrickPtrBuffer = 
 		AllocatePooledBuffer(BrickmapResources.BrickPtrBufferDesc, TEXT("SDF_BrickPtrBuffer"));
 	
+	BrickmapResources.BrickAllocCounter =
+		AllocatePooledBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), 1), TEXT("SDF_BrickAllocCounter"));
+
 	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Allocated Brickmap"));
 	GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, TEXT("Allocated Brickmap"));
 }
@@ -112,7 +116,7 @@ void FSDFSceneViewExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& Graph
 		FBuildBrickmapShader::FParameters* PassParameters =
 			GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
 		PassParameters->BrickAtlas = GraphBuilder.CreateUAV(BrickAtlasRDG);
-		PassParameters->PtrBuffer = GraphBuilder.CreateSRV(PtrBufferRDG);
+		PassParameters->PtrBuffer = GraphBuilder.CreateUAV(PtrBufferRDG);
 		PassParameters->GridSize = GridSize;
 		PassParameters->AtlasSize = AtlasSize;
 

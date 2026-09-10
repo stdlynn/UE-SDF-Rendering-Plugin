@@ -4,25 +4,8 @@
 #include "/Engine/Public/Platform.ush"
 #include "/Engine/Private/Common.ush"
 #include "/Engine/Private/DeferredShadingCommon.ush"
-
-Texture3D<float> BrickAtlas;
-SamplerState BrickSampler;
-
-float SDFSphere(float3 Point, float3 Center, float Radius)
-{
-	return length(Point - Center) - Radius;
-}
-
-// https://iquilezles.org/articles/normalsSDF/
-float3 GetSphereNormal(float3 Point, float3 Center, float Radius)
-{
-	const float H = 0.004; // magic value for now, read linked article for details
-	const float2 K = float2(1, -1);
-	return normalize(K.xyy * SDFSphere(Point + K.xyy * H, Center , Radius) + 
-					 K.yyx * SDFSphere(Point + K.yyx * H, Center , Radius) + 
-					 K.yxy * SDFSphere(Point + K.yxy * H, Center , Radius) + 
-					 K.xxx * SDFSphere(Point + K.xxx * H, Center , Radius));
-}
+#include "BrickmapCommon.ush"
+#include "Common.ush"
 
 void TraversePS(
 	float4	   InPosition	 : SV_POSITION,

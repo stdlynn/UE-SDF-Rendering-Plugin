@@ -1,0 +1,21 @@
+#pragma once
+
+#include "/Engine/Public/Platform.ush"
+
+SamplerState BrickSampler;
+RWBuffer<uint> BrickAllocCounter;
+#ifdef BRICKMAP_WRITE
+RWTexture3D<float> BrickAtlas;
+RWBuffer<uint> PtrGrid;
+#else
+Texture3D<float> BrickAtlas;
+Buffer<uint> PtrGrid;
+#endif
+
+void Allocate(uint3 BrickPos)
+{
+	uint nextIndex;
+	InterlockedAdd(BrickAllocCounter[0], 1, nextIndex);
+
+	PtrGrid[nextIndex] = nextIndex;
+}
