@@ -32,42 +32,40 @@ FSDFSceneViewExtension::FSDFSceneViewExtension(const FAutoRegister& AutoRegister
 
 void FSDFSceneViewExtension::BeginRenderViewFamily(FSceneViewFamily& InViewFamily)
 {
-	// TODO: plan
-	// TODO: Remove the SDFRenderParams_RenderThread from the subsystem
-	// TODO: Grab the game thread version through here
-	// TODO: Do the ENQUEUE_RENDER_COMMAND here (like before)
-	// TODO:
-	// TODO: Find out the intention of BeginRenderViewFamily to see if this
-	// TODO: architecture makes sense
-	// TODO:
-	InViewFamily.Scene->GetWorld()->GetSubsystem<USDFSubsystem>()->GetRenderParams();
+	// 'BeginRenderViewFamily' is called when the view family is about to be rendered
+	// Allowing for game thread work before rendering a view family
+	// A view represents a single viewpoint (camera) that we render from
+	// A view family is a group of views that gets rendered together for the same frame/setup
 
 	// We call this from here so it runs on the Game Thread
-	UploadSDFs( InViewFamily.Scene->GetWorld() );
+	TransferSDFsToRenderThread( InViewFamily.Scene->GetWorld() );
 };
 
-void FSDFSceneViewExtension::UploadSDFs( const UWorld* World )
+void FSDFSceneViewExtension::TransferSDFsToRenderThread( const UWorld* World )
 {
-	// Go over all actors with SDF objects
-	TArray<FVector4f> SDFRenderData;
-	for (TActorIterator<ASDFObjectActor> it{ World }; it; ++it)
-	{
-		// Grab the SDF object component
-		if (const USDFComponent* Obj{ it->GetComponentByClass<USDFComponent>() })
-		{
-			// Gather the necessary data for rendering
-			const FVector3f Pos{ Obj->GetComponentTransform().GetLocation() };
-			SDFRenderData.Add( { Pos, Obj->GetRadius() } );
-		}
-	}
+	// Only update if dirty
+	USDFSubsystem* SDFSubsystem{ World->GetSubsystem<USDFSubsystem>() };
+	if (not SDFSubsystem->GetAndResetDirty()) { return; }
 
-	// Queue some work for the render thread
-	// Move the render data, since it will go out of scope before this is executed
-	ENQUEUE_RENDER_COMMAND( SDFDataThreadTransfer )( [this, Data{ MoveTemp( SDFRenderData ) }] ( FRHICommandList& ) mutable
+	// Debug
+	GEngine->AddOnScreenDebugMessage( -1, // Force newline
+									  5.0f, // Time
+									  FColor::Yellow, 
+									  FString::Printf( TEXT( "Dirty SDF(s) found, updating render thread..." ) ) );
+
+	// Grab the game thread's SDFs
+	const TArray<FSDFRenderParams>& Params{ SDFSubsystem->GetRenderParams() };
+
+	// Transfer lambda
+	// Capture the parameters by copy, their state on the game thread might change before the lambda runs
+	auto TransferParams{ [this, Params = Params]( FRHICommandList& ) mutable
 	{
 		// On the render thread, set the SDF render data
-		SDFRenderData_RenderThread = MoveTemp( Data );
-	} );
+		SDFRenderParams_RenderThread = MoveTemp( Params );
+	} };
+
+	// Perform the transfer safely on the render thread
+	ENQUEUE_RENDER_COMMAND( SDFParamsThreadTransfer )( TransferParams );
 }
 
 // PostRenderBasePassDeferred is called after rendering but before deferred lighting

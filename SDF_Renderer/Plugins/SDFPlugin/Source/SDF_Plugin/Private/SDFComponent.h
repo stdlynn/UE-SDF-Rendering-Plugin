@@ -37,8 +37,8 @@ public:
 protected:
 	
 	// TODO: mark dirty, also if parameters change
-	virtual void OnUpdateTransform( EUpdateTransformFlags, 
-									ETeleportType = ETeleportType::None ) override;
+	virtual void OnUpdateTransform( EUpdateTransformFlags TransformFlags, 
+									ETeleportType TeleportType = ETeleportType::None ) override;
 
 private:
 
@@ -48,30 +48,29 @@ private:
 
 // TODO: create subsystem to help register the SDFs
 UCLASS()
-class USDFSubsystem : public UTickableWorldSubsystem
+class USDFSubsystem : public UWorldSubsystem
 {
 	GENERATED_BODY()
 
 public:
 
 	// TODO: how do we keep track of which is which?
-	void RegisterSDF( USDFComponent* Comp );
-	void UnregisterSDF( USDFComponent* Comp );
-	void SetSDFDirty( USDFComponent* Comp );
+	void RegisterSDF( const USDFComponent& Comp );
+	void UnregisterSDF( const USDFComponent& Comp );
+	void SetSDFDirty( const USDFComponent& Comp );
 
-	// TODO: change to using FWorldDelegates::OnWorldPostActorTick?
-	virtual void Tick(float DeltaTime) override;
-
-	// TODO: this becomes GetParams and returns game thread params
-	const TArray<FSDFRenderParams>& GetRenderParams() const { return SDFRenderParams_RenderThread; }
+	const TArray<FSDFRenderParams>& GetRenderParams() const { return SDFRenderParams; }
+	bool GetAndResetDirty()
+	{
+		const bool bWasDirty{ bDirty };
+		bDirty = false;
+		return bWasDirty;
+	}
 
 private:
 
-	void TransferToRenderThread();
-
-	TArray<FSDFRenderParams> SDFRenderParams; // Game thread
-	TArray<FSDFRenderParams> SDFRenderParams_RenderThread;
-
+	// Game thread
+	TArray<FSDFRenderParams> SDFRenderParams;
 	bool bDirty{ true };
 
 };

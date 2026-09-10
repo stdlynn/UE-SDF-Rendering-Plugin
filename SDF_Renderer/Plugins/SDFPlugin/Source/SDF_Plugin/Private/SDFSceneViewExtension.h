@@ -30,9 +30,9 @@ public:
 
 private:
 
-	void UploadSDFs( const UWorld* World );
+	void TransferSDFsToRenderThread( const UWorld* World );
 
-	TArray<FVector4f> SDFRenderData_RenderThread;
+	TArray<struct FSDFRenderParams> SDFRenderParams_RenderThread;
 
 };
 
