@@ -80,7 +80,7 @@ void FSDFSceneViewExtension::CreateSDFBuffer()
 	{
 		const uint32 NumAlloc{ static_cast<uint32>(std::max( RT.SDFRenderParams.Num(), 1 )) };
 		const FRDGBufferDesc Desc{ FRDGBufferDesc::CreateStructuredDesc( sizeof( FSDFRenderParams ), NumAlloc ) };
-		RT.SDFEdits.Buff = AllocatePooledBuffer( Desc, TEXT( "SDF Buffer" ) );
+		RT.SDFEdits.Buff = AllocatePooledBuffer( Desc, TEXT( "SDF Upload Buffer" ) );
 	}
 	// There is an existing buffer on the GPU, but we need to update it
 	else if (RT.SDFEdits.bDirty)
@@ -95,16 +95,48 @@ void FSDFSceneViewExtension::CreateSDFBuffer()
 		else
 		{
 			// TODO: dealloc old buff (or resize?)
+			// TODO: Don't think so, it's a shared pointer
+			// TODO: if you assign something new to it, the old one goes out of scope
+			// TODO: the RDG *should* take care of it (verify)
+			// TODO:
 			// TODO: alloc new buff
 		}
 	}
 }
+
 // PostRenderBasePassDeferred is called after rendering but before deferred lighting
 void FSDFSceneViewExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphBuilder, 
 																	  FSceneView& InView, 
 																	  const FRenderTargetBindingSlots& RenderTargets, 
 																	  TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
 {
+	// TODO: HI FRIDAY LYNN, here you go friend :)
+	// TODO: in the RDG article, see "Upload Buffers"
+	// TODO:
+	// TODO: CreateUploadDesc vs CreateStructuredUploadDesc
+	// TODO: should obviously be a structured buffer, no? Since it's
+	// TODO: a buffer of a struct (rather than just raw bytes)
+	const FRDGBufferDesc Desc{ FRDGBufferDesc::CreateUploadDesc( sizeof( FSDFRenderParams ), NumAlloc ) };
+	// TODO: CreateBuffer? CreateStructuredBuffer?
+	FRDGBufferRef SDFBuffRDG{ GraphBuilder.CreateBuffer( Desc, TEXT( "SDF Upload Buffer" ) ) };
+	FRDGUploadData<FSDFRenderParams> UploadData{ GraphBuilder, NumEdits };
+	// TODO: can also provide a data array (e.g. from storing it in a TArray) to the 2nd arg of QueueBufferUpload
+	// TODO: I put this as the second QueueBufferUpload, commented out
+	for (uint64 i{ 0 }; i < NumEdits; ++i)
+	{
+		UploadData[i] = ;
+	}
+	// TODO: NoCopy flag to indicate the uploaded data (as owned by us) will persist until graph deferral
+	GraphBuilder.QueueBufferUpload( SDFBuffRDG, UploadData, ERDGInitialDataFlags::NoCopy );
+	//GraphBuilder.QueueBufferUpload( SDFBuffRDG, Data, sizeof() * NumEdits, ERDGInitialDataFlags::NoCopy );
+	// TODO: Upload buffers are never transient, this doesn't mean they're automatically persistent/external
+	// TODO: So I think we still need to do the 'AllocatePooledBuffer' (and keep it as TRefCountPtr<FRDGPooledBuffer>
+	// TODO: and 'RegisterExternalBuffer' (per-frame register)
+	// TODO: do we need 'QueueBufferExtraction' to keep the buffer alive? Where?
+	// TODO:
+	// TODO: now we create the view (how a shader reads it)
+	GraphBuilder.CreateSRV( );
+
 	const FRDGTextureRef Depth = RenderTargets.DepthStencil.GetTexture();
 	if (!Depth)
 	{
