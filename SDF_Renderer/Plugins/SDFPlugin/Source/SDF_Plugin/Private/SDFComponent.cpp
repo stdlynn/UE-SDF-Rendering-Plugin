@@ -6,6 +6,7 @@
 ASDFActor::ASDFActor()
 	: sdf_object{ CreateDefaultSubobject<USDFComponent>( TEXT( "SDFObject" ) ) }
 {
+	// Use the SDF object as the root component so it dictates the actor's transform
 	RootComponent = sdf_object;
 
 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
@@ -30,14 +31,15 @@ void USDFComponent::OnUnregister()
 	Super::OnUnregister();
 }
 
+void USDFComponent::PostEditComponentMove( bool bFinished )
+{
+	Super::PostEditComponentMove( bFinished );
+	GetWorld()->GetSubsystem<USDFSubsystem>()->SetSDFDirty( *this );
+}
+
 void USDFComponent::OnUpdateTransform( EUpdateTransformFlags TransformFlags,
 									   ETeleportType TeleportType )
 {
-	GEngine->AddOnScreenDebugMessage( -1, // Force newline
-									  5.0f, // Time
-									  FColor::Yellow, 
-									  FString::Printf( TEXT( "IT TRIGGERED !!!!!!!" ) ) );
-	
 	Super::OnUpdateTransform( TransformFlags, TeleportType );
 	GetWorld()->GetSubsystem<USDFSubsystem>()->SetSDFDirty( *this );
 }
@@ -52,7 +54,7 @@ void USDFSubsystem::RegisterSDF( const USDFComponent& Comp )
 	// Debug
 	GEngine->AddOnScreenDebugMessage( -1, // Force newline
 									  5.0f, // Time
-									  FColor::Yellow, 
+									  FColor::Green, 
 									  FString::Printf( TEXT( "Added new SDF (%d total)" ), SDFRenderParams.Num() ) );
 }
 
@@ -64,7 +66,7 @@ void USDFSubsystem::UnregisterSDF( const USDFComponent& Comp )
 	// Debug
 	GEngine->AddOnScreenDebugMessage( -1, // Force newline
 									  5.0f, // Time
-									  FColor::Yellow, 
+									  FColor::Red, 
 									  FString::Printf( TEXT( "Removed SDF (%d total)" ), SDFRenderParams.Num() ) );
 }
 

@@ -15,18 +15,27 @@
 #include "SceneRendering.h"
 #include "DataDrivenShaderPlatformInfo.h"
 
+// TODO: once the sun and moon align (and our branches), rename to FSDFExtension
+// TODO: also rename file
 // Our Scene Extension
 class FSDFSceneViewExtension : public FSceneViewExtensionBase
 {
 public:
 
+	struct FSDFEdits
+	{
+		// TODO: also a buffer with 'NumEdits'
+		TRefCountPtr<FRDGPooledBuffer> Buff{ nullptr };
+		bool bDirty{ false };
+	};
+
 	FSDFSceneViewExtension(const FAutoRegister& AutoRegister);
 
 	virtual void SetupViewFamily(FSceneViewFamily& InViewFamily) override {};
 	virtual void SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView) override {};
-	virtual void BeginRenderViewFamily(FSceneViewFamily& InViewFamily) override;
 
-	// See SceneViewExtension.h for hooks to different stages of rendering
+	virtual void BeginRenderViewFamily(FSceneViewFamily& InViewFamily) override;
+	virtual void PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily) override;
 	virtual void PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphBuilder, 
 														  FSceneView& InView, 
 														  const FRenderTargetBindingSlots& RenderTargets, 
@@ -35,10 +44,22 @@ public:
 private:
 
 	void TransferSDFsToRenderThread( const UWorld* World );
+	void CreateSDFBuffer();
 
-	TMap<uint64, FSDFRenderParams> SDFRenderParams_RenderThread;
+	// Game thread
+	//struct
+	//{
+	//	
+	//} GT;
 
-};
+	// Render thread
+	struct
+	{
+		TMap<uint64, FSDFRenderParams> SDFRenderParams;
+		FSDFEdits SDFEdits;
+	} RT;
+
+}; // FSDFSceneViewExtension
 
 // Custom Shader
 class SDFPLUGIN_API FSDFTraverseShader : public FGlobalShader
@@ -50,6 +71,7 @@ public:
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View) // View/Camera
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<FSDFRenderParams>, SDFEdits)
 		RENDER_TARGET_BINDING_SLOTS() // RenderTarget Textures
 	END_SHADER_PARAMETER_STRUCT()
 

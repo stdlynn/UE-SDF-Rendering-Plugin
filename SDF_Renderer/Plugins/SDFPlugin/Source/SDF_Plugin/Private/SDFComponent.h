@@ -6,7 +6,7 @@
 #include "Components/SceneComponent.h"
 #include "SDFComponent.generated.h"
 
-// TODO: rename SDFObjectActor to SDFActor and move it in here
+// TODO: rename file SDFEdits
 
 struct FSDFGameParams
 {
@@ -36,7 +36,7 @@ public:
 
 protected:
 
-	// TODO: mark dirty, also if parameters change
+	virtual void PostEditComponentMove( bool bFinished ) override;
 	virtual void OnUpdateTransform( EUpdateTransformFlags TransformFlags,
 									ETeleportType TeleportType = ETeleportType::None ) override;
 

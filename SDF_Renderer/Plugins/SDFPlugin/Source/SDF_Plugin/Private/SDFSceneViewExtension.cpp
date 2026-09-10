@@ -48,7 +48,7 @@ void FSDFSceneViewExtension::TransferSDFsToRenderThread( const UWorld* World )
 
 	// Debug
 	GEngine->AddOnScreenDebugMessage( -1, // Force newline
-									  5.0f, // Time
+									  0.2f, // Time
 									  FColor::Yellow, 
 									  FString::Printf( TEXT( "Dirty SDF(s) found, updating render thread..." ) ) );
 
@@ -60,13 +60,46 @@ void FSDFSceneViewExtension::TransferSDFsToRenderThread( const UWorld* World )
 	auto TransferParams{ [this, Params = Params]( FRHICommandList& ) mutable
 	{
 		// On the render thread, set the SDF render data
-		SDFRenderParams_RenderThread = MoveTemp( Params );
+		RT.SDFRenderParams = MoveTemp( Params );
+		RT.SDFEdits.bDirty = true;
 	} };
 
 	// Perform the transfer safely on the render thread
 	ENQUEUE_RENDER_COMMAND( SDFParamsThreadTransfer )( TransferParams );
 }
 
+void FSDFSceneViewExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder, 
+															   FSceneViewFamily& InViewFamily )
+{
+	CreateSDFBuffer();
+}
+
+void FSDFSceneViewExtension::CreateSDFBuffer()
+{
+	// No SDF edits have been allocated on the GPU
+	if (not RT.SDFEdits.Buff.IsValid())
+	{
+		const uint32 NumAlloc{ static_cast<uint32>(std::max( RT.SDFRenderParams.Num(), 1 )) };
+		const FRDGBufferDesc Desc{ FRDGBufferDesc::CreateStructuredDesc( sizeof( FSDFRenderParams ), NumAlloc ) };
+		RT.SDFEdits.Buff = AllocatePooledBuffer( Desc, TEXT( "SDF Buffer" ) );
+	}
+	// There is an existing buffer on the GPU, but we need to update it
+	else if (RT.SDFEdits.bDirty)
+	{
+		// We can update/overwrite the current SDF edits
+		const uint32 CurrNum{ RT.SDFEdits.Buff->GetSize() / sizeof( FSDFRenderParams ) };
+		if (CurrNum >= static_cast<uint32>(RT.SDFRenderParams.Num()))
+		{
+			// TODO: upload new data
+		}
+		// There isn't enough space to store the SDF edits, reallocate
+		else
+		{
+			// TODO: dealloc old buff (or resize?)
+			// TODO: alloc new buff
+		}
+	}
+}
 // PostRenderBasePassDeferred is called after rendering but before deferred lighting
 void FSDFSceneViewExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphBuilder, 
 																	  FSceneView& InView, 
@@ -85,8 +118,13 @@ void FSDFSceneViewExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilde
 		// Gives us more data from the FSceneView
 		const FViewInfo& View = static_cast<const FViewInfo&>(InView);
 
+		// TODO: register every frame?
+		// The SDF edits buffer is persistent
+		const FRDGBufferRef RDGBuff = GraphBuilder.RegisterExternalBuffer( RT.SDFEdits.Buff, ERDGBufferFlags::MultiFrame );
+
 		FSDFTraverseShader::FParameters* PassParameters = GraphBuilder.AllocParameters<FSDFTraverseShader::FParameters>();
 		PassParameters->View = InView.ViewUniformBuffer;
+		PassParameters->SDFEdits = GraphBuilder.CreateSRV( RDGBuff );
 		PassParameters->RenderTargets = RenderTargets;
 		PassParameters->RenderTargets.DepthStencil = FDepthStencilBinding(
 			Depth,
