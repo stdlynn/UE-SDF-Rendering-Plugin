@@ -2,6 +2,25 @@
 
 #include "/Engine/Public/Platform.ush"
 
+struct FPrimitive
+{
+	float3 Pos;
+	float Radius;
+};
+
+struct AABB
+{
+	float3 Min;
+	float3 Max;
+};
+
+static const FPrimitive SDFEdits[4] =
+{
+	{ 300, 300, 300, 1.0 },
+	{ 600, 600, 600, 1.0 },
+	{ 600, 300, 300, 0.5 },
+	{ 300, 600, 300, 0.7 }
+};
 
 float SDFSphere(float3 Point, float3 Center, float Radius)
 {
@@ -13,8 +32,16 @@ float3 GetSphereNormal(float3 Point, float3 Center, float Radius)
 {
 	const float H = 0.004; // magic value for now, read linked article for details
 	const float2 K = float2(1, -1);
-	return normalize(K.xyy * SDFSphere(Point + K.xyy * H, Center , Radius) + 
-					 K.yyx * SDFSphere(Point + K.yyx * H, Center , Radius) + 
-					 K.yxy * SDFSphere(Point + K.yxy * H, Center , Radius) + 
-					 K.xxx * SDFSphere(Point + K.xxx * H, Center , Radius));
+	return normalize(K.xyy * SDFSphere(Point + K.xyy * H, Center, Radius) +
+					 K.yyx * SDFSphere(Point + K.yyx * H, Center, Radius) +
+					 K.yxy * SDFSphere(Point + K.yxy * H, Center, Radius) +
+					 K.xxx * SDFSphere(Point + K.xxx * H, Center, Radius));
+}
+
+AABB GetSphereAABB(float3 Center, float Radius)
+{
+	AABB Result;
+	Result.Min = float3(Center - Radius);
+	Result.Max = float3(Center + Radius);
+	return Result;
 }

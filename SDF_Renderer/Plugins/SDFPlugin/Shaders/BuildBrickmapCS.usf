@@ -4,12 +4,38 @@
 #include "/Engine/Public/Platform.ush"
 #define BRICKMAP_WRITE
 #include "BrickmapCommon.ush"
+#include "Common.ush"
+
+RWTexture3D<float> BrickAtlas;
+RWBuffer<uint> PtrGrid;
+RWBuffer<uint> BrickAllocCounter;
 
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
 void BuildBrickmapCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-    if (any(ThreadId >= AtlasSize))
-        return;
+	//if (any(ThreadId >= AtlasSize))
+	//    return;
+	if (ThreadId != uint3(0, 0, 0))
+	{
+		return;
+	}
 
-    BrickAtlas[ThreadId] = float(ThreadId.z) / AtlasSize.z;
+	const uint NumSDFEdits = 4;
+	for (int Idx = 0; Idx < NumSDFEdits; Idx++)
+	{
+		FPrimitive Primitive = SDFEdits[Idx];
+		AABB SphereAABB = GetSphereAABB(Primitive.Pos, Primitive.Radius);
+		uint3 MinBrickPos = WorldToBrickPos(SphereAABB.Min);
+		uint3 MaxBrickPos = WorldToBrickPos(SphereAABB.Max);
+		
+		uint3 NumBricks = abs(MaxBrickPos - MinBrickPos) + 1;
+		for (int z = 0; z < NumBricks.z; z++) {
+		for (int y = 0; y < NumBricks.y; y++) {
+		for (int x = 0; x < NumBricks.y; x++)
+		{
+			uint3 GridPos = uint3(x, y, z);
+			AllocateSafe(GridPos);
+			PopulateBrickSDF(GridPos, Primitive.Pos, Primitive.Radius);
+		}}}
+	}
 }

@@ -86,7 +86,7 @@ public:
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(Texture3D<float>, BrickAtlas)	 // Brick Atlas
-		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint>, PtrBuffer)		 // Pointer Buffer
+		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint>, PtrGrid)			 // Pointer Grid
 		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint>, BrickAllocCounter) // Atomic Counter
 		SHADER_PARAMETER(FIntVector, GridSize)
 		SHADER_PARAMETER(FIntVector, AtlasSize)
