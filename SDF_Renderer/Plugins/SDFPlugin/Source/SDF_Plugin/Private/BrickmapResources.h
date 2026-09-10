@@ -7,15 +7,15 @@
 struct FBrickmapResources
 {
 	TRefCountPtr<IPooledRenderTarget> BrickAtlas;
-	TRefCountPtr<FRDGPooledBuffer> BrickPtrBuffer;
+	TRefCountPtr<FRDGPooledBuffer> PtrBuffer;
 	TRefCountPtr<FRDGPooledBuffer> BrickAllocCounter;
 	// Store descs to be able to query their dimensions
 	FRDGTextureDesc BrickAtlasDesc;
-	FRDGBufferDesc BrickPtrBufferDesc;
+	FRDGBufferDesc PtrGridDesc;
 
 	bool IsValid() const
 	{
-		return BrickAtlas.IsValid() && BrickPtrBuffer.IsValid()
+		return BrickAtlas.IsValid() && PtrBuffer.IsValid()
 				&& BrickAllocCounter.IsValid();
 	}
 
@@ -23,7 +23,7 @@ struct FBrickmapResources
 	{
 		check(IsInRenderingThread());
 		BrickAtlas.SafeRelease();
-		BrickPtrBuffer.SafeRelease();
+		PtrBuffer.SafeRelease();
 		BrickAllocCounter.SafeRelease();
 	}
 };

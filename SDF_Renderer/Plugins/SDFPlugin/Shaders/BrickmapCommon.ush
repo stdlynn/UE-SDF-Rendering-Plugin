@@ -12,10 +12,70 @@ Texture3D<float> BrickAtlas;
 Buffer<uint> PtrGrid;
 #endif
 
+static const uint BrickResolution = 8;
+static const uint VoxelResolution = BrickResolution - 1;
+
+static const uint3 NumAtlasBricks = uint3(64, 64, 1);
+static const uint3 AtlasSize = NumAtlasBricks * BrickResolution;
+
+static const uint3 PtrGridSize = uint3(64, 64, 64);
+
+// World position to Ptr Grid cell
+uint3 WorldToBrickPos(float3 World)
+{
+    return floor(World / VoxelResolution);
+}
+
+// 0..1
+float3 WorldToVoxelPos(float3 World)
+{
+    return World % VoxelResolution;
+}
+
+uint2 IdxToAtlasBrickPos(uint Idx)
+{
+    return uint2(Idx % AtlasSize.x, Idx / VoxelResolution);
+}
+
+float3 GetAtlasUVW(uint Idx, float3 World)
+{
+    uint2 AtlasBrickCell = IdxToAtlasBrickPos(Idx);
+    float3 Local = WorldToVoxelPos(World);
+    return (float3(AtlasBrickCell, 0) + Local) * NumAtlasBricks;
+}
+
+// World position to UVW coordinate to sample from Atlas
+float3 WorldToAtlasUVW(float3 World)
+{
+    uint3 GridCell = WorldToBrickPos(World);
+    uint Idx = PtrGrid[GridCell];
+    return GetAtlasUVW(Idx, World);
+}
+
+bool IsBrickAllocated(uint3 GridCell)
+{
+    return (PtrGrid[GridCell] != 0xFFFFFFFF);
+}
+
+// Allocate a brick, only if this location isn't already allocated
+void AllocateSafe(uint3 BrickPos)
+{
+	// TODO: This isn't safe right now (the same ptr grid cell could increment the counter more than once)
+	// Won't be an issue when we upload a list of bricks to update
+    if (IsBrickAllocated(BrickPos))
+        return;
+
+	uint NextIndex;
+    InterlockedAdd(BrickAllocCounter[0], 1, NextIndex);
+
+    PtrGrid[NextIndex] = NextIndex;
+}
+
+// Allocate a brick by storing its index in the pointer grid
 void Allocate(uint3 BrickPos)
 {
-	uint nextIndex;
-	InterlockedAdd(BrickAllocCounter[0], 1, nextIndex);
+    uint NextIndex;
+    InterlockedAdd(BrickAllocCounter[0], 1, NextIndex);
 
-	PtrGrid[nextIndex] = nextIndex;
+    PtrGrid[NextIndex] = NextIndex;
 }

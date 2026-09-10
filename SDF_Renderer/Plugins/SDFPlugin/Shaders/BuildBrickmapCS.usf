@@ -8,6 +8,8 @@
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
 void BuildBrickmapCS(uint3 ThreadId : SV_DispatchThreadID)
 {
-	
-	BrickAtlas[ThreadId] = 0.5;
+    if (any(ThreadId >= AtlasSize))
+        return;
+
+    BrickAtlas[ThreadId] = float(ThreadId.z) / AtlasSize.z;
 }

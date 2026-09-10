@@ -2,6 +2,7 @@
 
 #include "/Engine/Public/Platform.ush"
 
+
 float SDFSphere(float3 Point, float3 Center, float Radius)
 {
 	return length(Point - Center) - Radius;

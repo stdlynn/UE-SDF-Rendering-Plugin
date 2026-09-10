@@ -43,7 +43,7 @@ BEGIN_UNIFORM_BUFFER_STRUCT(FPtrBuffer, )
 	SHADER_PARAMETER(uint32, Idx)
 END_UNIFORM_BUFFER_STRUCT()
 
-BEGIN_UNIFORM_BUFFER_STRUCT(FAtomicCounter, )
+BEGIN_UNIFORM_BUFFER_STRUCT(FBrickAllocCounter, )
 	SHADER_PARAMETER(uint32, Counter)
 END_UNIFORM_BUFFER_STRUCT()
 
@@ -85,9 +85,9 @@ public:
 	SHADER_USE_PARAMETER_STRUCT(FBuildBrickmapShader, FGlobalShader)
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-		SHADER_PARAMETER_RDG_TEXTURE_UAV(Texture3D<float>, BrickAtlas) // Brick Atlas
-		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint>, PtrBuffer)	   // Pointer Buffer
-		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint>, FAtomicCounter)  // Atomic Counter
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(Texture3D<float>, BrickAtlas)	 // Brick Atlas
+		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint>, PtrBuffer)		 // Pointer Buffer
+		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint>, BrickAllocCounter) // Atomic Counter
 		SHADER_PARAMETER(FIntVector, GridSize)
 		SHADER_PARAMETER(FIntVector, AtlasSize)
 	END_SHADER_PARAMETER_STRUCT()

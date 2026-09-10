@@ -9,9 +9,10 @@ IMPLEMENT_GLOBAL_SHADER(FSDFTraverseShader, "/Plugins/SDFPlugin/PostProcessCS.us
 IMPLEMENT_GLOBAL_SHADER(FBuildBrickmapShader, "/Plugins/SDFPlugin/BuildBrickmapCS.usf", "BuildBrickmapCS", SF_Compute);
 
 IMPLEMENT_UNIFORM_BUFFER_STRUCT(FPtrBuffer, "PtrBuffer");
-IMPLEMENT_UNIFORM_BUFFER_STRUCT(FAtomicCounter, "AtomicCounter");
+IMPLEMENT_UNIFORM_BUFFER_STRUCT(FBrickAllocCounter, "BrickAllocCounter");
 
-static const FIntVector GridSize = FIntVector(64, 64, 64);
+static const FIntVector AtlasSize = FIntVector(512, 512, 8);
+static const FIntVector PtrGridSize = FIntVector(64, 64, 64);
 
 namespace
 {
@@ -54,8 +55,6 @@ void FSDFSceneViewExtension::AllocateBrickmap()
 {
 	check(IsInRenderingThread());
 
-	const FIntVector AtlasSize = FIntVector(512, 512, 8);
-
 	BrickmapResources.BrickAtlasDesc = FRDGTextureDesc::Create3D(
 		AtlasSize, PF_R8, FClearValueBinding::None,
 		TexCreate_ShaderResource | TexCreate_UAV);
@@ -63,11 +62,11 @@ void FSDFSceneViewExtension::AllocateBrickmap()
 	BrickmapResources.BrickAtlas = 
 		AllocatePooledTexture(BrickmapResources.BrickAtlasDesc, TEXT("SDF_BrickAtlas"));
 
-	const uint32 PtrGridSize = GridSize.X * GridSize.Y * GridSize.Z;
-	BrickmapResources.BrickPtrBufferDesc = FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), PtrGridSize);
+	const uint32 GridSize = PtrGridSize.X * PtrGridSize.Y * PtrGridSize.Z;
+	BrickmapResources.PtrGridDesc = FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), GridSize);
 
-	BrickmapResources.BrickPtrBuffer = 
-		AllocatePooledBuffer(BrickmapResources.BrickPtrBufferDesc, TEXT("SDF_BrickPtrBuffer"));
+	BrickmapResources.PtrBuffer = 
+		AllocatePooledBuffer(BrickmapResources.PtrGridDesc, TEXT("SDF_BrickPtrBuffer"));
 	
 	BrickmapResources.BrickAllocCounter =
 		AllocatePooledBuffer(FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), 1), TEXT("SDF_BrickAllocCounter"));
@@ -101,11 +100,10 @@ void FSDFSceneViewExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& Graph
 		FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture(
 			BrickmapResources.BrickAtlas, ERDGTextureFlags::MultiFrame);
 		FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(
-			BrickmapResources.BrickPtrBuffer, ERDGBufferFlags::MultiFrame);
-		FRHISamplerState* BrickSampler =
-			TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
-		
-		const FIntVector AtlasSize = FIntVector(512, 512, 8);
+			BrickmapResources.PtrBuffer, ERDGBufferFlags::MultiFrame);
+		FRDGBufferRef AtomicCounterRDG = GraphBuilder.RegisterExternalBuffer(
+			BrickmapResources.BrickAllocCounter, ERDGBufferFlags::MultiFrame);
+
 		const FRDGTextureDesc BrickAtlasDesc = FRDGTextureDesc::Create3D(
 			AtlasSize, PF_R8, FClearValueBinding::None,
 			TexCreate_ShaderResource | TexCreate_UAV);
@@ -117,7 +115,8 @@ void FSDFSceneViewExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& Graph
 			GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
 		PassParameters->BrickAtlas = GraphBuilder.CreateUAV(BrickAtlasRDG);
 		PassParameters->PtrBuffer = GraphBuilder.CreateUAV(PtrBufferRDG);
-		PassParameters->GridSize = GridSize;
+		PassParameters->BrickAllocCounter = GraphBuilder.CreateUAV(AtomicCounterRDG);
+		PassParameters->GridSize = PtrGridSize;
 		PassParameters->AtlasSize = AtlasSize;
 
 		FIntVector GroupCount{
@@ -161,7 +160,7 @@ void FSDFSceneViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder
 		FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture(
 			BrickmapResources.BrickAtlas, ERDGTextureFlags::MultiFrame);
 		FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(
-			BrickmapResources.BrickPtrBuffer, ERDGBufferFlags::MultiFrame);
+			BrickmapResources.PtrBuffer, ERDGBufferFlags::MultiFrame);
 		FRHISamplerState* BrickSampler = 
 			TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 
