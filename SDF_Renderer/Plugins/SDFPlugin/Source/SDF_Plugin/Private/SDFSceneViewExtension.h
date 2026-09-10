@@ -3,6 +3,10 @@
 
 #pragma once
 
+// Plugin
+#include "SDFComponent.h"
+
+// UE
 #include "CoreMinimal.h"
 #include "RenderGraphUtils.h"
 #include "SceneViewExtension.h"
@@ -32,7 +36,7 @@ private:
 
 	void TransferSDFsToRenderThread( const UWorld* World );
 
-	TArray<struct FSDFRenderParams> SDFRenderParams_RenderThread;
+	TMap<uint64, FSDFRenderParams> SDFRenderParams_RenderThread;
 
 };
 

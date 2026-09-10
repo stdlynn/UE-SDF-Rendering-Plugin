@@ -26,25 +26,44 @@ class USDFComponent : public USceneComponent
 
 public:
 
-	// Sets default values for this component's properties
 	USDFComponent();
 
 	virtual void OnRegister() override;
 	virtual void OnUnregister() override;
 
 	const FSDFGameParams& GetParams() const { return Params; }
+	uint64 GetID() const { return ID; }
 
 protected:
-	
+
 	// TODO: mark dirty, also if parameters change
-	virtual void OnUpdateTransform( EUpdateTransformFlags TransformFlags, 
+	virtual void OnUpdateTransform( EUpdateTransformFlags TransformFlags,
 									ETeleportType TeleportType = ETeleportType::None ) override;
 
 private:
 
-	FSDFGameParams Params{};
+	inline static uint64 NextID{ 0 };
 
-};
+	FSDFGameParams Params{};
+	uint64 ID;
+
+}; // USDFComponent
+
+UCLASS()
+class ASDFActor : public AActor
+{
+	GENERATED_BODY()
+
+public:
+
+	// Sets default values for this actor's properties
+	ASDFActor();
+
+private:
+
+	USDFComponent* sdf_object;
+
+}; // ASDFActor
 
 // TODO: create subsystem to help register the SDFs
 UCLASS()
@@ -59,7 +78,7 @@ public:
 	void UnregisterSDF( const USDFComponent& Comp );
 	void SetSDFDirty( const USDFComponent& Comp );
 
-	const TArray<FSDFRenderParams>& GetRenderParams() const { return SDFRenderParams; }
+	const TMap<uint64, FSDFRenderParams>& GetRenderParams() const { return SDFRenderParams; }
 	bool GetAndResetDirty()
 	{
 		const bool bWasDirty{ bDirty };
@@ -70,7 +89,7 @@ public:
 private:
 
 	// Game thread
-	TArray<FSDFRenderParams> SDFRenderParams;
+	TMap<uint64, FSDFRenderParams> SDFRenderParams;
 	bool bDirty{ true };
 
-};
+}; // USDFSubsystem

@@ -4,7 +4,6 @@
 // Plugin
 #include "SDFSceneViewExtension.h"
 #include "PostProcess/SceneRenderTargets.h"
-#include "SDFObjectActor.h"
 
 // UE
 #include "EngineUtils.h"
@@ -54,7 +53,7 @@ void FSDFSceneViewExtension::TransferSDFsToRenderThread( const UWorld* World )
 									  FString::Printf( TEXT( "Dirty SDF(s) found, updating render thread..." ) ) );
 
 	// Grab the game thread's SDFs
-	const TArray<FSDFRenderParams>& Params{ SDFSubsystem->GetRenderParams() };
+	const TMap<uint64, FSDFRenderParams>& Params{ SDFSubsystem->GetRenderParams() };
 
 	// Transfer lambda
 	// Capture the parameters by copy, their state on the game thread might change before the lambda runs

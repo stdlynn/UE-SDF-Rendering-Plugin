@@ -2,10 +2,19 @@
 
 #include "SDFComponent.h"
 
-USDFComponent::USDFComponent()
+// Sets default values
+ASDFActor::ASDFActor()
+	: sdf_object{ CreateDefaultSubobject<USDFComponent>( TEXT( "SDFObject" ) ) }
 {
-	// TODO: do we need this?
-	// TODO: Does this affect transforms?
+	RootComponent = sdf_object;
+
+	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+	PrimaryActorTick.bCanEverTick = true;
+}
+
+USDFComponent::USDFComponent()
+	: ID{ NextID++ }
+{
 	PrimaryComponentTick.bCanEverTick = true;
 }
 
@@ -24,6 +33,11 @@ void USDFComponent::OnUnregister()
 void USDFComponent::OnUpdateTransform( EUpdateTransformFlags TransformFlags,
 									   ETeleportType TeleportType )
 {
+	GEngine->AddOnScreenDebugMessage( -1, // Force newline
+									  5.0f, // Time
+									  FColor::Yellow, 
+									  FString::Printf( TEXT( "IT TRIGGERED !!!!!!!" ) ) );
+	
 	Super::OnUpdateTransform( TransformFlags, TeleportType );
 	GetWorld()->GetSubsystem<USDFSubsystem>()->SetSDFDirty( *this );
 }
@@ -32,8 +46,7 @@ void USDFSubsystem::RegisterSDF( const USDFComponent& Comp )
 {
 	const auto [Radius]{ Comp.GetParams() };
 	const FVector3f Pos{ Comp.GetComponentTransform().GetLocation() };
-	SDFRenderParams.Emplace( Pos, Radius );
-	// TODO: keep track of components (I think we just assign IDs upon construction?)
+	SDFRenderParams.Add( Comp.GetID(), { Pos, Radius } );
 	bDirty = true;
 
 	// Debug
@@ -45,7 +58,7 @@ void USDFSubsystem::RegisterSDF( const USDFComponent& Comp )
 
 void USDFSubsystem::UnregisterSDF( const USDFComponent& Comp )
 {
-	//
+	SDFRenderParams.Remove( Comp.GetID() );
 	bDirty = true;
 
 	// Debug
@@ -57,6 +70,8 @@ void USDFSubsystem::UnregisterSDF( const USDFComponent& Comp )
 
 void USDFSubsystem::SetSDFDirty( const USDFComponent& Comp )
 {
-	//
+	const auto [Radius]{ Comp.GetParams() };
+	const FVector3f Pos{ Comp.GetComponentTransform().GetLocation() };
+	SDFRenderParams[Comp.GetID()] = FSDFRenderParams{ Pos, Radius };
 	bDirty = true;
 }
