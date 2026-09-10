@@ -4,7 +4,7 @@
 #pragma once
 
 // Plugin
-#include "SDFComponent.h"
+#include "SDFEdits.h"
 
 // UE
 #include "CoreMinimal.h"
@@ -24,7 +24,7 @@ public:
 
 	struct FSDFEdits
 	{
-		// TODO: also a buffer with 'NumEdits'
+		// TODO: also a uniform with 'NumEdits'
 		TRefCountPtr<FRDGPooledBuffer> Buff{ nullptr };
 		bool bDirty{ false };
 	};

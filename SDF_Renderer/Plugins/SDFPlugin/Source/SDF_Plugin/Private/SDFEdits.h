@@ -4,9 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
-#include "SDFComponent.generated.h"
-
-// TODO: rename file SDFEdits
+#include "SDFEdits.generated.h"
 
 struct FSDFGameParams
 {
@@ -65,7 +63,6 @@ private:
 
 }; // ASDFActor
 
-// TODO: create subsystem to help register the SDFs
 UCLASS()
 class USDFSubsystem : public UWorldSubsystem
 {
@@ -73,7 +70,6 @@ class USDFSubsystem : public UWorldSubsystem
 
 public:
 
-	// TODO: how do we keep track of which is which?
 	void RegisterSDF( const USDFComponent& Comp );
 	void UnregisterSDF( const USDFComponent& Comp );
 	void SetSDFDirty( const USDFComponent& Comp );

@@ -7,7 +7,6 @@
 
 // UE
 #include "EngineUtils.h"
-#include "SDFComponent.h"
 
 IMPLEMENT_GLOBAL_SHADER( FSDFTraverseShader, "/Plugins/SDFPlugin/PostProcessCS.usf", "MainPS", SF_Pixel );
 
