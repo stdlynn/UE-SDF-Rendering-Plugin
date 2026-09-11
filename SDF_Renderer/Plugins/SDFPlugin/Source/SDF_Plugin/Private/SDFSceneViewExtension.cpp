@@ -142,6 +142,7 @@ void FSDFSceneViewExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilde
 		FSDFTraverseShader::FParameters* PassParameters = GraphBuilder.AllocParameters<FSDFTraverseShader::FParameters>();
 		PassParameters->View = InView.ViewUniformBuffer;
 		PassParameters->SDFEdits = GraphBuilder.CreateSRV( SDFBuffRDG ); // Create the SDF buffer view (which specifies how the shader should read it)
+		PassParameters->NumEdits = RT.SDFs.Num();
 		PassParameters->RenderTargets = RenderTargets;
 		PassParameters->RenderTargets.DepthStencil = FDepthStencilBinding(
 			Depth,

@@ -74,6 +74,7 @@ public:
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View) // View/Camera
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FGPUSDF>, SDFEdits)
+		SHADER_PARAMETER(uint32, NumEdits)
 		RENDER_TARGET_BINDING_SLOTS() // RenderTarget Textures
 	END_SHADER_PARAMETER_STRUCT()
 
