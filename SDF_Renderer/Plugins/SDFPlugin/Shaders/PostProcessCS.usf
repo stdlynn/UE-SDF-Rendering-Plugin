@@ -7,6 +7,17 @@
 #include "/Engine/Private/DeferredShadingCommon.ush"
 #include "/Engine/Private/SceneTexturesCommon.ush"
 
+struct FGPUSDF
+{
+    float3 Pos;
+    float Radius;
+    uint Idx;
+};
+
+// Shader bindings
+StructuredBuffer<FGPUSDF> SDFEdits;
+uint NumEdits;
+
 float SDFSphere(float3 Point, float3 Center, float Radius)
 {
 	return length(Point - Center) - Radius;
@@ -40,14 +51,21 @@ void MainPS(
 
     float4 TranslatedWorldPosH = mul(float4(NDC, 0.5, 1), View.ClipToTranslatedWorld);
 	float3 Direction = normalize(TranslatedWorldPosH.xyz / TranslatedWorldPosH.w);
-	float3 Origin = View.ViewOriginHigh;
+	float3 Origin = View.ViewOriginHigh / 100.0;
 	float3 RayPosition = Origin;
 	float DistanceTraveled = 0.0;
 
-	const float SurfaceEpsilon = 0.01;
+	const float SurfaceEpsilon = 0.0001;
 	const float MaxDistance = 100000.0;
-	const float SphereRadius = 100.0;
-	const float3 SphereCenter = float3(0, 0, 0);
+	float SphereRadius = 1.0;
+	float3 SphereCenter = float3(0, 0, 0);
+
+	// TODO: temporary overwrite for testing
+	if (NumEdits > 0)
+	{
+        SphereRadius = SDFEdits[0].Radius;
+        SphereCenter = SDFEdits[0].Pos;
+    }
 
 	bool bHit = false;
 	for (int i = 0; i < 64; i++)
@@ -70,7 +88,7 @@ void MainPS(
 	{
 		float3 Normal = GetSphereNormal(RayPosition, SphereCenter, SphereRadius);
 
-		float ViewZ = mul(float4(RayPosition - Origin, 1.0), View.TranslatedWorldToView).z;
+		float ViewZ = mul(float4((RayPosition - Origin) * 100.0, 1.0), View.TranslatedWorldToView).z;
 		OutDepth = ConvertToDeviceZ(ViewZ);
 
 		FGBufferData GBuffer = (FGBufferData) 0;
