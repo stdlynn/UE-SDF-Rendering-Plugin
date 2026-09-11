@@ -1,8 +1,8 @@
 #include "SDFResourceSubsystem.h"
-#include "SDFSceneViewExtension.h"
+#include "SDFExtension.h"
 
 #include "SDFResourceSubsystem.h"
-#include "SDFSceneViewExtension.h"
+#include "SDFExtension.h"
 #include "SceneViewExtension.h"
 
 bool USDFResourceSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -27,14 +27,14 @@ void USDFResourceSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 
 	SceneViewExtension =
-		FSceneViewExtensions::NewExtension<FSDFSceneViewExtension>(GetWorld());
+		FSceneViewExtensions::NewExtension<FSDFExtension>(GetWorld());
 }
 
 void USDFResourceSubsystem::Deinitialize()
 {
 	if (SceneViewExtension)
 	{
-		FSDFSceneViewExtension* SVE = SceneViewExtension.Get();
+		FSDFExtension* SVE = SceneViewExtension.Get();
 		ENQUEUE_RENDER_COMMAND(ReleaseSDF)([SVE](FRHICommandListImmediate&)
 			{
 				SVE->ReleaseResources();

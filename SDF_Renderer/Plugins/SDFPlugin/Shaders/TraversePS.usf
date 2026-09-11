@@ -7,15 +7,8 @@
 #include "BrickmapCommon.ush"
 #include "Common.ush"
 
-struct FGPUSDF
-{
-    float3 Pos;
-    float Radius;
-    uint Idx;
-};
-
 // Shader bindings
-StructuredBuffer<FGPUSDF> SDFEdits;
+StructuredBuffer<FSDFEdit> SDFEdits;
 uint NumEdits;
 
 Texture3D<float> BrickAtlas;
@@ -40,20 +33,20 @@ void TraversePS(
 	float3 Origin = View.ViewOriginHigh * UnitSize; // Convert unit size
 	float3 RayPos = Origin;
 	float DistTraveled = 0.0;
-	uint PrimitiveHitIdx = 0xFFFFFFFF;
+	uint EditHitIdx = 0xFFFFFFFF;
 
 	bool bHit = false;
 	for (int Sample = 0; Sample < 32; Sample++)
 	{
 		float ClosestDist = MaxRayDist;
-		for (int PrimitiveIdx = 0; PrimitiveIdx < NumPrimitives; PrimitiveIdx++)
+		for (int EditIdx = 0; EditIdx < NumEdits; EditIdx++)
 		{
-			FPrimitive Primitive = SDFEdits[PrimitiveIdx];
-			float Dist = abs(SDFSphere(RayPos, Primitive.Pos, Primitive.Radius));
+			FSDFEdit Edit = SDFEdits[EditIdx];
+			float Dist = abs(SDFSphere(RayPos, Edit.Pos, Edit.Radius));
 			if (Dist < ClosestDist)
 			{
 				ClosestDist = Dist;
-				PrimitiveHitIdx = PrimitiveIdx;
+				EditHitIdx = EditIdx;
 			}
 		}
 
@@ -72,8 +65,8 @@ void TraversePS(
 
 	if (bHit)
 	{
-		FPrimitive Primitive = SDFEdits[PrimitiveHitIdx];
-		float3 Normal = GetSphereNormal(RayPos, Primitive.Pos, Primitive.Radius);
+		FSDFEdit Edit = SDFEdits[EditHitIdx];
+		float3 Normal = GetSphereNormal(RayPos, Edit.Pos, Edit.Radius);
 
 		// Convert unit size
 		float ViewZ = mul(float4((RayPos - Origin) / UnitSize, 1.0), View.TranslatedWorldToView).z;

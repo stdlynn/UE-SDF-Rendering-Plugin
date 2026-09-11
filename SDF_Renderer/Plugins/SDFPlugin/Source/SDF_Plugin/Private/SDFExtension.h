@@ -18,7 +18,7 @@
 // TODO: once the sun and moon align (and our branches), rename to FSDFExtension
 // TODO: also rename file
 // Our Scene Extension
-class FSDFSceneViewExtension : public FSceneViewExtensionBase
+class FSDFExtension : public FSceneViewExtensionBase
 {
 public:
 
@@ -30,7 +30,7 @@ public:
 		bool bUpload{ false };
 	};
 
-	FSDFSceneViewExtension(const FAutoRegister& AutoRegister, UWorld* InWorld);
+	FSDFExtension(const FAutoRegister& AutoRegister, UWorld* InWorld);
 
 	// To prevent multiple instaces of the extension
 	virtual bool IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const override;
@@ -50,8 +50,9 @@ public:
 
 private:
 
-	void TransferSDFsToRenderThread( const UWorld* World );
+	void TransferSDFsToRenderThread();
 	void UpdateSDFBuffer();
+	FRDGBufferRef RegisterSDFBuffer(FRDGBuilder& GraphBuilder);
 		
 	// Game thread
 	//struct
@@ -70,7 +71,7 @@ private:
 	TWeakObjectPtr<UWorld> World;
 	FBrickmapResources BrickmapResources;
 	uint32 LastBrickmapBuildFrame = MAX_uint32;
-}; // FSDFSceneViewExtension
+}; // FSDFExtension
 
 BEGIN_UNIFORM_BUFFER_STRUCT(FPtrBuffer, )
 	SHADER_PARAMETER(uint32, Idx)
@@ -120,6 +121,8 @@ public:
 	SHADER_USE_PARAMETER_STRUCT(FBuildBrickmapShader, FGlobalShader)
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FGPUSDF>, SDFEdits)
+		SHADER_PARAMETER(uint32, NumEdits)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(Texture3D<float>, BrickAtlas)	 // Brick Atlas
 		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint>, PtrGrid)			 // Pointer Grid
 		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint>, BrickAllocCounter) // Atomic Counter

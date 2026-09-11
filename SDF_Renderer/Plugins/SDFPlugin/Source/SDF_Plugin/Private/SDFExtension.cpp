@@ -2,14 +2,14 @@
 // Copyright 2023 - 2025 Ossi Luoto
 
 // Plugin
-#include "SDFSceneViewExtension.h"
+#include "SDFExtension.h"
 #include "PostProcess/SceneRenderTargets.h"
 #include "RenderGraphUtils.h"
 
 // UE
 #include "EngineUtils.h"
 
-IMPLEMENT_GLOBAL_SHADER(FSDFTraverseShader, "/Plugins/SDFPlugin/PostProcessCS.usf", "TraversePS", SF_Pixel);
+IMPLEMENT_GLOBAL_SHADER(FSDFTraverseShader, "/Plugins/SDFPlugin/TraversePS.usf", "TraversePS", SF_Pixel);
 IMPLEMENT_GLOBAL_SHADER(FBuildBrickmapShader, "/Plugins/SDFPlugin/BuildBrickmapCS.usf", "BuildBrickmapCS", SF_Compute);
 
 IMPLEMENT_UNIFORM_BUFFER_STRUCT(FPtrBuffer, "PtrGridBuff");
@@ -29,18 +29,18 @@ namespace
 		ECVF_RenderThreadSafe);
 }
 
-FSDFSceneViewExtension::FSDFSceneViewExtension(const FAutoRegister& AutoRegister, UWorld* InWorld) 
+FSDFExtension::FSDFExtension(const FAutoRegister& AutoRegister, UWorld* InWorld) 
 	: FSceneViewExtensionBase(AutoRegister), World(InWorld)
 {
 	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Custom SceneViewExtension registered"));
 }
 
-void FSDFSceneViewExtension::ReleaseResources()
+void FSDFExtension::ReleaseResources()
 {
 	BrickmapResources.Release();
 }
 
-bool FSDFSceneViewExtension::IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const
+bool FSDFExtension::IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const
 {
 	const UWorld* W = World.Get();
 	
@@ -60,7 +60,7 @@ bool FSDFSceneViewExtension::IsActiveThisFrame_Internal(const FSceneViewExtensio
 	return false;
 }
 
-void FSDFSceneViewExtension::BeginRenderViewFamily( FSceneViewFamily& InViewFamily )
+void FSDFExtension::BeginRenderViewFamily( FSceneViewFamily& InViewFamily )
 {
 	// 'BeginRenderViewFamily' is called when the view family is about to be rendered
 	// Allowing for game thread work before rendering a view family
@@ -68,10 +68,10 @@ void FSDFSceneViewExtension::BeginRenderViewFamily( FSceneViewFamily& InViewFami
 	// A view family is a group of views that gets rendered together for the same frame/setup
 
 	// We call this from here so it runs on the Game Thread
-	TransferSDFsToRenderThread( InViewFamily.Scene->GetWorld() );
+	TransferSDFsToRenderThread();
 };
 
-void FSDFSceneViewExtension::TransferSDFsToRenderThread( const UWorld* World )
+void FSDFExtension::TransferSDFsToRenderThread()
 {
 	// Only update if dirty
 	USDFSubsystem* SDFSubsystem{ World->GetSubsystem<USDFSubsystem>() };
@@ -105,7 +105,7 @@ void FSDFSceneViewExtension::TransferSDFsToRenderThread( const UWorld* World )
 	ENQUEUE_RENDER_COMMAND( SDFParamsThreadTransfer )( TransferParams );
 }
 
-void FSDFSceneViewExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily)
+void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily)
 {
 	UpdateSDFBuffer();
 
@@ -121,7 +121,7 @@ void FSDFSceneViewExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& Graph
 	}
 
 	// For now, just build it once and never again
-	RDG_EVENT_SCOPE(GraphBuilder, "Build Brickmap");
+	RDG_EVENT_SCOPE(GraphBuilder, "SDF_Build_Brickmap");
 	{
 		FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(InViewFamily.GetFeatureLevel());
 
@@ -132,9 +132,7 @@ void FSDFSceneViewExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& Graph
 		FRDGBufferRef AtomicCounterRDG = GraphBuilder.RegisterExternalBuffer(
 			BrickmapResources.BrickAllocCounter, ERDGBufferFlags::MultiFrame);
 
-		const FRDGTextureDesc BrickAtlasDesc = FRDGTextureDesc::Create3D(
-			AtlasSize, PF_R8, FClearValueBinding::None,
-			TexCreate_ShaderResource | TexCreate_UAV);
+		const FRDGBufferRef SDFBuffRDG{ RegisterSDFBuffer( GraphBuilder ) };
 
 		// Clear the brickmap every frame for now
 		AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(BrickAtlasRDG), 1.0f);
@@ -143,6 +141,8 @@ void FSDFSceneViewExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& Graph
 
 		FBuildBrickmapShader::FParameters* PassParameters =
 			GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
+		PassParameters->SDFEdits = GraphBuilder.CreateSRV(SDFBuffRDG); // Create the SDF buffer view (which specifies how the shader should read it)
+		PassParameters->NumEdits = RT.SDFs.Num();
 		PassParameters->BrickAtlas = GraphBuilder.CreateUAV(BrickAtlasRDG);
 		PassParameters->PtrGrid = GraphBuilder.CreateUAV(PtrBufferRDG);
 		PassParameters->BrickAllocCounter = GraphBuilder.CreateUAV(AtomicCounterRDG);
@@ -168,7 +168,7 @@ void FSDFSceneViewExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& Graph
 	}
 }
 
-void FSDFSceneViewExtension::UpdateSDFBuffer()
+void FSDFExtension::UpdateSDFBuffer()
 {
 	// The buffer is not up-to-date (or doesn't exist)
 	if (not RT.SDFResources.bDirty) { return; }
@@ -195,7 +195,23 @@ void FSDFSceneViewExtension::UpdateSDFBuffer()
 	}
 }
 
-void FSDFSceneViewExtension::AllocateBrickmap()
+FRDGBufferRef FSDFExtension::RegisterSDFBuffer(FRDGBuilder& GraphBuilder)
+{
+	const FRDGBufferRef SDFBuffRDG{ GraphBuilder.RegisterExternalBuffer(RT.SDFResources.Buff, ERDGBufferFlags::MultiFrame) };
+	if (RT.SDFResources.bUpload)
+	{
+		// 'NoCopy' indicates the RDG doesn't need to create its own copy of the specified upload data
+		// We may only use it if we guarantee the provided data survives until the RDG uploads it
+		GraphBuilder.QueueBufferUpload(SDFBuffRDG,
+			RT.SDFs.GetData(),
+			sizeof(FGPUSDF) * RT.SDFs.Num(),
+			ERDGInitialDataFlags::NoCopy);
+		RT.SDFResources.bUpload = false;
+	}
+	return SDFBuffRDG;
+}
+
+void FSDFExtension::AllocateBrickmap()
 {
 	check(IsInRenderingThread());
 
@@ -218,7 +234,7 @@ void FSDFSceneViewExtension::AllocateBrickmap()
 	GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, TEXT("Allocated Brickmap"));
 }
 
-void FSDFSceneViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
+void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
 {
 	FRDGTextureRef DepthTexture = RenderTargets.DepthStencil.GetTexture();
 	if (!DepthTexture)
@@ -241,17 +257,7 @@ void FSDFSceneViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder
 
 		// Tell the RDG that the SDF buffer will be used this frame
 		// Specify that it is persistent/external ('MultiFrame')
-		const FRDGBufferRef SDFBuffRDG{ GraphBuilder.RegisterExternalBuffer( RT.SDFResources.Buff, ERDGBufferFlags::MultiFrame ) };
-		if (RT.SDFResources.bUpload)
-		{
-			// 'NoCopy' indicates the RDG doesn't need to create its own copy of the specified upload data
-			// We may only use it if we guarantee the provided data survives until the RDG uploads it
-			GraphBuilder.QueueBufferUpload( SDFBuffRDG, 
-											RT.SDFs.GetData(), 
-											sizeof( FGPUSDF ) * RT.SDFs.Num(), 
-											ERDGInitialDataFlags::NoCopy );
-			RT.SDFResources.bUpload = false;
-		}		
+		const FRDGBufferRef SDFBuffRDG{ RegisterSDFBuffer( GraphBuilder ) };
 
 		FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture(
 			BrickmapResources.BrickAtlas, ERDGTextureFlags::MultiFrame);

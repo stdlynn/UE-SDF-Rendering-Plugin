@@ -4,7 +4,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "SDFResourceSubsystem.generated.h"
 
-class FSDFSceneViewExtension;
+class FSDFExtension;
 
 UCLASS()
 class SDFPLUGIN_API USDFResourceSubsystem : public UWorldSubsystem
@@ -18,5 +18,5 @@ public:
 	virtual void Deinitialize() override;
 
 private:
-	TSharedPtr<FSDFSceneViewExtension, ESPMode::ThreadSafe> SceneViewExtension;
+	TSharedPtr<FSDFExtension, ESPMode::ThreadSafe> SceneViewExtension;
 };

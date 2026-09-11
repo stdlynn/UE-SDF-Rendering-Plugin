@@ -10,6 +10,9 @@ RWBuffer<uint> BrickAllocCounter;
 #include "BrickmapCommon.ush"
 #include "Common.ush"
 
+StructuredBuffer<FSDFEdit> SDFEdits;
+uint NumEdits;
+
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
 void BuildBrickmapCS(uint3 ThreadId : SV_DispatchThreadID)
 {
@@ -20,13 +23,12 @@ void BuildBrickmapCS(uint3 ThreadId : SV_DispatchThreadID)
 		return;
 	}
 
-	const uint NumSDFEdits = 4;
-	for (int Idx = 0; Idx < NumSDFEdits; Idx++)
+	for (int Idx = 0; Idx < NumEdits; Idx++)
 	{
-		FPrimitive Primitive = SDFEdits[Idx];
-		Primitive.Pos *= 32.0;
-		Primitive.Radius *= 32.0;
-		AABB SphereAABB = GetSphereAABB(Primitive.Pos, Primitive.Radius);
+		FSDFEdit Edit = SDFEdits[Idx];
+		Edit.Pos *= 24.0;
+		Edit.Radius *= 24.0;
+		AABB SphereAABB = GetSphereAABB(Edit.Pos, Edit.Radius);
 		uint3 MinGridCell = WorldPosToGridCell(SphereAABB.Min);
 		uint3 MaxGridCell = WorldPosToGridCell(SphereAABB.Max);
 		
@@ -38,7 +40,7 @@ void BuildBrickmapCS(uint3 ThreadId : SV_DispatchThreadID)
 		{
 			uint3 GridCell = MinGridCell + GridCellOffset;
 			AllocateSafe(GridCell);
-			PopulateBrickSDF(GridCell, Primitive.Pos, Primitive.Radius);
+			PopulateBrickSDF(GridCell, Edit.Pos, Edit.Radius);
 		}}}
 	}
 }
