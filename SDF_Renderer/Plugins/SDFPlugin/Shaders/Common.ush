@@ -12,6 +12,7 @@ struct FSDFEdit
     float3 Pos;
     float Radius;
     uint Idx;
+    uint Padding[3];
 };
 
 struct AABB
