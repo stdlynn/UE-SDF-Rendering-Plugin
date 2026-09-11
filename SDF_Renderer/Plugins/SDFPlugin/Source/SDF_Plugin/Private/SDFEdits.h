@@ -6,15 +6,30 @@
 #include "Components/SceneComponent.h"
 #include "SDFEdits.generated.h"
 
+// SDF edit representation used for the SDF component
 struct FGameSDF
 {
 	float Radius{ 100.0f };
 };
 
+// SDF edit representation sent to the render thread
 struct FRenderSDF
 {
+	// Convert unit sizes
+	FRenderSDF( const FGameSDF& GameSDF, FVector3f Pos )
+		: Pos{ Pos / 100.0f }
+		, Radius{ GameSDF.Radius / 100.0f }
+	{}
+
 	FVector3f Pos;
 	float Radius;
+};
+
+// GPU SDF edits
+struct FGPUSDF
+{
+	FRenderSDF SDF;
+	uint32 Idx;
 };
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
@@ -70,13 +85,11 @@ class USDFSubsystem : public UWorldSubsystem
 
 public:
 
-	using FRenderSDFs = TMap<uint64, FRenderSDF>;
-
 	void RegisterSDF( const USDFComponent& Comp );
 	void UnregisterSDF( const USDFComponent& Comp );
 	void SetSDFDirty( const USDFComponent& Comp );
 
-	const FRenderSDFs& GetRenderParams() const { return RenderSDFs; }
+	const auto& GetRenderSDFs() const { return RenderSDFs; }
 	bool GetAndResetDirty()
 	{
 		const bool bWasDirty{ bDirty };
@@ -87,7 +100,7 @@ public:
 private:
 
 	// Render params, game thread
-	FRenderSDFs RenderSDFs;
+	TMap<uint64, FRenderSDF> RenderSDFs;
 	bool bDirty{ true };
 
 }; // USDFSubsystem

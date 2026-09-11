@@ -53,15 +53,20 @@ void FSDFSceneViewExtension::TransferSDFsToRenderThread( const UWorld* World )
 									  FString::Printf( TEXT( "Dirty SDF(s) found, updating render thread..." ) ) );
 
 	// Grab the game thread's SDFs
-	const auto& Params{ SDFSubsystem->GetRenderParams() };
+	const auto& SDFs{ SDFSubsystem->GetRenderSDFs() };
 
 	// Transfer lambda
 	// Capture the parameters by copy, their state on the game thread might change before the lambda runs
-	auto TransferParams{ [this, Params = Params]( FRHICommandList& ) mutable
+	auto TransferParams{ [this, SDFs = SDFs]( FRHICommandList& ) mutable
 	{
-		// On the render thread, set the SDF render data
-		RT.SDFRenderParams = MoveTemp( Params );
-		RT.SDFEdits.bDirty = true;
+		// Copy the SDF data over to the render thread
+		RT.SDFs.Empty();
+		RT.SDFs.Reserve( SDFs.Num() );
+		for (auto& Pair : SDFs)
+		{
+			RT.SDFs.Emplace( MoveTemp( Pair.Value ), Pair.Key );
+		}
+		RT.SDFResources.bDirty = true;
 	} };
 
 	// Perform the transfer safely on the render thread
@@ -71,56 +76,33 @@ void FSDFSceneViewExtension::TransferSDFsToRenderThread( const UWorld* World )
 void FSDFSceneViewExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 															   FSceneViewFamily& InViewFamily )
 {
-	CreateSDFBuffer( GraphBuilder );
+	UpdateSDFBuffer();
 }
 
-void FSDFSceneViewExtension::CreateSDFBuffer( FRDGBuilder& GraphBuilder )
+void FSDFSceneViewExtension::UpdateSDFBuffer()
 {
-	// No SDF edits have been allocated on the GPU
-	if (not RT.SDFResources.Buff.IsValid())
+	// The buffer is not up-to-date (or doesn't exist)
+	if (not RT.SDFResources.bDirty) { return; }
+
+	// We need to upload the updated SDF buffer
+	RT.SDFResources.bUpload = true;
+
+	// If the buffer hasn't been allocated or isn't large enough
+	// If not, we simply overwrite the current data through the upload call
+	if (not RT.SDFResources.Buff.IsValid()
+		|| (RT.SDFResources.Buff->GetSize() / sizeof( FGPUSDF )) < static_cast<uint32>(RT.SDFs.Num()))
 	{
 		// We cannot allocate a buffer of size 0
-		const uint32 NumAlloc{ static_cast<uint32>(FMath::Max( RT.SDFs.Num(), 1 )) };
+		const uint32 Capacity{ static_cast<uint32>(FMath::Max( RT.SDFs.Num(), 1 )) };
 
 		// We need a structured buffer (because we're storing an array of structs)
 		// We need it to be an upload buffer, which are for CPU-to-GPU uploads
-		const FRDGBufferDesc Desc{ FRDGBufferDesc::CreateStructuredUploadDesc( sizeof( FRenderSDF ), NumAlloc ) }
+		const FRDGBufferDesc Desc{ FRDGBufferDesc::CreateStructuredUploadDesc( sizeof( FGPUSDF ), Capacity ) };
 
 		// By manually allocating a buffer, we guarantee it's persistent among frames
 		// This wouldn't be the case for 'GraphBuilder.CreateBuffer()'
+		// If we already have a buffer allocated, it will be deallocated by the RDG when it goes out of scope
 		RT.SDFResources.Buff = AllocatePooledBuffer( Desc, TEXT( "SDF Upload Buffer" ) );
-
-
-		FRDGUploadData<FRenderSDF> UploadData{ GraphBuilder, NumEdits };
-		// TODO: can also provide a data array (e.g. from storing it in a TArray) to the 2nd arg of QueueBufferUpload
-		// TODO: I put this as the second QueueBufferUpload, commented out
-		for (uint64 i{ 0 }; i < NumEdits; ++i)
-		{
-			UploadData[i] =;
-		}
-		// TODO: NoCopy flag to indicate the uploaded data (as owned by us) will persist until graph deferral
-		// TODO: upload here or in RDG_EVENT_SCOPE?
-		GraphBuilder.QueueBufferUpload( SDFBuffRDG, UploadData, ERDGInitialDataFlags::NoCopy );
-	}
-	// There is an existing buffer on the GPU, but we need to update it
-	else if (RT.SDFResources.bDirty)
-	{
-		// We can update/overwrite the current SDF edits
-		const uint32 CurrNum{ RT.SDFEdits.Buff->GetSize() / sizeof( FRenderSDF ) };
-		if (CurrNum >= static_cast<uint32>(RT.SDFRenderParams.Num()))
-		{
-			// TODO: upload new data
-		}
-		// There isn't enough space to store the SDF edits, reallocate
-		else
-		{
-			// TODO: dealloc old buff (or resize?)
-			// TODO: Don't think so, it's a shared pointer
-			// TODO: if you assign something new to it, the old one goes out of scope
-			// TODO: the RDG *should* take care of it (verify)
-			// TODO:
-			// TODO: alloc new buff
-		}
 	}
 }
 
@@ -130,10 +112,6 @@ void FSDFSceneViewExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilde
 																	  const FRenderTargetBindingSlots& RenderTargets,
 																	  TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures )
 {
-	
-	// Create the SDF buffer view (which specifies how the shader should read it)
-	GraphBuilder.CreateSRV();
-
 	const FRDGTextureRef Depth = RenderTargets.DepthStencil.GetTexture();
 	if (! Depth)
 	{
@@ -148,11 +126,22 @@ void FSDFSceneViewExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilde
 
 		// Tell the RDG that the SDF buffer will be used this frame
 		// Specify that it is persistent/external ('MultiFrame')
-		GraphBuilder.RegisterExternalBuffer( RT.SDFResources.Buff, ERDGBufferFlags::MultiFrame );
+		const FRDGBufferRef SDFBuffRDG{ GraphBuilder.RegisterExternalBuffer( RT.SDFResources.Buff, ERDGBufferFlags::MultiFrame ) };
+		if (RT.SDFResources.bUpload)
+		{
+			// 'NoCopy' indicates the RDG doesn't need to create its own copy of the specified upload data
+			// We may only use it if we guarantee the provided data survives until the RDG uploads it
+			GraphBuilder.QueueBufferUpload( SDFBuffRDG, 
+											RT.SDFs.GetData(), 
+											sizeof( FGPUSDF ) * RT.SDFs.Num(), 
+											ERDGInitialDataFlags::NoCopy );
+			RT.SDFResources.bUpload = false;
+		}
 
+		// Set shader bindings
 		FSDFTraverseShader::FParameters* PassParameters = GraphBuilder.AllocParameters<FSDFTraverseShader::FParameters>();
 		PassParameters->View = InView.ViewUniformBuffer;
-		PassParameters->SDFEdits = GraphBuilder.CreateSRV(  );
+		PassParameters->SDFEdits = GraphBuilder.CreateSRV( SDFBuffRDG ); // Create the SDF buffer view (which specifies how the shader should read it)
 		PassParameters->RenderTargets = RenderTargets;
 		PassParameters->RenderTargets.DepthStencil = FDepthStencilBinding(
 			Depth,

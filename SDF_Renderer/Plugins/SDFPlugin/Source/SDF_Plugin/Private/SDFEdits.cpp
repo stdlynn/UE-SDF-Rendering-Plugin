@@ -46,9 +46,8 @@ void USDFComponent::OnUpdateTransform( EUpdateTransformFlags TransformFlags,
 
 void USDFSubsystem::RegisterSDF( const USDFComponent& Comp )
 {
-	const auto [Radius]{ Comp.GetSDF() };
 	const FVector3f Pos{ Comp.GetComponentTransform().GetLocation() };
-	RenderSDFs.Add( Comp.GetID(), { Pos, Radius } );
+	RenderSDFs.Add( Comp.GetID(), { Comp.GetSDF(), Pos } );
 	bDirty = true;
 
 	// Debug
@@ -72,8 +71,7 @@ void USDFSubsystem::UnregisterSDF( const USDFComponent& Comp )
 
 void USDFSubsystem::SetSDFDirty( const USDFComponent& Comp )
 {
-	const auto [Radius]{ Comp.GetSDF() };
 	const FVector3f Pos{ Comp.GetComponentTransform().GetLocation() };
-	RenderSDFs[Comp.GetID()] = FRenderSDF{ Pos, Radius };
+	RenderSDFs[Comp.GetID()] = FRenderSDF{ Comp.GetSDF(), Pos };
 	bDirty = true;
 }

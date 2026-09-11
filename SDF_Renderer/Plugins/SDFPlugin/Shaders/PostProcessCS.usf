@@ -7,6 +7,14 @@
 #include "/Engine/Private/DeferredShadingCommon.ush"
 #include "/Engine/Private/SceneTexturesCommon.ush"
 
+struct FGPUSDF
+{
+    FRenderSDF SDF;
+    uint32 Idx;
+};
+
+StructuredBuffer<FGPUSDF> SDFEdits;
+
 float SDFSphere(float3 Point, float3 Center, float Radius)
 {
 	return length(Point - Center) - Radius;

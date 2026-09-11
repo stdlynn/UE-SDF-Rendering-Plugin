@@ -26,7 +26,8 @@ public:
 	{
 		// TODO: also a uniform with 'NumEdits'
 		TRefCountPtr<FRDGPooledBuffer> Buff{ nullptr };
-		bool bDirty{ false };
+		bool bDirty{ true }; // True to always allocate the buffer the first frame
+		bool bUpload{ false };
 	};
 
 	FSDFSceneViewExtension(const FAutoRegister& AutoRegister);
@@ -44,8 +45,8 @@ public:
 private:
 
 	void TransferSDFsToRenderThread( const UWorld* World );
-	void CreateSDFBuffer( FRDGBuilder& GraphBuilder );
-
+	void UpdateSDFBuffer();
+		
 	// Game thread
 	//struct
 	//{
@@ -55,7 +56,8 @@ private:
 	// Render thread
 	struct
 	{
-		USDFSubsystem::FRenderSDFs SDFs;
+		// TODO: make TArray
+		TArray<FGPUSDF> SDFs;
 		FSDFResources SDFResources;
 	} RT;
 
@@ -71,7 +73,7 @@ public:
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View) // View/Camera
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<FSDFRenderParams>, SDFEdits)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FGPUSDF>, SDFEdits)
 		RENDER_TARGET_BINDING_SLOTS() // RenderTarget Textures
 	END_SHADER_PARAMETER_STRUCT()
 
