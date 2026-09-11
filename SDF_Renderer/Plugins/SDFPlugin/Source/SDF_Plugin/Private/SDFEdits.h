@@ -6,12 +6,12 @@
 #include "Components/SceneComponent.h"
 #include "SDFEdits.generated.h"
 
-struct FSDFGameParams
+struct FGameSDF
 {
 	float Radius{ 100.0f };
 };
 
-struct FSDFRenderParams
+struct FRenderSDF
 {
 	FVector3f Pos;
 	float Radius;
@@ -28,13 +28,13 @@ public:
 
 	virtual void OnRegister() override;
 	virtual void OnUnregister() override;
+	virtual void PostEditComponentMove( bool bFinished ) override;
 
-	const FSDFGameParams& GetParams() const { return Params; }
+	const FGameSDF& GetSDF() const { return GameSDF; }
 	uint64 GetID() const { return ID; }
 
 protected:
 
-	virtual void PostEditComponentMove( bool bFinished ) override;
 	virtual void OnUpdateTransform( EUpdateTransformFlags TransformFlags,
 									ETeleportType TeleportType = ETeleportType::None ) override;
 
@@ -42,7 +42,8 @@ private:
 
 	inline static uint64 NextID{ 0 };
 
-	FSDFGameParams Params{};
+	// Game params, game thread
+	FGameSDF GameSDF{};
 	uint64 ID;
 
 }; // USDFComponent
@@ -54,12 +55,11 @@ class ASDFActor : public AActor
 
 public:
 
-	// Sets default values for this actor's properties
 	ASDFActor();
 
 private:
 
-	USDFComponent* sdf_object;
+	USDFComponent* SDFComp;
 
 }; // ASDFActor
 
@@ -70,11 +70,13 @@ class USDFSubsystem : public UWorldSubsystem
 
 public:
 
+	using FRenderSDFs = TMap<uint64, FRenderSDF>;
+
 	void RegisterSDF( const USDFComponent& Comp );
 	void UnregisterSDF( const USDFComponent& Comp );
 	void SetSDFDirty( const USDFComponent& Comp );
 
-	const TMap<uint64, FSDFRenderParams>& GetRenderParams() const { return SDFRenderParams; }
+	const FRenderSDFs& GetRenderParams() const { return RenderSDFs; }
 	bool GetAndResetDirty()
 	{
 		const bool bWasDirty{ bDirty };
@@ -84,8 +86,8 @@ public:
 
 private:
 
-	// Game thread
-	TMap<uint64, FSDFRenderParams> SDFRenderParams;
+	// Render params, game thread
+	FRenderSDFs RenderSDFs;
 	bool bDirty{ true };
 
 }; // USDFSubsystem

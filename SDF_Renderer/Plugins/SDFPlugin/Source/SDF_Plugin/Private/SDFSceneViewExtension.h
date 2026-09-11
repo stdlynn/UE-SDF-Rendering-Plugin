@@ -22,7 +22,7 @@ class FSDFSceneViewExtension : public FSceneViewExtensionBase
 {
 public:
 
-	struct FSDFEdits
+	struct FSDFResources
 	{
 		// TODO: also a uniform with 'NumEdits'
 		TRefCountPtr<FRDGPooledBuffer> Buff{ nullptr };
@@ -44,7 +44,7 @@ public:
 private:
 
 	void TransferSDFsToRenderThread( const UWorld* World );
-	void CreateSDFBuffer();
+	void CreateSDFBuffer( FRDGBuilder& GraphBuilder );
 
 	// Game thread
 	//struct
@@ -55,8 +55,8 @@ private:
 	// Render thread
 	struct
 	{
-		TMap<uint64, FSDFRenderParams> SDFRenderParams;
-		FSDFEdits SDFEdits;
+		USDFSubsystem::FRenderSDFs SDFs;
+		FSDFResources SDFResources;
 	} RT;
 
 }; // FSDFSceneViewExtension
