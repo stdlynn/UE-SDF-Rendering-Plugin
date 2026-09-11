@@ -95,7 +95,7 @@ public:
 		SHADER_PARAMETER(uint32, NumEdits)
 		SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture3D<float>, BrickAtlas)	// Brick Atlas
 		SHADER_PARAMETER_SAMPLER(SamplerState, BrickSampler)			// Brick Sampler
-		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, PtrBuffer)		// Pointer Buffer
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, PtrGrid)		// Pointer Buffer
 		RENDER_TARGET_BINDING_SLOTS() // GBuffer Textures
 	END_SHADER_PARAMETER_STRUCT()
 
@@ -121,11 +121,11 @@ public:
 	SHADER_USE_PARAMETER_STRUCT(FBuildBrickmapShader, FGlobalShader)
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(Texture3D<float>, BrickAtlas)	   // Brick Atlas
+		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, PtrGrid)		   // Pointer Grid
+		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, BrickAllocCounter) // Atomic Counter
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FGPUSDF>, SDFEdits)
 		SHADER_PARAMETER(uint32, NumEdits)
-		SHADER_PARAMETER_RDG_TEXTURE_UAV(Texture3D<float>, BrickAtlas)	 // Brick Atlas
-		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint>, PtrGrid)			 // Pointer Grid
-		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint>, BrickAllocCounter) // Atomic Counter
 		SHADER_PARAMETER(FIntVector, GridSize)
 		SHADER_PARAMETER(FIntVector, AtlasSize)
 	END_SHADER_PARAMETER_STRUCT()

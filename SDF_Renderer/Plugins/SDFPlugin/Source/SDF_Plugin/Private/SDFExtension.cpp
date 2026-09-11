@@ -136,16 +136,16 @@ void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, 
 
 		// Clear the brickmap every frame for now
 		AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(BrickAtlasRDG), 1.0f);
-		AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(PtrBufferRDG), 0xFFFFFFFFu);
-		AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(AtomicCounterRDG), 0);
+		AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(PtrBufferRDG, PF_R32_UINT), 0xFFFFFFFFu);
+		AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(AtomicCounterRDG, PF_R32_UINT), 0);
 
 		FBuildBrickmapShader::FParameters* PassParameters =
 			GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
 		PassParameters->SDFEdits = GraphBuilder.CreateSRV(SDFBuffRDG); // Create the SDF buffer view (which specifies how the shader should read it)
 		PassParameters->NumEdits = RT.SDFs.Num();
 		PassParameters->BrickAtlas = GraphBuilder.CreateUAV(BrickAtlasRDG);
-		PassParameters->PtrGrid = GraphBuilder.CreateUAV(PtrBufferRDG);
-		PassParameters->BrickAllocCounter = GraphBuilder.CreateUAV(AtomicCounterRDG);
+		PassParameters->PtrGrid = GraphBuilder.CreateUAV(PtrBufferRDG, PF_R32_UINT);
+		PassParameters->BrickAllocCounter = GraphBuilder.CreateUAV(AtomicCounterRDG, PF_R32_UINT);
 		PassParameters->GridSize = PtrGridSize;
 		PassParameters->AtlasSize = AtlasSize;
 
@@ -222,11 +222,11 @@ void FSDFExtension::AllocateBrickmap()
 		AllocatePooledTexture(BrickAtlasDesc, TEXT("SDF_BrickAtlas"));
 
 	const uint32 GridSize = PtrGridSize.X * PtrGridSize.Y * PtrGridSize.Z;
-	FRDGBufferDesc PtrGridDesc = FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), GridSize);
+	FRDGBufferDesc PtrGridDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), GridSize);
 	BrickmapResources.PtrGrid = 
 		AllocatePooledBuffer(PtrGridDesc, TEXT("SDF_BrickPtrBuffer"));
 	
-	FRDGBufferDesc CounterDesc = FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), 1);
+	FRDGBufferDesc CounterDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), 1);
 	BrickmapResources.BrickAllocCounter =
 		AllocatePooledBuffer(CounterDesc, TEXT("SDF_BrickAllocCounter"));
 
@@ -273,7 +273,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBu
 		PassParameters->NumEdits = RT.SDFs.Num();
 		PassParameters->BrickAtlas = GraphBuilder.CreateSRV(BrickAtlasRDG);
 		PassParameters->BrickSampler = BrickSampler;
-		PassParameters->PtrBuffer = GraphBuilder.CreateSRV(PtrBufferRDG);
+		PassParameters->PtrGrid = GraphBuilder.CreateSRV(PtrBufferRDG, PF_R32_UINT);
 		PassParameters->RenderTargets = RenderTargets;
 		PassParameters->RenderTargets.DepthStencil = FDepthStencilBinding(
 			DepthTexture,
