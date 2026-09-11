@@ -9,11 +9,11 @@
     "Modules": [
 
         {
-            "Name": "SDFPlugin",
-            "Type": "Runtime",
-            "LoadingPhase": "PostConfigInit",
-            "WhitelistPlatforms": ["Win64"]
+          "Name": "SDFPlugin",
+          "Type": "Runtime",
+          "LoadingPhase": "PostConfigInit",
+          "PlatformAllowList": [ "Win64" ]
         }
     ],
-    "EnabledByDefault": false
+    "EnabledByDefault": true
 }

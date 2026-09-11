@@ -3,18 +3,33 @@
 
 #pragma once
 
+// Plugin
+#include "SDFEdits.h"
+#include "BrickmapResources.h"
+
+// UE
 #include "CoreMinimal.h"
 #include "SceneViewExtension.h"
 #include "PixelShaderUtils.h"
 #include "ScreenPass.h"
 #include "SceneRendering.h"
 #include "DataDrivenShaderPlatformInfo.h"
-#include "BrickmapResources.h"
 
+// TODO: once the sun and moon align (and our branches), rename to FSDFExtension
+// TODO: also rename file
 // Our Scene Extension
 class FSDFSceneViewExtension : public FSceneViewExtensionBase
 {
 public:
+
+	struct FSDFResources
+	{
+		// TODO: also a uniform with 'NumEdits'
+		TRefCountPtr<FRDGPooledBuffer> Buff{ nullptr };
+		bool bDirty{ true }; // True to always allocate the buffer the first frame
+		bool bUpload{ false };
+	};
+
 	FSDFSceneViewExtension(const FAutoRegister& AutoRegister, UWorld* InWorld);
 
 	// To prevent multiple instaces of the extension
@@ -22,22 +37,40 @@ public:
 	
 	virtual void SetupViewFamily(FSceneViewFamily& InViewFamily) override {};
 	virtual void SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView) override {};
-	virtual void BeginRenderViewFamily(FSceneViewFamily& InViewFamily) override {};
+
+	virtual void BeginRenderViewFamily(FSceneViewFamily& InViewFamily) override;
+	virtual void PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily) override;
+	virtual void PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphBuilder, 
+														  FSceneView& InView, 
+														  const FRenderTargetBindingSlots& RenderTargets, 
+														  TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures) override;
 
 	void AllocateBrickmap();
 	void ReleaseResources();
-	
-	// See SceneViewExtension.h for hooks to different stages of rendering
-	// PreRenderViewFamily is called before rendering of each view family
-	virtual void PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily) override;
-	// PostRenderBasePassDeferred is called after rendering but before deferred lighting
-	virtual void PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures) override;
 
 private:
+
+	void TransferSDFsToRenderThread( const UWorld* World );
+	void UpdateSDFBuffer();
+		
+	// Game thread
+	//struct
+	//{
+	//	
+	//} GT;
+
+	// Render thread
+	struct
+	{
+		// TODO: make TArray
+		TArray<FGPUSDF> SDFs;
+		FSDFResources SDFResources;
+	} RT;
+
 	TWeakObjectPtr<UWorld> World;
 	FBrickmapResources BrickmapResources;
 	uint32 LastBrickmapBuildFrame = MAX_uint32;
-};
+}; // FSDFSceneViewExtension
 
 BEGIN_UNIFORM_BUFFER_STRUCT(FPtrBuffer, )
 	SHADER_PARAMETER(uint32, Idx)
@@ -57,6 +90,8 @@ public:
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View) // View/Camera
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FGPUSDF>, SDFEdits)
+		SHADER_PARAMETER(uint32, NumEdits)
 		SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture3D<float>, BrickAtlas)	// Brick Atlas
 		SHADER_PARAMETER_SAMPLER(SamplerState, BrickSampler)			// Brick Sampler
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, PtrBuffer)		// Pointer Buffer

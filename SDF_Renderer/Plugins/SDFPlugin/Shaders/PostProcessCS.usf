@@ -7,6 +7,17 @@
 #include "BrickmapCommon.ush"
 #include "Common.ush"
 
+struct FGPUSDF
+{
+    float3 Pos;
+    float Radius;
+    uint Idx;
+};
+
+// Shader bindings
+StructuredBuffer<FGPUSDF> SDFEdits;
+uint NumEdits;
+
 Texture3D<float> BrickAtlas;
 SamplerState BrickSampler;
 Buffer<uint> PtrGrid;

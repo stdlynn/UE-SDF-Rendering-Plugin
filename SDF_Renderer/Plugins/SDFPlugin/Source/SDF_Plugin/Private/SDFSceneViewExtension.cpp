@@ -1,9 +1,13 @@
 // Custom SceneViewExtension Template for Unreal Engine
 // Copyright 2023 - 2025 Ossi Luoto
 
+// Plugin
 #include "SDFSceneViewExtension.h"
 #include "PostProcess/SceneRenderTargets.h"
 #include "RenderGraphUtils.h"
+
+// UE
+#include "EngineUtils.h"
 
 IMPLEMENT_GLOBAL_SHADER(FSDFTraverseShader, "/Plugins/SDFPlugin/PostProcessCS.usf", "TraversePS", SF_Pixel);
 IMPLEMENT_GLOBAL_SHADER(FBuildBrickmapShader, "/Plugins/SDFPlugin/BuildBrickmapCS.usf", "BuildBrickmapCS", SF_Compute);
@@ -31,6 +35,11 @@ FSDFSceneViewExtension::FSDFSceneViewExtension(const FAutoRegister& AutoRegister
 	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Custom SceneViewExtension registered"));
 }
 
+void FSDFSceneViewExtension::ReleaseResources()
+{
+	BrickmapResources.Release();
+}
+
 bool FSDFSceneViewExtension::IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const
 {
 	const UWorld* W = World.Get();
@@ -51,36 +60,55 @@ bool FSDFSceneViewExtension::IsActiveThisFrame_Internal(const FSceneViewExtensio
 	return false;
 }
 
-void FSDFSceneViewExtension::AllocateBrickmap()
+void FSDFSceneViewExtension::BeginRenderViewFamily( FSceneViewFamily& InViewFamily )
 {
-	check(IsInRenderingThread());
+	// 'BeginRenderViewFamily' is called when the view family is about to be rendered
+	// Allowing for game thread work before rendering a view family
+	// A view represents a single viewpoint (camera) that we render from
+	// A view family is a group of views that gets rendered together for the same frame/setup
 
-	FRDGTextureDesc BrickAtlasDesc = FRDGTextureDesc::Create3D(
-		AtlasSize, PF_R8, FClearValueBinding::None,
-		TexCreate_ShaderResource | TexCreate_UAV);
-	BrickmapResources.BrickAtlas = 
-		AllocatePooledTexture(BrickAtlasDesc, TEXT("SDF_BrickAtlas"));
+	// We call this from here so it runs on the Game Thread
+	TransferSDFsToRenderThread( InViewFamily.Scene->GetWorld() );
+};
 
-	const uint32 GridSize = PtrGridSize.X * PtrGridSize.Y * PtrGridSize.Z;
-	FRDGBufferDesc PtrGridDesc = FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), GridSize);
-	BrickmapResources.PtrGrid = 
-		AllocatePooledBuffer(PtrGridDesc, TEXT("SDF_BrickPtrBuffer"));
-	
-	FRDGBufferDesc CounterDesc = FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), 1);
-	BrickmapResources.BrickAllocCounter =
-		AllocatePooledBuffer(CounterDesc, TEXT("SDF_BrickAllocCounter"));
-
-	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Allocated Brickmap"));
-	GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, TEXT("Allocated Brickmap"));
-}
-
-void FSDFSceneViewExtension::ReleaseResources()
+void FSDFSceneViewExtension::TransferSDFsToRenderThread( const UWorld* World )
 {
-	BrickmapResources.Release();
+	// Only update if dirty
+	USDFSubsystem* SDFSubsystem{ World->GetSubsystem<USDFSubsystem>() };
+	if (not SDFSubsystem->GetAndResetDirty()) { return; }
+
+	// TODO: remove before PR (also other debug messages)
+	// Debug
+	GEngine->AddOnScreenDebugMessage( -1, // Force newline
+									  0.2f, // Time
+									  FColor::Yellow,
+									  FString::Printf( TEXT( "Dirty SDF(s) found, updating render thread..." ) ) );
+
+	// Grab the game thread's SDFs
+	const auto& SDFs{ SDFSubsystem->GetRenderSDFs() };
+
+	// Transfer lambda
+	// Capture the parameters by copy, their state on the game thread might change before the lambda runs
+	auto TransferParams{ [this, SDFs = SDFs]( FRHICommandList& ) mutable
+	{
+		// Copy the SDF data over to the render thread
+		RT.SDFs.Empty();
+		RT.SDFs.Reserve( SDFs.Num() );
+		for (auto& Pair : SDFs)
+		{
+			RT.SDFs.Emplace( MoveTemp( Pair.Value ), Pair.Key );
+		}
+		RT.SDFResources.bDirty = true;
+	} };
+
+	// Perform the transfer safely on the render thread
+	ENQUEUE_RENDER_COMMAND( SDFParamsThreadTransfer )( TransferParams );
 }
 
 void FSDFSceneViewExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily)
 {
+	UpdateSDFBuffer();
+
 	if (InViewFamily.FrameCounter == LastBrickmapBuildFrame)
 	{
 		return; // Already built brickmap this frame
@@ -140,6 +168,56 @@ void FSDFSceneViewExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& Graph
 	}
 }
 
+void FSDFSceneViewExtension::UpdateSDFBuffer()
+{
+	// The buffer is not up-to-date (or doesn't exist)
+	if (not RT.SDFResources.bDirty) { return; }
+
+	// We need to upload the updated SDF buffer
+	RT.SDFResources.bUpload = true;
+
+	// If the buffer hasn't been allocated or isn't large enough
+	// If not, we simply overwrite the current data through the upload call
+	if (not RT.SDFResources.Buff.IsValid()
+		|| (RT.SDFResources.Buff->GetSize() / sizeof( FGPUSDF )) < static_cast<uint32>(RT.SDFs.Num()))
+	{
+		// We cannot allocate a buffer of size 0
+		const uint32 Capacity{ static_cast<uint32>(FMath::Max( RT.SDFs.Num(), 1 )) };
+
+		// We need a structured buffer (because we're storing an array of structs)
+		// We need it to be an upload buffer, which are for CPU-to-GPU uploads
+		const FRDGBufferDesc Desc{ FRDGBufferDesc::CreateStructuredUploadDesc( sizeof( FGPUSDF ), Capacity ) };
+
+		// By manually allocating a buffer, we guarantee it's persistent among frames
+		// This wouldn't be the case for 'GraphBuilder.CreateBuffer()'
+		// If we already have a buffer allocated, it will be deallocated by the RDG when it goes out of scope
+		RT.SDFResources.Buff = AllocatePooledBuffer( Desc, TEXT( "SDF Upload Buffer" ) );
+	}
+}
+
+void FSDFSceneViewExtension::AllocateBrickmap()
+{
+	check(IsInRenderingThread());
+
+	FRDGTextureDesc BrickAtlasDesc = FRDGTextureDesc::Create3D(
+		AtlasSize, PF_R8, FClearValueBinding::None,
+		TexCreate_ShaderResource | TexCreate_UAV);
+	BrickmapResources.BrickAtlas = 
+		AllocatePooledTexture(BrickAtlasDesc, TEXT("SDF_BrickAtlas"));
+
+	const uint32 GridSize = PtrGridSize.X * PtrGridSize.Y * PtrGridSize.Z;
+	FRDGBufferDesc PtrGridDesc = FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), GridSize);
+	BrickmapResources.PtrGrid = 
+		AllocatePooledBuffer(PtrGridDesc, TEXT("SDF_BrickPtrBuffer"));
+	
+	FRDGBufferDesc CounterDesc = FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), 1);
+	BrickmapResources.BrickAllocCounter =
+		AllocatePooledBuffer(CounterDesc, TEXT("SDF_BrickAllocCounter"));
+
+	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Allocated Brickmap"));
+	GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, TEXT("Allocated Brickmap"));
+}
+
 void FSDFSceneViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
 {
 	FRDGTextureRef DepthTexture = RenderTargets.DepthStencil.GetTexture();
@@ -161,6 +239,20 @@ void FSDFSceneViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder
 		// Gives us more data from the FSceneView
 		const FViewInfo& View = static_cast<const FViewInfo&>(InView);
 
+		// Tell the RDG that the SDF buffer will be used this frame
+		// Specify that it is persistent/external ('MultiFrame')
+		const FRDGBufferRef SDFBuffRDG{ GraphBuilder.RegisterExternalBuffer( RT.SDFResources.Buff, ERDGBufferFlags::MultiFrame ) };
+		if (RT.SDFResources.bUpload)
+		{
+			// 'NoCopy' indicates the RDG doesn't need to create its own copy of the specified upload data
+			// We may only use it if we guarantee the provided data survives until the RDG uploads it
+			GraphBuilder.QueueBufferUpload( SDFBuffRDG, 
+											RT.SDFs.GetData(), 
+											sizeof( FGPUSDF ) * RT.SDFs.Num(), 
+											ERDGInitialDataFlags::NoCopy );
+			RT.SDFResources.bUpload = false;
+		}		
+
 		FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture(
 			BrickmapResources.BrickAtlas, ERDGTextureFlags::MultiFrame);
 		FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(
@@ -171,6 +263,8 @@ void FSDFSceneViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder
 		FSDFTraverseShader::FParameters* PassParameters =
 			GraphBuilder.AllocParameters<FSDFTraverseShader::FParameters>();
 		PassParameters->View = InView.ViewUniformBuffer;
+		PassParameters->SDFEdits = GraphBuilder.CreateSRV( SDFBuffRDG ); // Create the SDF buffer view (which specifies how the shader should read it)
+		PassParameters->NumEdits = RT.SDFs.Num();
 		PassParameters->BrickAtlas = GraphBuilder.CreateSRV(BrickAtlasRDG);
 		PassParameters->BrickSampler = BrickSampler;
 		PassParameters->PtrBuffer = GraphBuilder.CreateSRV(PtrBufferRDG);
