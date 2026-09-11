@@ -24,7 +24,7 @@ struct FRenderSDF
 };
 
 // GPU SDF edits
-struct FGPUSDF
+struct alignas(16) FGPUSDF
 {
 	FRenderSDF SDF;
 	uint32 Idx;
