@@ -26,7 +26,7 @@ static const uint3 PtrGridSize = uint3(64, 64, 64);
 
 bool IsInsideGrid(float3 WorldPos)
 {
-    return all(WorldPos >= 0) && all(WorldPos < PtrGridSize);
+    return all(WorldPos >= 0) && all(WorldPos < PtrGridSize * VoxelResolution);
 }
 
 float3 GridCellToWorldPos(uint3 GridCell)
