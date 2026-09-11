@@ -24,6 +24,11 @@ static const uint3 AtlasSize = NumAtlasBricks * BrickResolution;
 
 static const uint3 PtrGridSize = uint3(64, 64, 64);
 
+bool IsInsideGrid(float3 WorldPos)
+{
+    return all(WorldPos >= 0) && all(WorldPos < PtrGridSize);
+}
+
 float3 GridCellToWorldPos(uint3 GridCell)
 {
 	return GridCell * VoxelResolution;
@@ -31,7 +36,7 @@ float3 GridCellToWorldPos(uint3 GridCell)
 
 uint3 WorldPosToGridCell(float3 World)
 {
-	return floor(World / VoxelResolution);
+    return uint3(floor(World / VoxelResolution));
 }
 
 float3 WorldToAtlasPoint(float3 World)

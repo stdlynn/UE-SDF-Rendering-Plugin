@@ -1,0 +1,62 @@
+#include "/Engine/Public/Platform.ush"
+#include "/Engine/Private/Common.ush"
+#include "/Engine/Private/ScreenPass.ush"
+#include "Common.ush"
+#include "BrickmapCommon.ush"
+
+Texture2D OriginalSceneColor;
+SCREEN_PASS_TEXTURE_VIEWPORT(SceneColorViewport)
+RWTexture2D<float4> Output;
+
+Buffer<uint> PtrGrid;
+
+[numthreads(8, 8, 1)]
+void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
+{
+    if (any(DispatchThreadId >= SceneColorViewport_ViewportMax))
+    {
+        return;
+    }
+
+	float2 SampleUV = (float2(SceneColorViewport_ViewportMin) + DispatchThreadId + 0.5) * SceneColorViewport_ExtentInverse;
+	float2 ViewportUV = (DispatchThreadId + 0.5) * SceneColorViewport_ViewportSizeInverse;
+	float2 NDC = ViewportUV * float2(2, -2) + float2(-1, 1);
+    float4 OriginalColor = OriginalSceneColor.SampleLevel(GlobalPointClampedSampler, SampleUV, 0);
+    float3 Color = float3(0, 0, 0);
+
+	float4 TranslatedWorldPosH = mul(float4(NDC, 0.5, 1), View.ClipToTranslatedWorld);
+	float3 Dir = normalize(TranslatedWorldPosH.xyz / TranslatedWorldPosH.w);
+	float3 Origin = View.ViewOriginHigh * UnitSize; // Convert unit size
+	float3 RayPos = Origin;
+	
+	const float StepSize = 0.5;
+	uint3 LastGridCell = uint3(0, 0, 0);
+	float Hits = 0;
+
+	for (int Step = 0; Step < 512; Step++)
+	{
+	    RayPos += Dir * StepSize;
+		uint3 GridCell = WorldPosToGridCell(RayPos);
+
+	    if (all(GridCell == LastGridCell))
+	    {
+		    continue;
+	    }
+	    LastGridCell = GridCell;
+
+		if (!IsInsideGrid(RayPos))
+	    {
+		    continue;
+	    }
+
+	    if (PtrGrid[GridCellToGridIdx(GridCell)] != 0xFFFFFFFF)
+	    {
+		    Hits += 1.0;
+	    }
+	}
+	
+	Color = Hits * float3(1, 0, 0);
+	Color = Color / (Color + float3(2, 2, 2));
+
+    Output[SceneColorViewport_ViewportMin + DispatchThreadId] = float4(OriginalColor + Color, OriginalColor.w);
+}

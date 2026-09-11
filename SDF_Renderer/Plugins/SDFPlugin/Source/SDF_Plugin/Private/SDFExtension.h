@@ -44,6 +44,8 @@ public:
 														  FSceneView& InView, 
 														  const FRenderTargetBindingSlots& RenderTargets, 
 														  TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures) override;
+	virtual void SubscribeToPostProcessingPass(EPostProcessingPass Pass, const FSceneView& InView, FPostProcessingPassDelegateArray& InOutPassCallbacks, bool bIsPassEnabled) override;
+	FScreenPassTexture RenderDebug(FRDGBuilder& GraphBuilder, const FSceneView& SceneView, const FPostProcessMaterialInputs& Inputs);
 
 	void AllocateBrickmap();
 	void ReleaseResources();
@@ -139,5 +141,27 @@ public:
 		OutEnvironment.SetDefine(TEXT("THREADS_X"), 8);
 		OutEnvironment.SetDefine(TEXT("THREADS_Y"), 8);
 		OutEnvironment.SetDefine(TEXT("THREADS_Z"), 8);
+	}
+};
+
+// Debug Shader
+class SDFPLUGIN_API FDebugShader : public FGlobalShader
+{
+public:
+	DECLARE_GLOBAL_SHADER(FDebugShader)
+
+	SHADER_USE_PARAMETER_STRUCT(FDebugShader, FGlobalShader)
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_STRUCT(FScreenPassTextureViewportParameters, SceneColorViewport)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, OriginalSceneColor)
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, Output)
+		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, PtrGrid)
+	END_SHADER_PARAMETER_STRUCT()
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
 	}
 };
