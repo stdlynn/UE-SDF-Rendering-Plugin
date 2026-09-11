@@ -70,7 +70,7 @@ bool IsBrickAllocated(uint Idx)
 
 bool IsBrickAllocated(uint3 GridCell)
 {
-	return (PtrGrid[GridCellToGridIdx(GridCell)] != 0xFFFFFFFF);
+    return IsBrickAllocated(GridCellToGridIdx(GridCell));
 }
 
 // Allocate a brick by storing its index in the pointer grid
