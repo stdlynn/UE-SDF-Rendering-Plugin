@@ -8,8 +8,8 @@
 IMPLEMENT_GLOBAL_SHADER(FSDFTraverseShader, "/Plugins/SDFPlugin/PostProcessCS.usf", "TraversePS", SF_Pixel);
 IMPLEMENT_GLOBAL_SHADER(FBuildBrickmapShader, "/Plugins/SDFPlugin/BuildBrickmapCS.usf", "BuildBrickmapCS", SF_Compute);
 
-IMPLEMENT_UNIFORM_BUFFER_STRUCT(FPtrBuffer, "PtrGrid");
-IMPLEMENT_UNIFORM_BUFFER_STRUCT(FBrickAllocCounter, "BrickAllocCounter");
+IMPLEMENT_UNIFORM_BUFFER_STRUCT(FPtrBuffer, "PtrGridBuff");
+IMPLEMENT_UNIFORM_BUFFER_STRUCT(FBrickAllocCounter, "BrickAllocCounterBuff");
 
 static const FIntVector AtlasSize = FIntVector(512, 512, 8);
 static const FIntVector PtrGridSize = FIntVector(64, 64, 64);
@@ -90,51 +90,54 @@ void FSDFSceneViewExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& Graph
 	if (!BrickmapResources.IsValid())
 	{
 		AllocateBrickmap();
-		
-		// For now, just build it once and never again
-		RDG_EVENT_SCOPE(GraphBuilder, "Build Brickmap");
-		{
-			FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(InViewFamily.GetFeatureLevel());
-
-			FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture(
-				BrickmapResources.BrickAtlas, ERDGTextureFlags::MultiFrame);
-			FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(
-				BrickmapResources.PtrGrid, ERDGBufferFlags::MultiFrame);
-			FRDGBufferRef AtomicCounterRDG = GraphBuilder.RegisterExternalBuffer(
-				BrickmapResources.BrickAllocCounter, ERDGBufferFlags::MultiFrame);
-
-			const FRDGTextureDesc BrickAtlasDesc = FRDGTextureDesc::Create3D(
-				AtlasSize, PF_R8, FClearValueBinding::None,
-				TexCreate_ShaderResource | TexCreate_UAV);
-
-			// Clear the brickmap every frame for now
-			AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(PtrBufferRDG), 0xFFFFFFFFu);
-
-			FBuildBrickmapShader::FParameters* PassParameters =
-				GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
-			PassParameters->BrickAtlas = GraphBuilder.CreateUAV(BrickAtlasRDG);
-			PassParameters->PtrGrid = GraphBuilder.CreateUAV(PtrBufferRDG);
-			PassParameters->BrickAllocCounter = GraphBuilder.CreateUAV(AtomicCounterRDG);
-			PassParameters->GridSize = PtrGridSize;
-			PassParameters->AtlasSize = AtlasSize;
-
-			FIntVector GroupCount{
-				FMath::DivideAndRoundUp(1, 8),
-				FMath::DivideAndRoundUp(1, 8),
-				FMath::DivideAndRoundUp(1, 8)
-			};
-
-			TShaderMapRef<FBuildBrickmapShader> ComputeShader(GlobalShaderMap);
-
-			FComputeShaderUtils::AddPass(
-				GraphBuilder,
-				RDG_EVENT_NAME("Brickmap_Build"),
-				ComputeShader,
-				PassParameters,
-				GroupCount);
-		}
 	}
 
+	// For now, just build it once and never again
+	RDG_EVENT_SCOPE(GraphBuilder, "Build Brickmap");
+	{
+		FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(InViewFamily.GetFeatureLevel());
+
+		FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture(
+			BrickmapResources.BrickAtlas, ERDGTextureFlags::MultiFrame);
+		FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(
+			BrickmapResources.PtrGrid, ERDGBufferFlags::MultiFrame);
+		FRDGBufferRef AtomicCounterRDG = GraphBuilder.RegisterExternalBuffer(
+			BrickmapResources.BrickAllocCounter, ERDGBufferFlags::MultiFrame);
+
+		const FRDGTextureDesc BrickAtlasDesc = FRDGTextureDesc::Create3D(
+			AtlasSize, PF_R8, FClearValueBinding::None,
+			TexCreate_ShaderResource | TexCreate_UAV);
+
+		// Clear the brickmap every frame for now
+		AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(BrickAtlasRDG), 1.0f);
+		AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(PtrBufferRDG), 0xFFFFFFFFu);
+		AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(AtomicCounterRDG), 0);
+
+		FBuildBrickmapShader::FParameters* PassParameters =
+			GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
+		PassParameters->BrickAtlas = GraphBuilder.CreateUAV(BrickAtlasRDG);
+		PassParameters->PtrGrid = GraphBuilder.CreateUAV(PtrBufferRDG);
+		PassParameters->BrickAllocCounter = GraphBuilder.CreateUAV(AtomicCounterRDG);
+		PassParameters->GridSize = PtrGridSize;
+		PassParameters->AtlasSize = AtlasSize;
+
+		FIntVector GroupCount{
+			FMath::DivideAndRoundUp(1, 8),
+			FMath::DivideAndRoundUp(1, 8),
+			FMath::DivideAndRoundUp(1, 8)
+		};
+
+		TShaderMapRef<FBuildBrickmapShader> ComputeShader(GlobalShaderMap);
+
+		FComputeShaderUtils::AddPass(
+			GraphBuilder,
+			RDG_EVENT_NAME("Brickmap_Build"),
+			ComputeShader,
+			PassParameters,
+			GroupCount);
+
+		UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Built Brickmap"));
+	}
 }
 
 void FSDFSceneViewExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)

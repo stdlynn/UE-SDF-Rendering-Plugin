@@ -2,6 +2,11 @@
 
 #include "/Engine/Public/Platform.ush"
 
+static const float UnitSize = 0.01;
+
+static const float MaxRayDist = 1000.0;
+static const float SurfaceEpsilon = 0.0005;
+
 struct FPrimitive
 {
 	float3 Pos;
@@ -14,12 +19,13 @@ struct AABB
 	float3 Max;
 };
 
+static const uint NumPrimitives = 4;
 static const FPrimitive SDFEdits[4] =
 {
-	{ 300, 300, 300, 1.0 },
-	{ 600, 600, 600, 1.0 },
-	{ 600, 300, 300, 0.5 },
-	{ 300, 600, 300, 0.7 }
+	{ 3, 3, 3, 1.0 },
+	{ 6, 6, 6, 1.0 },
+	{ 6, 3, 3, 0.5 },
+	{ 3, 6, 3, 0.7 }
 };
 
 float SDFSphere(float3 Point, float3 Center, float Radius)

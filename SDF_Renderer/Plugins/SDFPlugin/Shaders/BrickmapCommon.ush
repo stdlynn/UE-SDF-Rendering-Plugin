@@ -3,96 +3,113 @@
 #include "/Engine/Public/Platform.ush"
 #include "Common.ush"
 
+//________________________________________________________________________
+//																		  |	
+// GridCell   | uint3  | 0-64   | 3D PtrGrid cell index					  |
+// AtlasCell  |	uint2  | 0-128  | 2D Brick cell index in Atlas			  |
+// WorldPos   |	float3 | inf    | World-space position					  |
+// AtlasPoint |	uint3  | 0-7    | 3D Atlas texel index					  |
+// BrickPoint |	uint3  | 0-1024 | Atlas texel, relative to brick's origin |
+// AtlasUVW   |	float3 | 0-1    | Sampling coordinates for BrickAtlas	  |
+// Idx        |	uint   | 0-16k  | Index to a Brick stored in Ptr Grid	  |
+// GridIdx    | uint   | 0-262k | 1D index to sample Ptr Grid			  |
+//________________________________________________________________________|
+
+
 static const uint BrickResolution = 8;
 static const uint VoxelResolution = BrickResolution - 1;
 
-static const uint3 NumAtlasBricks = uint3(64, 64, 1);
+static const uint3 NumAtlasBricks = uint3(128, 128, 1);
 static const uint3 AtlasSize = NumAtlasBricks * BrickResolution;
 
 static const uint3 PtrGridSize = uint3(64, 64, 64);
 
-float3 GridToWorldPos(uint3 BrickPos)
+float3 GridCellToWorldPos(uint3 GridCell)
 {
-	return BrickPos * VoxelResolution;
+	return GridCell * VoxelResolution;
 }
 
-// World position to Ptr Grid position
-uint3 WorldToGridPos(float3 World)
+uint3 WorldPosToGridCell(float3 World)
 {
 	return floor(World / VoxelResolution);
 }
 
-// 0..7
-float3 WorldToLocalVoxelPos(float3 World)
+float3 WorldToAtlasPoint(float3 World)
 {
 	return World % VoxelResolution;
 }
 
-uint2 IdxToAtlasBrickPos(uint Idx)
+uint GridCellToGridIdx(uint3 GridCell)
 {
-	return uint2(Idx % AtlasSize.x, Idx / VoxelResolution);
+	return GridCell.x + (GridCell.y * PtrGridSize.x) + (GridCell.z * PtrGridSize.y * PtrGridSize.z);
+}
+
+uint2 IdxToAtlasCell(uint Idx)
+{
+	return uint2(Idx % NumAtlasBricks.x, (Idx / NumAtlasBricks.x) % NumAtlasBricks.y);
 }
 
 float3 GetAtlasUVW(uint Idx, float3 World)
 {
-	uint2 AtlasBrickCell = IdxToAtlasBrickPos(Idx);
-	float3 Local = WorldToLocalVoxelPos(World);
-	return ((float3(AtlasBrickCell, 0) + Local) * NumAtlasBricks) / AtlasSize;
+	uint2 AtlasBrickCell = IdxToAtlasCell(Idx);
+	float3 Local = WorldToAtlasPoint(World);
+	return (float3(AtlasBrickCell * BrickResolution, 0) + Local) / AtlasSize;
 }
 
-// World position to UVW coordinate to sample from Atlas
 float3 WorldToAtlasUVW(float3 World)
 {
-	uint3 GridPos = WorldToGridPos(World);
-	uint Idx = PtrGrid[GridPos];
+	uint3 GridCell = WorldPosToGridCell(World);
+	uint Idx = PtrGrid[GridCellToGridIdx(GridCell)];
 	return GetAtlasUVW(Idx, World);
+}
+
+bool IsBrickAllocated(uint Idx)
+{
+	return (PtrGrid[Idx] != 0xFFFFFFFF);
 }
 
 bool IsBrickAllocated(uint3 GridCell)
 {
-	return (PtrGrid[GridCell] != 0xFFFFFFFF);
-}
-
-// Allocate a brick, only if this location isn't already allocated
-void AllocateSafe(uint3 BrickPos)
-{
-	// TODO: This isn't safe right now (the same ptr grid cell could increment the counter more than once)
-	// Won't be an issue when we upload a list of bricks to update
-	if (IsBrickAllocated(BrickPos))
-		return;
-
-	uint NextIndex;
-	InterlockedAdd(BrickAllocCounter[0], 1, NextIndex);
-
-	PtrGrid[NextIndex] = NextIndex;
+	return (PtrGrid[GridCellToGridIdx(GridCell)] != 0xFFFFFFFF);
 }
 
 // Allocate a brick by storing its index in the pointer grid
-void Allocate(uint3 BrickPos)
+void Allocate(uint3 GridCell)
 {
 	uint NextIndex;
 	InterlockedAdd(BrickAllocCounter[0], 1, NextIndex);
 
-	PtrGrid[NextIndex] = NextIndex;
+	PtrGrid[GridCellToGridIdx(GridCell)] = NextIndex;
 }
 
-void PopulateBrickSDF(uint3 GridPos, float3 SphereCenter, float SphereRadius)
+// Allocate a brick, only if this location isn't already allocated
+void AllocateSafe(uint3 GridCell)
 {
-	uint Idx = PtrGrid[GridPos];
-	uint3 AtlasBrickPos = uint3(IdxToAtlasBrickPos(Idx), 1) * BrickResolution;
+	// TODO: This isn't safe right now (the same ptr grid cell could increment the counter more than once)
+	// Won't be an issue when we upload a list of bricks to update
+	if (IsBrickAllocated(GridCell))
+		return;
 
-	for (int z = 0; z < BrickResolution; z++)
+	Allocate(GridCell);
+}
+
+// Assumes the cell is already allocated
+void PopulateBrickSDF(uint3 GridCell, float3 SphereCenter, float SphereRadius)
+{
+	uint Idx = PtrGrid[GridCellToGridIdx(GridCell)];
+	uint3 AtlasCell = uint3(IdxToAtlasCell(Idx), 0) * BrickResolution;
+
+	for (int z = 0; z < BrickResolution; z++) {
+	for (int y = 0; y < BrickResolution; y++) {
+	for (int x = 0; x < BrickResolution; x++) 
 	{
-		for (int y = 0; y < BrickResolution; y++)
+		uint3 AtlasPoint = AtlasCell + uint3(x, y, z);
+		float CurDist = BrickAtlas[AtlasPoint];
+
+		float Dist = SDFSphere(AtlasPoint, SphereCenter, SphereRadius) * 0.003;
+		if (Dist < CurDist)
 		{
-			for (int x = 0; x < BrickResolution; x++)
-			{
-				uint3 VoxelPos = AtlasBrickPos + uint3(x, y, z);
-
-				float Distance = SDFSphere(VoxelPos, SphereCenter, SphereRadius);
-
-				BrickAtlas[VoxelPos] = Distance;
-			}
+			BrickAtlas[AtlasPoint] = abs(Dist);
 		}
-	}
+	}}}
 }
