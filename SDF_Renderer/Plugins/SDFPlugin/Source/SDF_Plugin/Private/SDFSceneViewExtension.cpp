@@ -35,15 +35,21 @@ void FSDFSceneViewExtension::BeginRenderViewFamily( FSceneViewFamily& InViewFami
 	// A view represents a single viewpoint (camera) that we render from
 	// A view family is a group of views that gets rendered together for the same frame/setup
 
-	// We call this from here so it runs on the Game Thread
-	TransferSDFsToRenderThread( InViewFamily.Scene->GetWorld() );
+	// SceneViewExtension functions get called for ANY viewport
+	// This includes preview scenes that might not include an associated world
+	if (const UWorld* World{ InViewFamily.Scene->GetWorld() })
+	{
+		// We call this from here so it runs on the Game Thread
+		TransferSDFsToRenderThread( InViewFamily.Scene->GetWorld() );
+	}
 };
 
 void FSDFSceneViewExtension::TransferSDFsToRenderThread( const UWorld* World )
 {
 	// Only update if dirty
+	// First check if the world we're rendering includes the SDF subsystem
 	USDFSubsystem* SDFSubsystem{ World->GetSubsystem<USDFSubsystem>() };
-	if (not SDFSubsystem->GetAndResetDirty()) { return; }
+	if (not SDFSubsystem || not SDFSubsystem->GetAndResetDirty()) { return; }
 
 	// TODO: remove before PR (also other debug messages)
 	// Debug

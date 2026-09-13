@@ -118,6 +118,10 @@ public:
 		return bWasDirty;
 	}
 
+protected:
+
+	virtual bool DoesSupportWorldType( const EWorldType::Type WorldType ) const override;
+
 private:
 
 	// Render params, game thread
