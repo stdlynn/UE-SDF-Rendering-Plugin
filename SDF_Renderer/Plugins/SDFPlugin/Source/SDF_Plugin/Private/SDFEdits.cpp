@@ -32,13 +32,18 @@ void USDFComponent::OnUnregister()
 void USDFComponent::PostEditComponentMove( bool bFinished )
 {
 	Super::PostEditComponentMove( bFinished );
-	GetWorld()->GetSubsystem<USDFSubsystem>()->SetSDFDirty( *this );
+	SetDirty();
 }
 
 void USDFComponent::OnUpdateTransform( EUpdateTransformFlags TransformFlags,
 									   ETeleportType TeleportType )
 {
 	Super::OnUpdateTransform( TransformFlags, TeleportType );
+	SetDirty();
+}
+
+void USDFComponent::SetDirty() const
+{
 	GetWorld()->GetSubsystem<USDFSubsystem>()->SetSDFDirty( *this );
 }
 
