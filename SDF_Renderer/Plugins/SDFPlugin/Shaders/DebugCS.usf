@@ -10,6 +10,8 @@ RWTexture2D<float4> Output;
 
 Buffer<uint> PtrGrid;
 
+#define USE_DIST_INSTEAD_OF_HITS 0
+
 // Returns true if there is an intersection
 // If true, hit_t is the intersection time
 bool IntersectRayPtrGrid( float3 RayPos, float3 RayDir, out float HitT )
@@ -28,7 +30,7 @@ bool IntersectRayPtrGrid( float3 RayPos, float3 RayDir, out float HitT )
     return TNear <= TFar;
 }
 
-uint NumBrickHits( float3 RayPos, float3 RayDir )
+float NumBrickHits( float3 RayPos, float3 RayDir )
 {
     // TODO: Missing constants
     const float GridCellSize = BrickResolution;
@@ -54,16 +56,11 @@ uint NumBrickHits( float3 RayPos, float3 RayDir )
     }
     
     // Should be safe
+    float CurrT = 0;
+    float TotalT = 0; // Total distance travelled within allocated bricks
     uint NumHits = 0;
     while (true)
     {
-        // Check if a brick is present in the current cell
-        if (PtrGrid[GridCellToGridIdx((uint3)GridCellCoord)] != 0xFFFFFFFF)
-        {
-            // Intersection found
-            NumHits++;
-        }
-
         // Find the axis on which we are the closest to the next cell
         uint Axis = TMax.x < TMax.y
 			        ? TMax.x < TMax.z
@@ -73,6 +70,19 @@ uint NumBrickHits( float3 RayPos, float3 RayDir )
 			        	    ? 1
 			        	    : 2;
         
+        float CellDist = TMax[Axis] - CurrT;
+
+        // Check if a brick is present in the current cell
+        if (PtrGrid[GridCellToGridIdx((uint3)GridCellCoord)] != 0xFFFFFFFF)
+        {
+            // Intersection found
+            NumHits++;
+            TotalT += CellDist;
+        }
+
+        // Store the distance travelled AFTER we step to the next cell
+        CurrT = TMax[Axis];
+
         // Step to the next cell
         GridCellCoord[Axis] += CellStep[Axis];
         TMax[Axis] += TDelta[Axis];
@@ -84,10 +94,24 @@ uint NumBrickHits( float3 RayPos, float3 RayDir )
         }
     }
 
-    return NumHits;
+#if USE_DIST_INSTEAD_OF_HITS
+	return TotalT / 20.0;
+#else
+    return NumHits / 4.0;
+#endif
 }
 
 // [CREDITS] https://www.shadertoy.com/view/XtGGzG
+float3 InfernoQuintic(float Normalized)
+{
+    Normalized = saturate(Normalized);
+    float4 x1 = float4(1.0, Normalized, Normalized * Normalized, Normalized * Normalized * Normalized); // 1 x x2 x3
+    float4 x2 = x1 * x1.w * Normalized; // x4 x5 x6 x7
+    return saturate(float3(
+		dot(x1.xyzw, float4(-0.027780558, +1.228188385, +0.278906882, +3.892783760)) + dot(x2.xy, float2(-8.490712758, +4.069046086)),
+		dot(x1.xyzw, float4(+0.014065206, +0.015360518, +1.605395918, -4.821108251)) + dot(x2.xy, float2(+8.389314011, -4.193858954)),
+		dot(x1.xyzw, float4(-0.019628385, +3.122510347, -5.893222355, +2.798380308)) + dot(x2.xy, float2(-3.608884658, +4.324996022))));
+}
 float3 MagmaQuintic( float Normalized )
 {
     Normalized = saturate(Normalized);
@@ -131,7 +155,7 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
         RayPos += Dir * AABBHitT;
         Hits = NumBrickHits( RayPos, Dir );
     }
-	Color = MagmaQuintic( Hits / 4.0 );
+    Color = InfernoQuintic(Hits);
 #else
     for (int Step = 0; Step < 512; Step++)
     {
