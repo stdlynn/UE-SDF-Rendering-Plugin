@@ -7,8 +7,8 @@ ASDFActor::ASDFActor()
 	// Use the SDF object as the root component so it dictates the actor's transform
 	RootComponent = SDFComp;
 
-	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
-	PrimaryActorTick.bCanEverTick = true;
+	// Do we need this? Sure don't hope so
+	PrimaryActorTick.bCanEverTick = false;
 }
 
 USDFComponent::USDFComponent()
