@@ -26,8 +26,6 @@ void BuildBrickmapCS(uint3 ThreadId : SV_DispatchThreadID)
 	for (int Idx = 0; Idx < NumEdits; Idx++)
 	{
 		FSDFEdit Edit = SDFEdits[Idx];
-		Edit.Pos *= 24.0;
-		Edit.Radius *= 24.0;
 		AABB SphereAABB = GetSphereAABB(Edit.Pos, Edit.Radius);
 		uint3 MinGridCell = WorldPosToGridCell(SphereAABB.Min);
 		uint3 MaxGridCell = WorldPosToGridCell(SphereAABB.Max);

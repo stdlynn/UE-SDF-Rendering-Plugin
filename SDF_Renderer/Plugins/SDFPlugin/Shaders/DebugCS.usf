@@ -10,6 +10,95 @@ RWTexture2D<float4> Output;
 
 Buffer<uint> PtrGrid;
 
+// Returns true if there is an intersection
+// If true, hit_t is the intersection time
+bool IntersectRayPtrGrid( float3 RayPos, float3 RayDir, out float HitT )
+{
+    // TODO: should probably be calculated once and stored
+    float3 InvRayDir = 1.0 / RayDir;
+
+    float3 TToMin = (float3(0,0,0) - RayPos) * InvRayDir;
+    float3 TToMax = (PtrGridSize * BrickResolution - RayPos) * InvRayDir;
+    float3 TMin = min(TToMin, TToMax);
+    float3 TMax = max(TToMin, TToMax);
+    float TNear = max(max3(TMin.x, TMin.y, TMin.z), 0);
+    float TFar = min(min3(TMax.x, TMax.y, TMax.z), 1e38);
+
+    HitT = TNear;
+    return TNear <= TFar;
+}
+
+uint NumBrickHits( float3 RayPos, float3 RayDir )
+{
+    // TODO: Missing constants
+    const float GridCellSize = BrickResolution;
+
+    // TODO: should probably be calculated once and stored
+    float3 InvRayDir = 1.0 / RayDir;
+
+    // [CREDITS] DDA algorithm from http://www.cs.yorku.ca/~amana/research/grid.pdf
+    int3 GridCellCoord = int3(floor((RayPos - float3(0,0,0)) / GridCellSize)); // The ray origin in pointer-grid space
+    const int3 CellStep = int3(sign(RayDir)); // The step direction for each axis (-1, 0, or 1), in pointer-grid space
+    const float3 TDelta = abs(GridCellSize * InvRayDir); // The step size (to move the length of a voxel along a certain axis) for each axis, in world space
+    const int3 NextCellCoord = GridCellCoord + (CellStep + 1) / 2; // The next cell to be hit (on a certain axis) for each axis, in pointer-grid space
+    const float3 NextCellCoordWorldSpace = float3(NextCellCoord) * GridCellSize + float3(0, 0, 0); // The next cells to be hit (on a certain axis) for each axis, in world space
+    float3 TMax = (NextCellCoordWorldSpace - RayPos) * InvRayDir; // The distance to the next cell for each axis, in world space
+
+    // Handle ray direction being zero
+    for (uint Axis = 0; Axis < 3; ++Axis)
+    {
+        if (RayDir[Axis] == 0)
+        {
+            TMax[Axis] = 1e38;
+        }
+    }
+    
+    // Should be safe
+    uint NumHits = 0;
+    while (true)
+    {
+        // Check if a brick is present in the current cell
+        if (PtrGrid[GridCellToGridIdx((uint3)GridCellCoord)] != 0xFFFFFFFF)
+        {
+            // Intersection found
+            NumHits++;
+        }
+
+        // Find the axis on which we are the closest to the next cell
+        uint Axis = TMax.x < TMax.y
+			        ? TMax.x < TMax.z
+			             ? 0
+			             : 2
+			        : TMax.y < TMax.z
+			        	    ? 1
+			        	    : 2;
+        
+        // Step to the next cell
+        GridCellCoord[Axis] += CellStep[Axis];
+        TMax[Axis] += TDelta[Axis];
+
+        // Voxel object and ray bounds check
+        if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis])
+        {
+            break;
+        }
+    }
+
+    return NumHits;
+}
+
+// [CREDITS] https://www.shadertoy.com/view/XtGGzG
+float3 MagmaQuintic( float Normalized )
+{
+    Normalized = saturate(Normalized);
+    float4 X1 = float4(1.0, Normalized, Normalized * Normalized, Normalized * Normalized * Normalized); // 1 x x2 x3
+    float4 X2 = X1 * X1.w * Normalized; // x4 x5 x6 x7
+    return saturate(float3(
+		dot(X1.xyzw, float4(-0.023226960, +1.087154378, -0.109964741, +6.333665763)) + dot(X2.xy, float2(-11.640596589, +5.337625354)),
+		dot(X1.xyzw, float4(+0.010680993, +0.176613780, +1.638227448, -6.743522237)) + dot(X2.xy, float2(+11.426396979, -5.523236379)),
+		dot(X1.xyzw, float4(-0.008260782, +2.244286052, +3.005587601, -24.279769818)) + dot(X2.xy, float2(+32.484310068, -12.688259703))));
+}
+
 [numthreads(8, 8, 1)]
 void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
 {
@@ -33,30 +122,42 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
 	uint3 LastGridCell = uint3(0, 0, 0);
 	float Hits = 0;
 
-	for (int Step = 0; Step < 512; Step++)
-	{
-	    RayPos += Dir * StepSize;
-		uint3 GridCell = WorldPosToGridCell(RayPos);
-
-	    if (all(GridCell == LastGridCell))
-	    {
-		    continue;
-	    }
-	    LastGridCell = GridCell;
-
-		if (!IsInsideGrid(RayPos))
-	    {
-		    continue;
-	    }
-
-	    if (PtrGrid[GridCellToGridIdx(GridCell)] != 0xFFFFFFFF)
-	    {
-		    Hits += 1.0;
-	    }
-	}
+#if 1
+    float AABBHitT;
+    if (IntersectRayPtrGrid( RayPos, Dir, AABBHitT ))
+    {
+        const float AABBEpsilon = 1e-4;
+        AABBHitT += AABBEpsilon;
+        RayPos += Dir * AABBHitT;
+        Hits = NumBrickHits( RayPos, Dir );
+    }
+	Color = MagmaQuintic( Hits / 4.0 );
+#else
+    for (int Step = 0; Step < 512; Step++)
+    {
+        RayPos += Dir * StepSize;
+        uint3 GridCell = WorldPosToGridCell(RayPos);
+    
+        if (all(GridCell == LastGridCell))
+        {
+            continue;
+        }
+        LastGridCell = GridCell;
+    
+        if (!IsInsideGrid(RayPos))
+        {
+            continue;
+        }
+    
+        if (PtrGrid[GridCellToGridIdx(GridCell)] != 0xFFFFFFFF)
+        {
+            Hits += 1.0;
+        }
+    }
 	
 	Color = Hits * float3(1, 0, 0);
 	Color = Color / (Color + float3(2, 2, 2));
+#endif
 
     Output[SceneColorViewport_ViewportMin + DispatchThreadId] = float4(OriginalColor + Color, OriginalColor.w);
 }
