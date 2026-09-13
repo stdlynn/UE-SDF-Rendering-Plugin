@@ -10,7 +10,7 @@ struct FGameSDF
 {
 	GENERATED_BODY()
 
-	UPROPERTY( EditAnywhere, BlueprintReadWrite )
+	UPROPERTY( EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0") )
 	float Radius{ 100.0f };
 };
 
