@@ -3,14 +3,16 @@
 
 // Plugin
 #include "SDFExtension.h"
-#include "PostProcess/SceneRenderTargets.h"
-#include "RenderGraphUtils.h"
 
 // UE
 #include "EngineUtils.h"
+#include "RenderGraphUtils.h"
+#include "PostProcess/PostProcessMaterialInputs.h"
+#include "PostProcess/SceneRenderTargets.h"
 
 IMPLEMENT_GLOBAL_SHADER(FSDFTraverseShader, "/Plugins/SDFPlugin/TraversePS.usf", "TraversePS", SF_Pixel);
 IMPLEMENT_GLOBAL_SHADER(FBuildBrickmapShader, "/Plugins/SDFPlugin/BuildBrickmapCS.usf", "BuildBrickmapCS", SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FDebugShader, "/Plugins/SDFPlugin/DebugCS.usf", "DebugCS", SF_Compute);
 
 IMPLEMENT_UNIFORM_BUFFER_STRUCT(FPtrBuffer, "PtrGridBuff");
 IMPLEMENT_UNIFORM_BUFFER_STRUCT(FBrickAllocCounter, "BrickAllocCounterBuff");
@@ -24,6 +26,14 @@ namespace
 		TEXT("r.SDFPlugin"),
 		1,
 		TEXT("Enable SDF Plugin \n")
+		TEXT(" 0: OFF;")
+		TEXT(" 1: ON."),
+		ECVF_RenderThreadSafe);
+
+	TAutoConsoleVariable<int32> CVarDebugGrid(
+		TEXT("r.SDFDebugGrid"),
+		0,
+		TEXT("Enable debug view of the pointer grid \n")
 		TEXT(" 0: OFF;")
 		TEXT(" 1: ON."),
 		ECVF_RenderThreadSafe);
@@ -107,6 +117,11 @@ void FSDFExtension::TransferSDFsToRenderThread()
 
 void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily)
 {
+	if (CVarShaderOn.GetValueOnRenderThread() == 0)
+	{
+		return;
+	}
+
 	UpdateSDFBuffer();
 
 	if (InViewFamily.FrameCounter == RT.LastBrickmapBuildFrame)
@@ -236,6 +251,11 @@ void FSDFExtension::AllocateBrickmap()
 
 void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
 {
+	if (CVarShaderOn.GetValueOnRenderThread() == 0)
+	{
+		return;
+	}
+
 	const FRDGTextureRef DepthTexture = RenderTargets.DepthStencil.GetTexture();
 	if (!DepthTexture)
 	{
@@ -310,4 +330,72 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBu
 			DepthStencilState,
 			StencilRef);
 	}
+}
+
+void FSDFExtension::SubscribeToPostProcessingPass(
+	EPostProcessingPass PassId, const FSceneView& InView, FAfterPassCallbackDelegateArray& InOutPassCallbacks, bool bIsPassEnabled)
+{
+	if (PassId == EPostProcessingPass::MotionBlur)
+	{
+		InOutPassCallbacks.Add(FAfterPassCallbackDelegate::CreateRaw(this, &FSDFExtension::RenderDebug));
+	}
+}
+
+FScreenPassTexture FSDFExtension::RenderDebug(FRDGBuilder& GraphBuilder, const FSceneView& SceneView, const FPostProcessMaterialInputs& Inputs)
+{
+	const FSceneViewFamily& ViewFamily = *SceneView.Family;
+
+	const FScreenPassTexture& SceneColor = FScreenPassTexture::CopyFromSlice(GraphBuilder, Inputs.GetInput(EPostProcessMaterialInput::SceneColor));
+
+	if (!SceneColor.IsValid() || CVarDebugGrid.GetValueOnRenderThread() == 0)
+	{
+		return SceneColor;
+	}
+
+	const FScreenPassTextureViewport SceneColorViewport(SceneColor);
+
+	RDG_EVENT_SCOPE(GraphBuilder, "SDF_Debug");
+	{
+		FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(ViewFamily.GetFeatureLevel());
+
+		FRDGTextureDesc OutputDesc;
+		{
+			OutputDesc = SceneColor.Texture->Desc;
+
+			OutputDesc.Reset();
+			OutputDesc.Flags |= TexCreate_UAV;
+			OutputDesc.Flags &= ~(TexCreate_RenderTargetable | TexCreate_FastVRAM);
+
+			FLinearColor ClearColor(0., 0., 0., 0.);
+			OutputDesc.ClearValue = FClearValueBinding(ClearColor);
+		}
+
+		FRDGTextureRef OutputTexture = GraphBuilder.CreateTexture(OutputDesc, TEXT("Custom Effect Output Texture"));
+
+		FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(
+			RT.BrickmapResources.PtrGrid, ERDGBufferFlags::MultiFrame);
+
+		FDebugShader::FParameters* PassParameters = GraphBuilder.AllocParameters<FDebugShader::FParameters>();
+		PassParameters->OriginalSceneColor = SceneColor.Texture;
+		PassParameters->View = SceneView.ViewUniformBuffer;
+		PassParameters->PtrGrid = GraphBuilder.CreateSRV(PtrBufferRDG, PF_R32_UINT);
+		PassParameters->SceneColorViewport = GetScreenPassTextureViewportParameters(SceneColorViewport);
+		PassParameters->Output = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(OutputTexture));
+
+		FIntPoint PassViewSize = SceneColor.ViewRect.Size();
+		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(PassViewSize, FComputeShaderUtils::kGolden2DGroupSize);
+
+		TShaderMapRef<FDebugShader> ComputeShader(GlobalShaderMap);
+
+		FComputeShaderUtils::AddPass(
+			GraphBuilder,
+			RDG_EVENT_NAME("SDF Debug Post Processing CS Shader %dx%d", PassViewSize.X, PassViewSize.Y),
+			ComputeShader,
+			PassParameters,
+			GroupCount);
+
+		AddCopyTexturePass(GraphBuilder, OutputTexture, SceneColor.Texture);
+	}
+
+	return SceneColor;
 }
