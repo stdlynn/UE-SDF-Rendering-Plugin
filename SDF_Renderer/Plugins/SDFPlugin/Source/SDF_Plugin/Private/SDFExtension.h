@@ -5,7 +5,7 @@
 
 // Plugin
 #include "SDFEdits.h"
-#include "BrickmapResources.h"
+#include "FBrickmapBuilder.h"
 
 // UE
 #include "CoreMinimal.h"
@@ -44,7 +44,6 @@ public:
 	virtual void SubscribeToPostProcessingPass(EPostProcessingPass Pass, const FSceneView& InView, FPostProcessingPassDelegateArray& InOutPassCallbacks, bool bIsPassEnabled) override;
 	FScreenPassTexture RenderDebug(FRDGBuilder& GraphBuilder, const FSceneView& SceneView, const FPostProcessMaterialInputs& Inputs);
 
-	void AllocateBrickmap();
 	void ReleaseResources();
 
 protected:
@@ -69,19 +68,18 @@ private:
 	{
 		TArray<FGPUSDF> SDFs;
 		FSDFResources SDFResources;
-		FBrickmapResources BrickmapResources;
-		uint32 LastBrickmapBuildFrame = MAX_uint32;
+		FBrickmapBuilder BrickmapBuilder;
 	} RT;
 
 }; // FSDFExtension
 
-BEGIN_UNIFORM_BUFFER_STRUCT(FPtrBuffer, )
-	SHADER_PARAMETER(uint32, Idx)
-END_UNIFORM_BUFFER_STRUCT()
-
-BEGIN_UNIFORM_BUFFER_STRUCT(FBrickAllocCounter, )
-	SHADER_PARAMETER(uint32, Counter)
-END_UNIFORM_BUFFER_STRUCT()
+//BEGIN_UNIFORM_BUFFER_STRUCT(FPtrBuffer, )
+//	SHADER_PARAMETER(uint32, Idx)
+//END_UNIFORM_BUFFER_STRUCT()
+//
+//BEGIN_UNIFORM_BUFFER_STRUCT(FBrickAllocCounter, )
+//	SHADER_PARAMETER(uint32, Counter)
+//END_UNIFORM_BUFFER_STRUCT()
 
 // Traversal Shader
 class SDFPLUGIN_API FSDFTraverseShader : public FGlobalShader
