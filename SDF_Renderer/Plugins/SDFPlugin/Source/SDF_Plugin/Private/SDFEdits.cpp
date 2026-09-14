@@ -35,11 +35,13 @@ void USDFComponent::OnUnregister()
 	Super::OnUnregister();
 }
 
+#if WITH_EDITOR
 void USDFComponent::PostEditComponentMove( bool bFinished )
 {
 	Super::PostEditComponentMove( bFinished );
 	SetDirty();
 }
+#endif
 
 void USDFComponent::OnUpdateTransform( EUpdateTransformFlags TransformFlags,
 									   ETeleportType TeleportType )

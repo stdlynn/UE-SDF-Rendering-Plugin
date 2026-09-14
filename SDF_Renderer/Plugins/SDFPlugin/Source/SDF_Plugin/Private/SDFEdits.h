@@ -45,7 +45,9 @@ public:
 
 	virtual void OnRegister() override;
 	virtual void OnUnregister() override;
-	virtual void PostEditComponentMove( bool bFinished ) override;
+#if WITH_EDITOR
+	virtual void PostEditComponentMove(bool bFinished) override;
+#endif
 
 	const FGameSDF& GetSDF() const { return GameSDF; }
 	uint64 GetID() const { return ID; }
