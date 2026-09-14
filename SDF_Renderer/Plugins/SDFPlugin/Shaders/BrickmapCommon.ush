@@ -106,10 +106,13 @@ void PopulateBrickSDF(uint3 GridCell, float3 SphereCenter, float SphereRadius)
 		uint3 AtlasPoint = AtlasCell + uint3(x, y, z);
 		float CurDist = BrickAtlas[AtlasPoint];
 
-		float Dist = SDFSphere(AtlasPoint, SphereCenter, SphereRadius) * 0.003;
+		// Distance is stored so that 1.0 is the length of a voxel diagonal (=1.732)
+		const float Diagonal = sqrt(3);
+		float Dist = SDFSphere(AtlasPoint, SphereCenter, SphereRadius) / Diagonal;
+		Dist = clamp(Dist, -1.0, 1.0);
 		if (Dist < CurDist)
 		{
-			BrickAtlas[AtlasPoint] = abs(Dist);
+			BrickAtlas[AtlasPoint] = Dist;
 		}
 	}}}
 }
