@@ -345,7 +345,7 @@ FScreenPassTexture FSDFExtension::RenderDebug(FRDGBuilder& GraphBuilder, const F
 		FRDGTextureRef OutputTexture = GraphBuilder.CreateTexture(OutputDesc, TEXT("Custom Effect Output Texture"));
 
 		FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(
-			RT.BrickmapResources.PtrGrid, ERDGBufferFlags::MultiFrame);
+			RT.BrickmapBuilder.GetPtrGrid(), ERDGBufferFlags::MultiFrame);
 
 		FDebugShader::FParameters* PassParameters = GraphBuilder.AllocParameters<FDebugShader::FParameters>();
 		PassParameters->OriginalSceneColor = SceneColor.Texture;
