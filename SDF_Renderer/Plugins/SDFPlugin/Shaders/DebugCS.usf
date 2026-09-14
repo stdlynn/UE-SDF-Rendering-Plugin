@@ -20,7 +20,7 @@ bool IntersectRayPtrGrid( float3 RayPos, float3 RayDir, out float HitT )
     float3 InvRayDir = 1.0 / RayDir;
 
     float3 TToMin = (float3(0,0,0) - RayPos) * InvRayDir;
-    float3 TToMax = (PtrGridSize * BrickResolution - RayPos) * InvRayDir;
+    float3 TToMax = (PtrGridSize * VoxelResolution - RayPos) * InvRayDir;
     float3 TMin = min(TToMin, TToMax);
     float3 TMax = max(TToMin, TToMax);
     float TNear = max(max3(TMin.x, TMin.y, TMin.z), 0);
@@ -33,7 +33,7 @@ bool IntersectRayPtrGrid( float3 RayPos, float3 RayDir, out float HitT )
 float NumBrickHits( float3 RayPos, float3 RayDir )
 {
     // TODO: Missing constants
-    const float GridCellSize = BrickResolution;
+    const float GridCellSize = VoxelResolution;
 
     // TODO: should probably be calculated once and stored
     float3 InvRayDir = 1.0 / RayDir;
