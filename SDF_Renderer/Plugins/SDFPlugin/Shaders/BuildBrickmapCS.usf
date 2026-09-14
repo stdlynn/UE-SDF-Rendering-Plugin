@@ -1,0 +1,44 @@
+// Custom SceneViewExtension Template for Unreal Engine
+// Copyright 2023 - 2025 Ossi Luoto
+
+// TODO Probably not a good idea to keep these above the includes
+RWTexture3D<float> BrickAtlas;
+RWBuffer<uint> PtrGrid;
+RWBuffer<uint> BrickAllocCounter;
+
+#include "/Engine/Public/Platform.ush"
+#include "BrickmapCommon.ush"
+#include "Common.ush"
+
+StructuredBuffer<FSDFEdit> SDFEdits;
+uint NumEdits;
+
+[numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
+void BuildBrickmapCS(uint3 ThreadId : SV_DispatchThreadID)
+{
+	//if (any(ThreadId >= AtlasSize))
+	//    return;
+	if (any(ThreadId != 0))
+	{
+		return;
+	}
+
+	for (int Idx = 0; Idx < NumEdits; Idx++)
+	{
+		FSDFEdit Edit = SDFEdits[Idx];
+		AABB SphereAABB = GetSphereAABB(Edit.Pos, Edit.Radius);
+		uint3 MinGridCell = WorldPosToGridCell(SphereAABB.Min);
+		uint3 MaxGridCell = WorldPosToGridCell(SphereAABB.Max);
+		
+		uint3 NumBricks = abs(MaxGridCell - MinGridCell) + 1;
+		uint3 GridCellOffset;
+		for (GridCellOffset.z = 0; GridCellOffset.z < NumBricks.z; GridCellOffset.z++) {
+		for (GridCellOffset.y = 0; GridCellOffset.y < NumBricks.y; GridCellOffset.y++) {
+		for (GridCellOffset.x = 0; GridCellOffset.x < NumBricks.x; GridCellOffset.x++)
+		{
+			uint3 GridCell = MinGridCell + GridCellOffset;
+			AllocateSafe(GridCell);
+			PopulateBrickSDF(GridCell, Edit.Pos, Edit.Radius);
+		}}}
+	}
+}

@@ -5,10 +5,10 @@
 
 // Plugin
 #include "SDFEdits.h"
+#include "BrickmapResources.h"
 
 // UE
 #include "CoreMinimal.h"
-#include "RenderGraphUtils.h"
 #include "SceneViewExtension.h"
 #include "PixelShaderUtils.h"
 #include "ScreenPass.h"
@@ -18,7 +18,7 @@
 // TODO: once the sun and moon align (and our branches), rename to FSDFExtension
 // TODO: also rename file
 // Our Scene Extension
-class FSDFSceneViewExtension : public FSceneViewExtensionBase
+class FSDFExtension : public FSceneViewExtensionBase
 {
 public:
 
@@ -30,8 +30,8 @@ public:
 		bool bUpload{ false };
 	};
 
-	FSDFSceneViewExtension(const FAutoRegister& AutoRegister);
-
+	FSDFExtension(const FAutoRegister& AutoRegister, UWorld* InWorld);
+	
 	virtual void SetupViewFamily(FSceneViewFamily& InViewFamily) override {};
 	virtual void SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView) override {};
 
@@ -42,28 +42,46 @@ public:
 														  const FRenderTargetBindingSlots& RenderTargets, 
 														  TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures) override;
 
+	void AllocateBrickmap();
+	void ReleaseResources();
+
+protected:
+
+	// To prevent multiple instances of the extension
+	virtual bool IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const override;
+
 private:
 
-	void TransferSDFsToRenderThread( const UWorld* World );
+	void TransferSDFsToRenderThread();
 	void UpdateSDFBuffer();
+	FRDGBufferRef RegisterSDFBuffer(FRDGBuilder& GraphBuilder);
 		
 	// Game thread
-	//struct
-	//{
-	//	
-	//} GT;
+	struct
+	{
+		TWeakObjectPtr<UWorld> World;
+	} GT;
 
 	// Render thread
 	struct
 	{
-		// TODO: make TArray
 		TArray<FGPUSDF> SDFs;
 		FSDFResources SDFResources;
+		FBrickmapResources BrickmapResources;
+		uint32 LastBrickmapBuildFrame = MAX_uint32;
 	} RT;
 
-}; // FSDFSceneViewExtension
+}; // FSDFExtension
 
-// Custom Shader
+BEGIN_UNIFORM_BUFFER_STRUCT(FPtrBuffer, )
+	SHADER_PARAMETER(uint32, Idx)
+END_UNIFORM_BUFFER_STRUCT()
+
+BEGIN_UNIFORM_BUFFER_STRUCT(FBrickAllocCounter, )
+	SHADER_PARAMETER(uint32, Counter)
+END_UNIFORM_BUFFER_STRUCT()
+
+// Traversal Shader
 class SDFPLUGIN_API FSDFTraverseShader : public FGlobalShader
 {
 public:
@@ -75,7 +93,10 @@ public:
 		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View) // View/Camera
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FGPUSDF>, SDFEdits)
 		SHADER_PARAMETER(uint32, NumEdits)
-		RENDER_TARGET_BINDING_SLOTS() // RenderTarget Textures
+		SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture3D<float>, BrickAtlas)	// Brick Atlas
+		SHADER_PARAMETER_SAMPLER(SamplerState, BrickSampler)			// Brick Sampler
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, PtrGrid)		// Pointer Buffer
+		RENDER_TARGET_BINDING_SLOTS() // GBuffer Textures
 	END_SHADER_PARAMETER_STRUCT()
 
 	// Basic shader initialization
@@ -88,5 +109,35 @@ public:
 	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
 	{
 		//OutEnvironment.SetDefine(TEXT("SOME_VAR"), 1);
+	}
+};
+
+// Brickmap Build Shader
+class SDFPLUGIN_API FBuildBrickmapShader : public FGlobalShader
+{
+public:
+	DECLARE_GLOBAL_SHADER(FBuildBrickmapShader)
+
+	SHADER_USE_PARAMETER_STRUCT(FBuildBrickmapShader, FGlobalShader)
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(Texture3D<float>, BrickAtlas)	   // Brick Atlas
+		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, PtrGrid)		   // Pointer Grid
+		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, BrickAllocCounter) // Atomic Counter
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FGPUSDF>, SDFEdits)
+		SHADER_PARAMETER(uint32, NumEdits)
+		SHADER_PARAMETER(FIntVector, GridSize)
+		SHADER_PARAMETER(FIntVector, AtlasSize)
+	END_SHADER_PARAMETER_STRUCT()
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+	}
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		OutEnvironment.SetDefine(TEXT("THREADS_X"), 8);
+		OutEnvironment.SetDefine(TEXT("THREADS_Y"), 8);
+		OutEnvironment.SetDefine(TEXT("THREADS_Z"), 8);
 	}
 };

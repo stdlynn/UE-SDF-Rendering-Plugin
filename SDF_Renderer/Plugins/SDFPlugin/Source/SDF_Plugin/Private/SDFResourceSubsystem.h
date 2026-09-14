@@ -1,0 +1,24 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Subsystems/WorldSubsystem.h"
+#include "SDFResourceSubsystem.generated.h"
+
+class FSDFExtension;
+
+UCLASS()
+class SDFPLUGIN_API USDFResourceSubsystem : public UWorldSubsystem
+{
+	GENERATED_BODY()
+public:
+	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
+
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void Deinitialize() override;
+
+protected:
+	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
+
+private:
+	TSharedPtr<FSDFExtension, ESPMode::ThreadSafe> SceneViewExtension;
+};
