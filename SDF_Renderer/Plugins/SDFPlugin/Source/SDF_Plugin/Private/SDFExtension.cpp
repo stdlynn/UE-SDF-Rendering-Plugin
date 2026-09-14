@@ -109,7 +109,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, 
 {
 	UpdateSDFBuffer();
 
-	if (InViewFamily.FrameCounter == RT.LastBrickmapBuildFrame)
+	if (InViewFamily.FrameCounter == RT.LastBrickmapBuildFrame || InViewFamily.FrameCounter > 1)
 	{
 		return; // Already built brickmap this frame
 	}
