@@ -15,16 +15,20 @@
 #include "SceneRendering.h"
 #include "DataDrivenShaderPlatformInfo.h"
 
-// TODO: once the sun and moon align (and our branches), rename to FSDFExtension
-// TODO: also rename file
 // Our Scene Extension
 class FSDFExtension : public FSceneViewExtensionBase
 {
 public:
 
+	struct FSettings
+	{
+		FVector3f PtrGridPos;
+		float VoxSize;
+		bool bUpload{ true };
+	};
+
 	struct FSDFResources
 	{
-		// TODO: also a uniform with 'NumEdits'
 		TRefCountPtr<FRDGPooledBuffer> Buff{ nullptr };
 		bool bDirty{ true }; // True to always allocate the buffer the first frame
 		bool bUpload{ false };
@@ -55,6 +59,7 @@ protected:
 private:
 
 	void TransferSDFsToRenderThread();
+	void TransferGridParamsToRenderThread();
 	void UpdateSDFBuffer();
 	FRDGBufferRef RegisterSDFBuffer(FRDGBuilder& GraphBuilder);
 		
@@ -62,11 +67,14 @@ private:
 	struct
 	{
 		TWeakObjectPtr<UWorld> World;
+		FVector3f PtrGridPos;
+		float VoxSize;
 	} GT;
 
 	// Render thread
 	struct
 	{
+		FSettings Settings;
 		TArray<FGPUSDF> SDFs;
 		FSDFResources SDFResources;
 		FBrickmapResources BrickmapResources;

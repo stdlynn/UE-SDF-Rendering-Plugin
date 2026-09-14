@@ -3,6 +3,7 @@
 
 // Plugin
 #include "SDFExtension.h"
+#include "SDFSettings.h"
 
 // UE
 #include "EngineUtils.h"
@@ -79,6 +80,7 @@ void FSDFExtension::BeginRenderViewFamily( FSceneViewFamily& InViewFamily )
 
 	// We call this from here so it runs on the Game Thread
 	TransferSDFsToRenderThread();
+	TransferGridParamsToRenderThread();
 };
 
 void FSDFExtension::TransferSDFsToRenderThread()
@@ -115,6 +117,28 @@ void FSDFExtension::TransferSDFsToRenderThread()
 	ENQUEUE_RENDER_COMMAND( SDFParamsThreadTransfer )( TransferParams );
 }
 
+void FSDFExtension::TransferGridParamsToRenderThread()
+{
+	// Check if any of the settings are dirty
+	const USDFSettings* SDFSettings{ GetDefault<USDFSettings>() };
+	if (GT.PtrGridPos == SDFSettings->PtrGridPos && GT.VoxSize == SDFSettings->VoxSize) { return; }
+	
+	GT.PtrGridPos = SDFSettings->PtrGridPos;
+	GT.VoxSize = SDFSettings->VoxSize;
+
+	// Transfer lambda
+	// Capture the parameters by copy, their state on the game thread might change before the lambda runs
+	auto TransferSettings{ [this, PtrGridPos = GT.PtrGridPos, VoxSize = GT.VoxSize]( FRHICommandList& ) mutable
+	{
+		// Copy the settings over to the render thread
+		RT.Settings.PtrGridPos = PtrGridPos;
+		RT.Settings.VoxSize = VoxSize;
+		RT.Settings.bUpload = true;
+	} };
+
+	// Perform the transfer safely on the render thread
+	ENQUEUE_RENDER_COMMAND( SDFSettingsThreadTransfer )( TransferSettings );
+}
 void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily)
 {
 	if (CVarShaderOn.GetValueOnRenderThread() == 0)
