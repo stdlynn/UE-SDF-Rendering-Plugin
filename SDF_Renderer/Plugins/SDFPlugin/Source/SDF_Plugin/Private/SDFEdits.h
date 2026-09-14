@@ -5,8 +5,12 @@
 #include "SDFEdits.generated.h"
 
 // SDF edit representation used for the SDF component
+USTRUCT( BlueprintType )
 struct FGameSDF
 {
+	GENERATED_BODY()
+
+	UPROPERTY( EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0") )
 	float Radius{ 100.0f };
 };
 
@@ -24,7 +28,7 @@ struct FRenderSDF
 };
 
 // GPU SDF edits
-struct FGPUSDF
+struct alignas(16) FGPUSDF
 {
 	FRenderSDF SDF;
 	uint32 Idx;
@@ -46,6 +50,13 @@ public:
 	const FGameSDF& GetSDF() const { return GameSDF; }
 	uint64 GetID() const { return ID; }
 
+	UFUNCTION( BlueprintCallable )
+	void SetRadius( float NewRadius )
+	{
+		GameSDF.Radius = NewRadius;
+		SetDirty();
+	}
+
 protected:
 
 	virtual void OnUpdateTransform( EUpdateTransformFlags TransformFlags,
@@ -55,7 +66,15 @@ private:
 
 	inline static uint64 NextID{ 0 };
 
+	void SetDirty() const;
+
 	// Game params, game thread
+	UPROPERTY( EditAnywhere,
+			   BlueprintReadOnly, // Edit through setters
+			   Category = "SDF",
+			   meta = (DisplayName = "Shape"),
+			   meta = (ShowOnlyInnerProperties),
+			   meta = (AllowPrivateAccess = "true") )
 	FGameSDF GameSDF{};
 	uint64 ID;
 
@@ -72,6 +91,10 @@ public:
 
 private:
 
+	UPROPERTY( EditAnywhere, 
+			   BlueprintReadOnly, 
+			   Category = "Components", 
+			   meta = (AllowPrivateAccess = "true") )
 	USDFComponent* SDFComp;
 
 }; // ASDFActor
@@ -94,6 +117,10 @@ public:
 		bDirty = false;
 		return bWasDirty;
 	}
+
+protected:
+
+	virtual bool DoesSupportWorldType( const EWorldType::Type WorldType ) const override;
 
 private:
 

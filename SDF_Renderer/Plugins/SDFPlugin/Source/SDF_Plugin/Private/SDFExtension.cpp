@@ -40,19 +40,19 @@ namespace
 }
 
 FSDFExtension::FSDFExtension(const FAutoRegister& AutoRegister, UWorld* InWorld) 
-	: FSceneViewExtensionBase(AutoRegister), World(InWorld)
+	: FSceneViewExtensionBase(AutoRegister), GT{ .World{ InWorld} }
 {
 	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Custom SceneViewExtension registered"));
 }
 
 void FSDFExtension::ReleaseResources()
 {
-	BrickmapResources.Release();
+	RT.BrickmapResources.Release();
 }
 
 bool FSDFExtension::IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const
 {
-	const UWorld* W = World.Get();
+	const UWorld* W = GT.World.Get();
 	
 	// Check if world exists
 	if (!W) return false;
@@ -84,7 +84,7 @@ void FSDFExtension::BeginRenderViewFamily( FSceneViewFamily& InViewFamily )
 void FSDFExtension::TransferSDFsToRenderThread()
 {
 	// Only update if dirty
-	USDFSubsystem* SDFSubsystem{ World->GetSubsystem<USDFSubsystem>() };
+	USDFSubsystem* SDFSubsystem{ GT.World->GetSubsystem<USDFSubsystem>() };
 	if (not SDFSubsystem->GetAndResetDirty()) { return; }
 
 	// TODO: remove before PR (also other debug messages)
@@ -124,13 +124,13 @@ void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, 
 
 	UpdateSDFBuffer();
 
-	if (InViewFamily.FrameCounter == LastBrickmapBuildFrame)
+	if (InViewFamily.FrameCounter == RT.LastBrickmapBuildFrame)
 	{
 		return; // Already built brickmap this frame
 	}
-	LastBrickmapBuildFrame = InViewFamily.FrameCounter;
+	RT.LastBrickmapBuildFrame = InViewFamily.FrameCounter;
 
-	if (!BrickmapResources.IsValid())
+	if (!RT.BrickmapResources.IsValid())
 	{
 		AllocateBrickmap();
 	}
@@ -138,14 +138,14 @@ void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, 
 	// For now, just build it once and never again
 	RDG_EVENT_SCOPE(GraphBuilder, "SDF_Build_Brickmap");
 	{
-		FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(InViewFamily.GetFeatureLevel());
+		const FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(InViewFamily.GetFeatureLevel());
 
-		FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture(
-			BrickmapResources.BrickAtlas, ERDGTextureFlags::MultiFrame);
-		FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(
-			BrickmapResources.PtrGrid, ERDGBufferFlags::MultiFrame);
-		FRDGBufferRef AtomicCounterRDG = GraphBuilder.RegisterExternalBuffer(
-			BrickmapResources.BrickAllocCounter, ERDGBufferFlags::MultiFrame);
+		const FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture(
+			RT.BrickmapResources.BrickAtlas, ERDGTextureFlags::MultiFrame);
+		const FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(
+			RT.BrickmapResources.PtrGrid, ERDGBufferFlags::MultiFrame);
+		const FRDGBufferRef AtomicCounterRDG = GraphBuilder.RegisterExternalBuffer(
+			RT.BrickmapResources.BrickAllocCounter, ERDGBufferFlags::MultiFrame);
 
 		const FRDGBufferRef SDFBuffRDG{ RegisterSDFBuffer( GraphBuilder ) };
 
@@ -164,13 +164,13 @@ void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, 
 		PassParameters->GridSize = PtrGridSize;
 		PassParameters->AtlasSize = AtlasSize;
 
-		FIntVector GroupCount{
+		const FIntVector GroupCount{
 			FMath::DivideAndRoundUp(1, 8),
 			FMath::DivideAndRoundUp(1, 8),
 			FMath::DivideAndRoundUp(1, 8)
 		};
 
-		TShaderMapRef<FBuildBrickmapShader> ComputeShader(GlobalShaderMap);
+		const TShaderMapRef<FBuildBrickmapShader> ComputeShader(GlobalShaderMap);
 
 		FComputeShaderUtils::AddPass(
 			GraphBuilder,
@@ -230,19 +230,19 @@ void FSDFExtension::AllocateBrickmap()
 {
 	check(IsInRenderingThread());
 
-	FRDGTextureDesc BrickAtlasDesc = FRDGTextureDesc::Create3D(
+	const FRDGTextureDesc BrickAtlasDesc = FRDGTextureDesc::Create3D(
 		AtlasSize, PF_R8, FClearValueBinding::None,
 		TexCreate_ShaderResource | TexCreate_UAV);
-	BrickmapResources.BrickAtlas = 
+	RT.BrickmapResources.BrickAtlas = 
 		AllocatePooledTexture(BrickAtlasDesc, TEXT("SDF_BrickAtlas"));
 
 	const uint32 GridSize = PtrGridSize.X * PtrGridSize.Y * PtrGridSize.Z;
-	FRDGBufferDesc PtrGridDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), GridSize);
-	BrickmapResources.PtrGrid = 
+	const FRDGBufferDesc PtrGridDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), GridSize);
+	RT.BrickmapResources.PtrGrid = 
 		AllocatePooledBuffer(PtrGridDesc, TEXT("SDF_BrickPtrBuffer"));
 	
-	FRDGBufferDesc CounterDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), 1);
-	BrickmapResources.BrickAllocCounter =
+	const FRDGBufferDesc CounterDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), 1);
+	RT.BrickmapResources.BrickAllocCounter =
 		AllocatePooledBuffer(CounterDesc, TEXT("SDF_BrickAllocCounter"));
 
 	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Allocated Brickmap"));
@@ -256,7 +256,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBu
 		return;
 	}
 
-	FRDGTextureRef DepthTexture = RenderTargets.DepthStencil.GetTexture();
+	const FRDGTextureRef DepthTexture = RenderTargets.DepthStencil.GetTexture();
 	if (!DepthTexture)
 	{
 		UE_LOG(LogTemp, Error, TEXT("No Depth Stencil texture available for Rendering"));
@@ -264,7 +264,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBu
 		return;
 	}
 
-	if (!BrickmapResources.IsValid())
+	if (!RT.BrickmapResources.IsValid())
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red, TEXT("Brickmap Resources aren't valid!"));
 		return;
@@ -279,10 +279,10 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBu
 		// Specify that it is persistent/external ('MultiFrame')
 		const FRDGBufferRef SDFBuffRDG{ RegisterSDFBuffer( GraphBuilder ) };
 
-		FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture(
-			BrickmapResources.BrickAtlas, ERDGTextureFlags::MultiFrame);
-		FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(
-			BrickmapResources.PtrGrid, ERDGBufferFlags::MultiFrame);
+		const FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture(
+			RT.BrickmapResources.BrickAtlas, ERDGTextureFlags::MultiFrame);
+		const FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(
+			RT.BrickmapResources.PtrGrid, ERDGBufferFlags::MultiFrame);
 		FRHISamplerState* BrickSampler = 
 			TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 
@@ -311,10 +311,10 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBu
 			0x0, // StencilReadMask
 			0x0>::GetRHI();
 
-		TShaderMapRef<FSDFTraverseShader> PixelShader(View.ShaderMap);
+		const TShaderMapRef<FSDFTraverseShader> PixelShader(View.ShaderMap);
 
 		// For if we ever need to write to the stencil buffer
-		const uint32 StencilRef =
+		static constexpr uint32 StencilRef =
 			GET_STENCIL_BIT_MASK(RECEIVE_DECAL, 1) |
 			STENCIL_LIGHTING_CHANNELS_MASK(0x1);
 

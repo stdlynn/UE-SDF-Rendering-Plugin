@@ -31,9 +31,6 @@ public:
 	};
 
 	FSDFExtension(const FAutoRegister& AutoRegister, UWorld* InWorld);
-
-	// To prevent multiple instaces of the extension
-	virtual bool IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const override;
 	
 	virtual void SetupViewFamily(FSceneViewFamily& InViewFamily) override {};
 	virtual void SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView) override {};
@@ -50,6 +47,11 @@ public:
 	void AllocateBrickmap();
 	void ReleaseResources();
 
+protected:
+
+	// To prevent multiple instances of the extension
+	virtual bool IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const override;
+
 private:
 
 	void TransferSDFsToRenderThread();
@@ -57,22 +59,20 @@ private:
 	FRDGBufferRef RegisterSDFBuffer(FRDGBuilder& GraphBuilder);
 		
 	// Game thread
-	//struct
-	//{
-	//	
-	//} GT;
+	struct
+	{
+		TWeakObjectPtr<UWorld> World;
+	} GT;
 
 	// Render thread
 	struct
 	{
-		// TODO: make TArray
 		TArray<FGPUSDF> SDFs;
 		FSDFResources SDFResources;
+		FBrickmapResources BrickmapResources;
+		uint32 LastBrickmapBuildFrame = MAX_uint32;
 	} RT;
 
-	TWeakObjectPtr<UWorld> World;
-	FBrickmapResources BrickmapResources;
-	uint32 LastBrickmapBuildFrame = MAX_uint32;
 }; // FSDFExtension
 
 BEGIN_UNIFORM_BUFFER_STRUCT(FPtrBuffer, )
