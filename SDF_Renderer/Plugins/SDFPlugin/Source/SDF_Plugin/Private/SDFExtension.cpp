@@ -163,8 +163,6 @@ void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, 
 			ComputeShader,
 			PassParameters,
 			GroupCount);
-
-		UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Built Brickmap"));
 	}
 }
 
