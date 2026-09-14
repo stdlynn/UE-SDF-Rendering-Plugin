@@ -15,14 +15,19 @@
 // GridIdx    | uint   | 0-262k | 1D index to sample Ptr Grid			  |
 //________________________________________________________________________|
 
-
 static const uint BrickResolution = 8;
 static const uint VoxelResolution = BrickResolution - 1;
 
 static const uint3 NumAtlasBricks = uint3(128, 128, 1);
 static const uint3 AtlasSize = NumAtlasBricks * BrickResolution;
 
+// TODO: expose as setting
 static const uint3 PtrGridSize = uint3(64, 64, 64);
+
+// TODO: functions
+// TODO: rename PtrGridPos to PtrGridCenter
+// - float GetBrickSize( float VoxSize )
+// - AABB GetPtrGridAABB( float3 Pos, float BrickSize )
 
 bool IsInsideGrid(float3 WorldPos)
 {
