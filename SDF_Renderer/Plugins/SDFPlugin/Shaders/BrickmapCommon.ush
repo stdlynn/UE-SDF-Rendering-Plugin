@@ -19,7 +19,7 @@
 static const uint BrickResolution = 8;
 static const uint VoxelResolution = BrickResolution - 1;
 
-static const uint3 NumAtlasBricks = uint3(128, 128, 1);
+static const uint3 NumAtlasBricks = uint3(64, 64, 1);
 static const uint3 AtlasSize = NumAtlasBricks * BrickResolution;
 
 static const uint3 PtrGridSize = uint3(64, 64, 64);

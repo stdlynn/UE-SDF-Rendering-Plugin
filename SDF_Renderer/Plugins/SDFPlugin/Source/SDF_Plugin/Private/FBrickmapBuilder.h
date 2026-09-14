@@ -5,20 +5,14 @@
 
 // UE
 #include "CoreMinimal.h"
-#include "SceneViewExtension.h"
 #include "PixelShaderUtils.h"
-#include "ScreenPass.h"
-#include "SceneRendering.h"
 #include "DataDrivenShaderPlatformInfo.h"
-
-static const FIntVector AtlasSize = FIntVector(512, 512, 8);
-static const FIntVector PtrGridSize = FIntVector(64, 64, 64);
 
 class FBrickmapBuilder
 {
 public:
 
-	FBrickmapBuilder() = default;
+	FBrickmapBuilder();
 
 	[[nodiscard]] IPooledRenderTarget* GetBrickAtlas() const { return RT.BrickAtlas; }
 	[[nodiscard]] FRDGPooledBuffer* GetPtrGrid() const { return RT.PtrGrid; }
@@ -30,8 +24,12 @@ public:
 	void ReleaseResources();
 	bool AreResourcesValid() const;
 
+	FRDGPooledBuffer* GetBrickUpdateList(const TArray<FGPUSDF>& SDFs);
 
 private:
+
+	[[nodiscard]] bool GetBrickListBit(uint32 Idx) const;
+	void SetBrickListBit(uint32 Idx, bool bValue);
 
 	// Render thread
 	struct
@@ -40,6 +38,9 @@ private:
 		TRefCountPtr<FRDGPooledBuffer> PtrGrid;
 		TRefCountPtr<FRDGPooledBuffer> BrickAllocCounter;
 		uint32 LastBuildFrame = MAX_uint32;
+		
+		TRefCountPtr<FRDGPooledBuffer> BrickUpdateList;
+		TArray<uint32> BrickListCPU;
 	} RT;
 
 }; // BrickmapBuilder
