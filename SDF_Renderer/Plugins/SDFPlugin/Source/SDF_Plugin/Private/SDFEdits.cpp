@@ -20,26 +20,47 @@ USDFComponent::USDFComponent()
 void USDFComponent::OnRegister()
 {
 	Super::OnRegister();
-	GetWorld()->GetSubsystem<USDFSubsystem>()->RegisterSDF( *this );
+	if (USDFSubsystem* SDFSubsystem{ GetWorld()->GetSubsystem<USDFSubsystem>() })
+	{
+		SDFSubsystem->RegisterSDF( *this );
+	}
 }
 
 void USDFComponent::OnUnregister()
 {
-	GetWorld()->GetSubsystem<USDFSubsystem>()->UnregisterSDF( *this );
+	if (USDFSubsystem* SDFSubsystem{ GetWorld()->GetSubsystem<USDFSubsystem>() })
+	{
+		SDFSubsystem->UnregisterSDF( *this );
+	}
 	Super::OnUnregister();
 }
 
 void USDFComponent::PostEditComponentMove( bool bFinished )
 {
 	Super::PostEditComponentMove( bFinished );
-	GetWorld()->GetSubsystem<USDFSubsystem>()->SetSDFDirty( *this );
+	SetDirty();
 }
 
 void USDFComponent::OnUpdateTransform( EUpdateTransformFlags TransformFlags,
 									   ETeleportType TeleportType )
 {
 	Super::OnUpdateTransform( TransformFlags, TeleportType );
-	GetWorld()->GetSubsystem<USDFSubsystem>()->SetSDFDirty( *this );
+	SetDirty();
+}
+
+void USDFComponent::SetDirty() const
+{
+	if (USDFSubsystem* SDFSubsystem{ GetWorld()->GetSubsystem<USDFSubsystem>() })
+	{
+		SDFSubsystem->SetSDFDirty( *this );
+	}
+}
+
+bool USDFSubsystem::DoesSupportWorldType( const EWorldType::Type WorldType ) const
+{
+	return WorldType == EWorldType::Type::Game
+		   || WorldType == EWorldType::Type::PIE // Play in editor
+		   || WorldType == EWorldType::Type::Editor;
 }
 
 void USDFSubsystem::RegisterSDF( const USDFComponent& Comp )
@@ -51,7 +72,7 @@ void USDFSubsystem::RegisterSDF( const USDFComponent& Comp )
 	// Debug
 	GEngine->AddOnScreenDebugMessage( -1, // Force newline
 									  5.0f, // Time
-									  FColor::Green, 
+									  FColor::Green,
 									  FString::Printf( TEXT( "[+] SDF Edit (%d total)" ), RenderSDFs.Num() ) );
 }
 
@@ -63,7 +84,7 @@ void USDFSubsystem::UnregisterSDF( const USDFComponent& Comp )
 	// Debug
 	GEngine->AddOnScreenDebugMessage( -1, // Force newline
 									  5.0f, // Time
-									  FColor::Red, 
+									  FColor::Red,
 									  FString::Printf( TEXT( "[-] SDF Edit (%d total)" ), RenderSDFs.Num() ) );
 }
 
