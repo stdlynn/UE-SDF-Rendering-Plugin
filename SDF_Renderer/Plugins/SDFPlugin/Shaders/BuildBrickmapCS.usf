@@ -50,3 +50,39 @@ void BuildBrickmapCS(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupT
 	const float PrevValue = BrickAtlas[AtlasPoint];
 	BrickAtlas[AtlasPoint] = min(Encoded, PrevValue);
 }
+
+[numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
+void TheoreticalAllocator(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID)
+{
+	if (GroupID.x >= NumUpdatedBricks) return;
+
+	// For every Edit:
+	//		store closest distance
+
+	// If within distance:
+	//		set deallocation flag false
+
+	// Barrier
+
+	// If deallocation and thread is 0:
+	//		Atomically append atlas index to deallocated list
+	//		Set PtrGrid to 0xffffffff
+	
+	// if not deallocate:
+	//		if thread 0:
+	//			Atomically claim atlas index from deallocated list
+	//			If failed (none free):
+	//				Claim next BrickAllocCounter in brick atlas
+	//			Write claimed value into PtrGrid
+	//		Barrier
+	//		Write distance value into our voxel within brick pointed to by PtrGrid
+
+	// Allocate brick
+	if (all(GroupThreadID == 0) && PtrGrid[GridIdx] == 0xFFFFFFFFu)
+    {
+        uint Next;
+        InterlockedAdd(BrickAllocCounter[0], 1, Next);
+        PtrGrid[GridIdx] = Next;
+    }
+    AllMemoryBarrierWithGroupSync();
+}
