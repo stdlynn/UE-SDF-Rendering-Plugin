@@ -124,8 +124,10 @@ public:
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(Texture3D<float>, BrickAtlas)	   // Brick Atlas
 		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, PtrGrid)		   // Pointer Grid
 		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, BrickAllocCounter) // Atomic Counter
+		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint32>, BrickList)		   // Brick List
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FGPUSDF>, SDFEdits)
 		SHADER_PARAMETER(uint32, NumEdits)
+		SHADER_PARAMETER(uint32, NumUpdatedBricks)
 		SHADER_PARAMETER(FIntVector, GridSize)
 		SHADER_PARAMETER(FIntVector, AtlasSize)
 	END_SHADER_PARAMETER_STRUCT()

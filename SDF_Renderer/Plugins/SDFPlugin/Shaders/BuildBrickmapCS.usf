@@ -12,33 +12,41 @@ RWBuffer<uint> BrickAllocCounter;
 
 StructuredBuffer<FSDFEdit> SDFEdits;
 uint NumEdits;
+Buffer<uint> BrickList;
+uint NumUpdatedBricks;
 
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
-void BuildBrickmapCS(uint3 ThreadId : SV_DispatchThreadID)
+void BuildBrickmapCS(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID)
 {
-	//if (any(ThreadId >= AtlasSize))
-	//    return;
-	if (any(ThreadId != 0))
+	if (GroupID.x >= NumUpdatedBricks) return;
+
+	const uint GridIdx = BrickList[GroupID.x];
+	const uint3 GridCell = GridIdxToGridCell(GridIdx);
+
+	// Allocate brick
+	if (all(GroupThreadID == 0) && PtrGrid[GridIdx] == 0xFFFFFFFFu)
+    {
+        uint Next;
+        InterlockedAdd(BrickAllocCounter[0], 1, Next);
+        PtrGrid[GridIdx] = Next;
+    }
+    AllMemoryBarrierWithGroupSync();
+
+	const uint Idx = PtrGrid[GridCellToGridIdx(GridCell)];
+	const uint3 AtlasPoint = uint3(IdxToAtlasCell(Idx) * BrickResolution, 0) + GroupThreadID;
+	const float3 WorldPos = GridCellToWorldPos(GridCell) + float3(GroupThreadID);
+
+	float Nearest = MaxRayDist;
+	for (uint EditIdx = 0; EditIdx < NumEdits; EditIdx++)
 	{
-		return;
+	    const FSDFEdit Edit = SDFEdits[EditIdx];
+	    Nearest = min(Nearest, SDFSphere(WorldPos, Edit.Pos, Edit.Radius));
 	}
 
-	for (int Idx = 0; Idx < NumEdits; Idx++)
-	{
-		FSDFEdit Edit = SDFEdits[Idx];
-		AABB SphereAABB = GetSphereAABB(Edit.Pos, Edit.Radius);
-		uint3 MinGridCell = WorldPosToGridCell(SphereAABB.Min);
-		uint3 MaxGridCell = WorldPosToGridCell(SphereAABB.Max);
-		
-		uint3 NumBricks = abs(MaxGridCell - MinGridCell) + 1;
-		uint3 GridCellOffset;
-		for (GridCellOffset.z = 0; GridCellOffset.z < NumBricks.z; GridCellOffset.z++) {
-		for (GridCellOffset.y = 0; GridCellOffset.y < NumBricks.y; GridCellOffset.y++) {
-		for (GridCellOffset.x = 0; GridCellOffset.x < NumBricks.x; GridCellOffset.x++)
-		{
-			uint3 GridCell = MinGridCell + GridCellOffset;
-			AllocateSafe(GridCell);
-			PopulateBrickSDF(GridCell, Edit.Pos, Edit.Radius);
-		}}}
-	}
+	// Distance is stored so that 1.0 is the length of a voxel diagonal (=1.732)
+	static const float InvDiagonal = 1.0 / sqrt(3.0);
+	const float Encoded = clamp(Nearest * InvDiagonal, -1.0, 1.0) * 0.5 + 0.5;
+
+	const float PrevValue = BrickAtlas[AtlasPoint];
+	BrickAtlas[AtlasPoint] = min(Encoded, PrevValue);
 }

@@ -11,32 +11,6 @@ struct FAABB
 	FVector3f Max;
 };
 
-FBrickmapBuilder::FBrickmapBuilder()
-{
-	RT.BrickListCPU.SetNum((PtrGridSize.X * PtrGridSize.Y * PtrGridSize.Z) / 32);
-}
-
-bool FBrickmapBuilder::GetBrickListBit(uint32 Idx) const
-{
-	const uint32 ArrayIdx = Idx / 32;
-	const uint32 BitIdx = Idx % 32;
-	return (RT.BrickListCPU[ArrayIdx] & (1u << BitIdx)) != 0;
-}
-
-void FBrickmapBuilder::SetBrickListBit(uint32 Idx, bool bValue)
-{
-	const uint32 ArrayIdx = Idx / 32;
-	const uint32 BitIdx = Idx % 32;
-	if (bValue)
-	{
-		RT.BrickListCPU[ArrayIdx] |= (1u << BitIdx);
-	}
-	else
-	{
-		RT.BrickListCPU[ArrayIdx] &= ~(1u << BitIdx);
-	}
-}
-
 void FBrickmapBuilder::AllocateResources()
 {
 	check(IsInRenderingThread());
@@ -54,11 +28,6 @@ void FBrickmapBuilder::AllocateResources()
 	const FRDGBufferDesc CounterDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), numCounters);
 	RT.BrickAllocCounter = AllocatePooledBuffer(CounterDesc, TEXT("SDF_BrickAllocCounter"));
 
-	constexpr uint32 maxUpdatesPerFrame = 1024;
-	const FRDGBufferDesc BrickUpdateDesc = FRDGBufferDesc::CreateStructuredDesc(
-		sizeof(FGPUSDF), maxUpdatesPerFrame);
-	RT.BrickUpdateList = AllocatePooledBuffer(BrickUpdateDesc, TEXT("SDF_BrickUpdateList"));
-
 	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Allocated Brickmap"));
 	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Allocated Brickmap"));
 }
@@ -69,7 +38,7 @@ void FBrickmapBuilder::ReleaseResources()
 	RT.BrickAtlas.SafeRelease();
 	RT.PtrGrid.SafeRelease();
 	RT.BrickAllocCounter.SafeRelease();
-	RT.BrickUpdateList.SafeRelease();
+	RT.BrickListResource.SafeRelease();
 }
 
 bool FBrickmapBuilder::AreResourcesValid() const
@@ -77,68 +46,81 @@ bool FBrickmapBuilder::AreResourcesValid() const
 	return RT.BrickAtlas.IsValid() 
 		&& RT.PtrGrid.IsValid()
 		&& RT.BrickAllocCounter.IsValid()
-		&& RT.BrickUpdateList.IsValid();
+		&& RT.BrickListResource.IsValid();
 }
 
-FRDGPooledBuffer* FBrickmapBuilder::GetBrickUpdateList(const TArray<FGPUSDF>& SDFs)
+void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs)
 {
-	RT.BrickListCPU.Empty((PtrGridSize.X * PtrGridSize.Y * PtrGridSize.Z) / 32);
+	RT.BrickListCPU.Empty();
 
-	for (auto Edit : SDFs)
+	const FIntVector3 GridMax = FIntVector3(PtrGridSize.X, PtrGridSize.Y, PtrGridSize.Z) - FIntVector3(1);
+
+	for (const auto& [SDF, Idx] : SDFs)
 	{
-		TArray<uint64> BrickList;
-		
-		// Find bricks within edit's AABB
-		FAABB AABB;
-		AABB.Min = Edit.SDF.Pos - Edit.SDF.Radius;
-		AABB.Max = Edit.SDF.Pos + Edit.SDF.Radius;
+		FIntVector3 MinCell = WorldPosToGridCellSigned(SDF.Pos - SDF.Radius);
+		FIntVector3 MaxCell = WorldPosToGridCellSigned(SDF.Pos + SDF.Radius);
 
-		FUintVector MinCell = WorldPosToGridCell(AABB.Min);
-		FUintVector MaxCell = WorldPosToGridCell(AABB.Max);
-		uint32 Width = MaxCell.X - MinCell.X + 1;
-		uint32 Height = MaxCell.Y - MinCell.Y + 1;
-		uint32 Depth = MaxCell.Z - MinCell.Z + 1;
+		MinCell = FIntVector3(
+			FMath::Clamp(MinCell.X, 0, GridMax.X),
+			FMath::Clamp(MinCell.Y, 0, GridMax.Y),
+			FMath::Clamp(MinCell.Z, 0, GridMax.Z));
+		MaxCell = FIntVector3(
+			FMath::Clamp(MaxCell.X, 0, GridMax.X),
+			FMath::Clamp(MaxCell.Y, 0, GridMax.Y),
+			FMath::Clamp(MaxCell.Z, 0, GridMax.Z));
 
-		for (uint32 z = 0; z < Depth; z++)
+		// @formatter:off
+		for (int32 z = MinCell.Z; z <= MaxCell.Z; z++) {
+		for (int32 y = MinCell.Y; y <= MaxCell.Y; y++) {
+		for (int32 x = MinCell.X; x <= MaxCell.X; x++)
 		{
-			for (uint32 y = 0; y < Height; y++)
+			const FUintVector3 GridCell(
+				static_cast<uint32>(x), static_cast<uint32>(y), static_cast<uint32>(z));
+
+			const FVector3f Min = GridCellToWorldPos(GridCell);
+			const FVector3f Max = Min + FVector3f(VoxelResolution);
+
+			const FVector3f ClosestPoint(
+				FMath::Clamp(SDF.Pos.X, Min.X, Max.X),
+				FMath::Clamp(SDF.Pos.Y, Min.Y, Max.Y),
+				FMath::Clamp(SDF.Pos.Z, Min.Z, Max.Z));
+
+			const FVector3f FarthestPoint(
+				FMath::Abs(SDF.Pos.X - Min.X) > FMath::Abs(SDF.Pos.X - Max.X) ? Min.X : Max.X,
+				FMath::Abs(SDF.Pos.Y - Min.Y) > FMath::Abs(SDF.Pos.Y - Max.Y) ? Min.Y : Max.Y,
+				FMath::Abs(SDF.Pos.Z - Min.Z) > FMath::Abs(SDF.Pos.Z - Max.Z) ? Min.Z : Max.Z);
+
+			if (SDFSphere(ClosestPoint, SDF.Pos, SDF.Radius) <= 0.0f
+				&& SDFSphere(FarthestPoint, SDF.Pos, SDF.Radius) >= 0.0f)
 			{
-				for (uint32 x = 0; x < Width; x++)
-				{
-					FUintVector GridCell = MinCell + FUintVector(x, y, z);
-					uint32 BrickIndex = GridCellToGridIdx(GridCell);
-					BrickList.Add(BrickIndex);
-				}
+				RT.BrickListCPU.Add(GridCellToGridIdx(GridCell));
 			}
-		}
-
-		// Cull non-touching bricks
-		for (int i = 0; i < BrickList.Num(); i++)
-		{
-			uint32 BrickIndex = BrickList[i];
-			FUintVector3 GridCell = GridIdxToGridCell(BrickIndex);
-			FVector3f World = GridCellToWorldPos(GridCell) + FVector3f(VoxelResolution / 2.0f);
-
-			FVector3f Diff = Edit.SDF.Pos - World;
-			FVector3f Delta = Diff / FMath::Abs(Diff); // either -1 or +1 per axis
-			FVector3f ClosestCorner = World + Delta * FVector3f(VoxelResolution / 2.0f);
-			FVector3f FarthestCorner = World - Delta * FVector3f(VoxelResolution / 2.0f);
-
-			float ClosestDist = SDFSphere(ClosestCorner, Edit.SDF.Pos, Edit.SDF.Radius);
-			float FarthestDist = SDFSphere(FarthestCorner, Edit.SDF.Pos, Edit.SDF.Radius);
-			bool bInsideClose = ClosestDist < Edit.SDF.Radius;
-			bool bInsideFar = FarthestDist < Edit.SDF.Radius;
-
-			// Check if the brick touches the shell
-			if (bInsideClose && not bInsideFar)
-			{
-				SetBrickListBit(BrickIndex, true);
-			}
-		}
+		}}}
+		// @formatter:on
 	}
+}
 
-	// Copy brick list to the GPU buffer
+void FBrickmapBuilder::AllocateBrickList()
+{
+	// TODO look into if this should be a per-frame allocated buffer
+	if (not RT.BrickListResource.IsValid() || RT.BrickListCPU.Num() > RT.BrickListResource->GetSize() / sizeof(uint32))
+	{
+		const uint32 Capacity = FMath::Max(RT.BrickListCPU.Num(), 1);
 
+		FRDGBufferDesc BufferDesc = FRDGBufferDesc::CreateUploadDesc(sizeof(uint32), Capacity);
+		RT.BrickListResource = AllocatePooledBuffer(BufferDesc, TEXT("Brick List Update Buffer"));
+	}
+}
 
-	return RT.BrickUpdateList;
+FRDGBufferRef FBrickmapBuilder::RegisterBrickListBuffer(FRDGBuilder& GraphBuilder) const
+{
+	TArray<uint32> BrickArray = RT.BrickListCPU.Array();
+	
+	const FRDGBufferRef BrickListRDG{ GraphBuilder.RegisterExternalBuffer(RT.BrickListResource, 
+																		  ERDGBufferFlags::MultiFrame) };
+
+	GraphBuilder.QueueBufferUpload(BrickListRDG, BrickArray.GetData(), 
+								   BrickArray.Num() * sizeof(uint32), ERDGInitialDataFlags::None);
+
+	return BrickListRDG;
 }

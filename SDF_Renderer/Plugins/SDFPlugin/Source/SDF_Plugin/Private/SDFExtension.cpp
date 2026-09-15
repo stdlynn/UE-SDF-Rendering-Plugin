@@ -3,6 +3,7 @@
 
 // Plugin
 #include "SDFExtension.h"
+#include "BrickmapCommon.h"
 
 // UE
 #include "EngineUtils.h"
@@ -119,7 +120,11 @@ void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, 
 		return;
 	}
 
+	RT.BrickmapBuilder.SetBrickUpdateList(RT.SDFs);
+
+	// Update upload buffers
 	UpdateSDFBuffer();
+	RT.BrickmapBuilder.AllocateBrickList();
 
 	if (InViewFamily.FrameCounter == RT.BrickmapBuilder.GetLastBuildFrame())
 	{
@@ -136,6 +141,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, 
 	{
 		const FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(InViewFamily.GetFeatureLevel());
 
+		const FRDGBufferRef BrickListRDG = RT.BrickmapBuilder.RegisterBrickListBuffer(GraphBuilder);
 		const FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture(
 			RT.BrickmapBuilder.GetBrickAtlas(), ERDGTextureFlags::MultiFrame);
 		const FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(
@@ -153,16 +159,18 @@ void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, 
 			GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
 		PassParameters->SDFEdits = GraphBuilder.CreateSRV(SDFBuffRDG); // Create the SDF buffer view (which specifies how the shader should read it)
 		PassParameters->NumEdits = RT.SDFs.Num();
+		PassParameters->BrickList = GraphBuilder.CreateSRV(BrickListRDG, PF_R32_UINT);
+		PassParameters->NumUpdatedBricks = RT.BrickmapBuilder.GetNumUpdatedBricks();
 		PassParameters->BrickAtlas = GraphBuilder.CreateUAV(BrickAtlasRDG);
 		PassParameters->PtrGrid = GraphBuilder.CreateUAV(PtrBufferRDG, PF_R32_UINT);
 		PassParameters->BrickAllocCounter = GraphBuilder.CreateUAV(AtomicCounterRDG, PF_R32_UINT);
-		PassParameters->GridSize = PtrGridSize;
-		PassParameters->AtlasSize = AtlasSize;
+		PassParameters->GridSize = FIntVector3(PtrGridSize);
+		PassParameters->AtlasSize = FIntVector3(AtlasSize);
 
 		const FIntVector GroupCount{
-			FMath::DivideAndRoundUp(1, 8),
-			FMath::DivideAndRoundUp(1, 8),
-			FMath::DivideAndRoundUp(1, 8)
+			FMath::DivideAndRoundUp(static_cast<int>(PassParameters->NumUpdatedBricks * BrickResolution), 8),
+			FMath::DivideAndRoundUp(static_cast<int>(BrickResolution), 8),
+			FMath::DivideAndRoundUp(static_cast<int>(BrickResolution), 8)
 		};
 
 		const TShaderMapRef<FBuildBrickmapShader> ComputeShader(GlobalShaderMap);

@@ -97,7 +97,7 @@ float NumBrickHits( float3 RayPos, float3 RayDir )
 #if USE_DIST_INSTEAD_OF_HITS
 	return TotalT / 20.0;
 #else
-    return NumHits / 4.0;
+    return NumHits / 12.0;
 #endif
 }
 
@@ -183,5 +183,6 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
 	Color = Color / (Color + float3(2, 2, 2));
 #endif
 
-    Output[SceneColorViewport_ViewportMin + DispatchThreadId] = float4(OriginalColor + Color, OriginalColor.w);
+    const float3 NewColor = (Hits > 0) ? lerp( OriginalColor, Color, 0.6 ) : OriginalColor;
+	Output[SceneColorViewport_ViewportMin + DispatchThreadId] = float4(NewColor, OriginalColor.w);
 }

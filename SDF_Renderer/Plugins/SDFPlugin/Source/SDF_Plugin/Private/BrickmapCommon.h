@@ -6,7 +6,7 @@
 static constexpr uint32 BrickResolution = 8;
 static constexpr uint32 VoxelResolution = BrickResolution - 1;
 
-static const FUintVector3 NumAtlasBricks = FUintVector3(128, 128, 1);
+static const FUintVector3 NumAtlasBricks = FUintVector3(64, 64, 1);
 static const FUintVector3 AtlasSize = NumAtlasBricks * BrickResolution;
 
 static const FUintVector3 PtrGridSize = FUintVector3(64, 64, 64);
@@ -24,16 +24,25 @@ inline FUintVector3 WorldPosToGridCell(const FVector3f& World)
     return FUintVector3(FMath::FloorToInt(Scaled.X), FMath::FloorToInt(Scaled.Y), FMath::FloorToInt(Scaled.Z));
 }
 
+inline FIntVector3 WorldPosToGridCellSigned(const FVector3f& World)
+{
+	const FVector3f Scaled = World / static_cast<float>(VoxelResolution);
+	return FIntVector3(
+		FMath::FloorToInt(Scaled.X),
+		FMath::FloorToInt(Scaled.Y),
+		FMath::FloorToInt(Scaled.Z));
+};
+
 inline uint32 GridCellToGridIdx(const FUintVector3& GridCell)
 {
 	return GridCell.X + (GridCell.Y * PtrGridSize.X) + (GridCell.Z * PtrGridSize.Y * PtrGridSize.X);
 }
 
-inline FUintVector3 GridIdxToGridCell(uint32 Idx)
+inline FUintVector3 GridIdxToGridCell(uint32 GridIdx)
 {
-    const uint32 X = Idx % PtrGridSize.X;
-    const uint32 Y = (Idx / PtrGridSize.X) % PtrGridSize.Y;
-    const uint32 Z = Idx / (PtrGridSize.X * PtrGridSize.Y);
+    const uint32 X = GridIdx % PtrGridSize.X;
+    const uint32 Y = (GridIdx / PtrGridSize.X) % PtrGridSize.Y;
+    const uint32 Z = GridIdx / (PtrGridSize.X * PtrGridSize.Y);
     return FUintVector3(X, Y, Z);
 }
 

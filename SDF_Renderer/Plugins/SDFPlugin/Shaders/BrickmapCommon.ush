@@ -41,12 +41,21 @@ uint3 WorldPosToGridCell(float3 World)
 
 float3 WorldToAtlasPoint(float3 World)
 {
-	return World % VoxelResolution;
+    const float3 BrickOrigin = GridCellToWorldPos(WorldPosToGridCell(World));
+	return clamp(World - BrickOrigin, 0.0, VoxelResolution);
 }
 
 uint GridCellToGridIdx(uint3 GridCell)
 {
-	return GridCell.x + (GridCell.y * PtrGridSize.x) + (GridCell.z * PtrGridSize.y * PtrGridSize.z);
+	return GridCell.x + (GridCell.y * PtrGridSize.x) + (GridCell.z * PtrGridSize.y * PtrGridSize.x);
+}
+
+uint3 GridIdxToGridCell(uint GridIdx)
+{
+	const uint X = GridIdx % PtrGridSize.x;
+	const uint Y = (GridIdx / PtrGridSize.x) % PtrGridSize.y;
+	const uint Z = GridIdx / (PtrGridSize.x * PtrGridSize.y);
+	return uint3(X, Y, Z);
 }
 
 uint2 IdxToAtlasCell(uint Idx)
@@ -56,16 +65,23 @@ uint2 IdxToAtlasCell(uint Idx)
 
 float3 GetAtlasUVW(uint Idx, float3 World)
 {
-	uint2 AtlasBrickCell = IdxToAtlasCell(Idx);
+	const uint3 AtlasOrigin = uint3(IdxToAtlasCell(Idx), 0) * BrickResolution;
 	float3 Local = WorldToAtlasPoint(World);
-	return (float3(AtlasBrickCell * BrickResolution, 0) + Local) / AtlasSize;
+	return (float3(AtlasOrigin) + Local + 0.5) / float3(AtlasSize);
+}
+
+float3 GetAtlasUVW(uint Idx, uint3 GridCell, float3 World)
+{
+    const uint3  AtlasOrigin = uint3(IdxToAtlasCell(Idx), 0) * BrickResolution;
+    const float3 Local = clamp(World - GridCellToWorldPos(GridCell), 0.0, (float)VoxelResolution);
+    return (float3(AtlasOrigin) + Local + 0.5) / float3(AtlasSize);
 }
 
 float3 WorldToAtlasUVW(float3 World)
 {
-	uint3 GridCell = WorldPosToGridCell(World);
-	uint Idx = PtrGrid[GridCellToGridIdx(GridCell)];
-	return GetAtlasUVW(Idx, World);
+	const uint3 GridCell = WorldPosToGridCell(World);
+	const uint Idx = PtrGrid[GridCellToGridIdx(GridCell)];
+	return GetAtlasUVW(Idx, GridCell, World);
 }
 
 bool IsBrickAllocated(uint Idx)
@@ -96,28 +112,4 @@ void AllocateSafe(uint3 GridCell)
 		return;
 
 	Allocate(GridCell);
-}
-
-// Assumes the cell is already allocated
-void PopulateBrickSDF(uint3 GridCell, float3 SphereCenter, float SphereRadius)
-{
-	uint Idx = PtrGrid[GridCellToGridIdx(GridCell)];
-	uint3 AtlasCell = uint3(IdxToAtlasCell(Idx), 0) * BrickResolution;
-
-	for (int z = 0; z < BrickResolution; z++) {
-	for (int y = 0; y < BrickResolution; y++) {
-	for (int x = 0; x < BrickResolution; x++) 
-	{
-		uint3 AtlasPoint = AtlasCell + uint3(x, y, z);
-		float CurDist = BrickAtlas[AtlasPoint];
-
-		// Distance is stored so that 1.0 is the length of a voxel diagonal (=1.732)
-		const float Diagonal = sqrt(3);
-		float Dist = SDFSphere(AtlasPoint, SphereCenter, SphereRadius) / Diagonal;
-		Dist = clamp(Dist, -1.0, 1.0);
-		if (Dist < CurDist)
-		{
-			BrickAtlas[AtlasPoint] = Dist;
-		}
-	}}}
 }
