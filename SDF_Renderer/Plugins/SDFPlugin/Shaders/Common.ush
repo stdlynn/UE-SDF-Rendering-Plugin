@@ -7,7 +7,7 @@ static const float UnitSize = 0.01;
 static const float Infinity = asfloat( 0x7F7FFFFF );
 static const float MaxRayDist = 10e3;
 static const float SurfaceEpsilon = 5e-4;
-static const float AABBEpsilon = 5e-4;
+static const float AABBEpsilon = 5e-3;
 
 struct FSDFEdit
 {

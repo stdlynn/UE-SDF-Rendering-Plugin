@@ -9,21 +9,20 @@ SCREEN_PASS_TEXTURE_VIEWPORT(SceneColorViewport)
 RWTexture2D<float4> Output;
 
 Buffer<uint> PtrGrid;
+float3 PtrGridPos;
+float VoxSize;
 
 #define USE_DIST_INSTEAD_OF_HITS 0
 
 // TODO: change this to work in the right space
-float NumBrickHits( FRay Ray )
+float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
 {
-    // TODO: Missing constants
-    const float GridCellSize = VoxelResolution;
-
     // [CREDITS] DDA algorithm from http://www.cs.yorku.ca/~amana/research/grid.pdf
-    int3 GridCellCoord = int3(floor((Ray.Pos - float3(0,0,0)) / GridCellSize)); // The ray origin in pointer-grid space
+    int3 GridCellCoord = int3(floor((Ray.Pos - BoundsMin) / BrickSize)); // The ray origin in pointer-grid space
     const int3 CellStep = int3(sign(Ray.Dir)); // The step direction for each axis (-1, 0, or 1), in pointer-grid space
-    const float3 TDelta = abs(GridCellSize * Ray.InvDir); // The step size (to move the length of a voxel along a certain axis) for each axis, in world space
+    const float3 TDelta = abs(BrickSize * Ray.InvDir); // The step size (to move the length of a voxel along a certain axis) for each axis, in world space
     const int3 NextCellCoord = GridCellCoord + (CellStep + 1) / 2; // The next cell to be hit (on a certain axis) for each axis, in pointer-grid space
-    const float3 NextCellCoordWorldSpace = float3(NextCellCoord) * GridCellSize + float3(0, 0, 0); // The next cells to be hit (on a certain axis) for each axis, in world space
+    const float3 NextCellCoordWorldSpace = float3(NextCellCoord) * BrickSize + BoundsMin; // The next cells to be hit (on a certain axis) for each axis, in world space
     float3 TMax = (NextCellCoordWorldSpace - Ray.Pos) * Ray.InvDir; // The distance to the next cell for each axis, in world space
 
     // Handle ray direction being zero
@@ -111,68 +110,29 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
         return;
     }
 
+    // Ray setup
 	float2 SampleUV = (float2(SceneColorViewport_ViewportMin) + DispatchThreadId + 0.5) * SceneColorViewport_ExtentInverse;
 	float2 ViewportUV = (DispatchThreadId + 0.5) * SceneColorViewport_ViewportSizeInverse;
 	float2 NDC = ViewportUV * float2(2, -2) + float2(-1, 1);
     float4 OriginalColor = OriginalSceneColor.SampleLevel(GlobalPointClampedSampler, SampleUV, 0);
-    float3 Color = float3(0, 0, 0);
-
 	float4 TranslatedWorldPosH = mul(float4(NDC, 0.5, 1), View.ClipToTranslatedWorld);
 	float3 Dir = normalize(TranslatedWorldPosH.xyz / TranslatedWorldPosH.w);
 	float3 Origin = View.ViewOriginHigh * UnitSize; // Convert unit size
 	FRay Ray = FRay::Create( Origin, Dir );
 	
-	const float StepSize = 0.5;
-	uint3 LastGridCell = uint3(0, 0, 0);
-	float Hits = 0;
-
-#if 1
-    // TODO: REMOVE
-    // TODO: REMOVE
-    // TODO: REMOVE
-	float3 PtrGridPos{ 0, 0, 0 };
-	float VoxSize = 1.0;
-    const float BrickSize{ GetBrickSize( VoxSize ) };
-    FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
-    // TODO: Remove
-	GridAABB.Min = float3( 0, 0, 0 );
-    GridAABB.Max = PtrGridSize * VoxelResolution;
-
+	// Grid AABB check
     float AABBHitT;
+	float NumHits = 0;
+    const float BrickSize = GetBrickSize( VoxSize );
+    const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
 	if (IntersectAABB( GridAABB, Ray, AABBHitT ))
     {
+		// Grid DDA
         AABBHitT += AABBEpsilon;
         Ray.Pos += Ray.Dir * AABBHitT;
-        Hits = NumBrickHits( Ray );
+        NumHits = NumBrickHits( Ray, GridAABB.Min, BrickSize );
     }
-    Color = InfernoQuintic(Hits);
-#else
-    for (int Step = 0; Step < 512; Step++)
-    {
-        RayPos += Dir * StepSize;
-        uint3 GridCell = WorldPosToGridCell(RayPos);
     
-        if (all(GridCell == LastGridCell))
-        {
-            continue;
-        }
-        LastGridCell = GridCell;
-    
-        if (!IsInsideGrid(RayPos))
-        {
-            continue;
-        }
-    
-        if (PtrGrid[GridCellToGridIdx(GridCell)] != 0xFFFFFFFF)
-        {
-            Hits += 1.0;
-        }
-    }
-	
-	Color = Hits * float3(1, 0, 0);
-	Color = Color / (Color + float3(2, 2, 2));
-#endif
-    
-    const float3 NewColor = (Hits > 0) ? lerp( OriginalColor, Color, 0.6 ) : OriginalColor;
+    const float3 NewColor = (NumHits > 0) ? lerp( OriginalColor, InfernoQuintic(NumHits), 0.6 ) : OriginalColor;
     Output[SceneColorViewport_ViewportMin + DispatchThreadId] = float4(NewColor, OriginalColor.w);
 }
