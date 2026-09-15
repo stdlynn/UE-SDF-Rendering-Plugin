@@ -24,7 +24,6 @@ public:
 	{
 		FVector3f PtrGridPos;
 		float VoxSize;
-		bool bUpload{ true };
 	};
 
 	struct FSDFResources
@@ -67,9 +66,8 @@ private:
 	struct
 	{
 		TWeakObjectPtr<UWorld> World;
-		FVector3f PtrGridPos;
-		float VoxSize;
-	} GT;
+		FSettings Settings;
+	} GT{};
 
 	// Render thread
 	struct
@@ -79,7 +77,7 @@ private:
 		FSDFResources SDFResources;
 		FBrickmapResources BrickmapResources;
 		uint32 LastBrickmapBuildFrame = MAX_uint32;
-	} RT;
+	} RT{};
 
 }; // FSDFExtension
 

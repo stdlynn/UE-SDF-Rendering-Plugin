@@ -42,7 +42,7 @@ void TraversePS(
 		for (int EditIdx = 0; EditIdx < NumEdits; EditIdx++)
 		{
 			FSDFEdit Edit = SDFEdits[EditIdx];
-			float Dist = abs(SDFSphere(RayPos, Edit.Pos, Edit.Radius));
+			float Dist = abs(DistFn::Sphere(Edit, RayPos));
 			if (Dist < ClosestDist)
 			{
 				ClosestDist = Dist;
@@ -66,7 +66,7 @@ void TraversePS(
 	if (bHit)
 	{
 		FSDFEdit Edit = SDFEdits[EditHitIdx];
-		float3 Normal = GetSphereNormal(RayPos, Edit.Pos, Edit.Radius);
+		float3 Normal = GetSphereNormal(Edit, RayPos);
 
 		// Convert unit size
 		float ViewZ = mul(float4((RayPos - Origin) / UnitSize, 1.0), View.TranslatedWorldToView).z;

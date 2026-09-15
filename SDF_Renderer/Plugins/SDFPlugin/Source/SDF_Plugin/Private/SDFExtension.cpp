@@ -24,7 +24,7 @@ static const FIntVector PtrGridSize = FIntVector(64, 64, 64);
 namespace
 {
 	TAutoConsoleVariable<int32> CVarShaderOn(
-		TEXT("r.SDFPlugin"),
+		TEXT("r.SDF.Plugin"),
 		1,
 		TEXT("Enable SDF Plugin \n")
 		TEXT(" 0: OFF;")
@@ -32,7 +32,7 @@ namespace
 		ECVF_RenderThreadSafe);
 
 	TAutoConsoleVariable<int32> CVarDebugGrid(
-		TEXT("r.SDFDebugGrid"),
+		TEXT("r.SDF.Debug.Grid"),
 		0,
 		TEXT("Enable debug view of the pointer grid \n")
 		TEXT(" 0: OFF;")
@@ -121,19 +121,18 @@ void FSDFExtension::TransferGridParamsToRenderThread()
 {
 	// Check if any of the settings are dirty
 	const USDFSettings* SDFSettings{ GetDefault<USDFSettings>() };
-	if (GT.PtrGridPos == SDFSettings->PtrGridPos && GT.VoxSize == SDFSettings->VoxSize) { return; }
+	if (GT.Settings.PtrGridPos == SDFSettings->PtrGridPos && GT.Settings.VoxSize == SDFSettings->VoxSize) { return; }
 	
-	GT.PtrGridPos = SDFSettings->PtrGridPos;
-	GT.VoxSize = SDFSettings->VoxSize;
+	GT.Settings.PtrGridPos = SDFSettings->PtrGridPos;
+	GT.Settings.VoxSize = SDFSettings->VoxSize;
 
 	// Transfer lambda
 	// Capture the parameters by copy, their state on the game thread might change before the lambda runs
-	auto TransferSettings{ [this, PtrGridPos = GT.PtrGridPos, VoxSize = GT.VoxSize]( FRHICommandList& ) mutable
+	auto TransferSettings{ [this, PtrGridPos = GT.Settings.PtrGridPos, VoxSize = GT.Settings.VoxSize]( FRHICommandList& ) mutable
 	{
 		// Copy the settings over to the render thread
 		RT.Settings.PtrGridPos = PtrGridPos;
 		RT.Settings.VoxSize = VoxSize;
-		RT.Settings.bUpload = true;
 	} };
 
 	// Perform the transfer safely on the render thread

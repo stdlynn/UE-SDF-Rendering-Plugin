@@ -24,10 +24,22 @@ static const uint3 AtlasSize = NumAtlasBricks * BrickResolution;
 // TODO: expose as setting
 static const uint3 PtrGridSize = uint3(64, 64, 64);
 
-// TODO: functions
-// TODO: rename PtrGridPos to PtrGridCenter
-// - float GetBrickSize( float VoxSize )
-// - AABB GetPtrGridAABB( float3 Pos, float BrickSize )
+float GetBrickSize( float VoxSize )
+{
+	return VoxSize * VoxelResolution;
+}
+
+namespace AABB
+{
+	FAABB PtrGrid( float3 Pos, float BrickSize )
+	{
+		const float3 HalfExtent = PtrGridSize * BrickSize / 2.0;
+		FAABB Bounds;
+		Bounds.Min = Pos - HalfExtent;
+		Bounds.Max = Pos + HalfExtent;
+        return Bounds;
+	}
+} // AABB
 
 bool IsInsideGrid(float3 WorldPos)
 {
@@ -104,7 +116,7 @@ void AllocateSafe(uint3 GridCell)
 }
 
 // Assumes the cell is already allocated
-void PopulateBrickSDF(uint3 GridCell, float3 SphereCenter, float SphereRadius)
+void PopulateBrickSDF(FSDFEdit Sphere, uint3 GridCell)
 {
 	uint Idx = PtrGrid[GridCellToGridIdx(GridCell)];
 	uint3 AtlasCell = uint3(IdxToAtlasCell(Idx), 0) * BrickResolution;
@@ -118,7 +130,7 @@ void PopulateBrickSDF(uint3 GridCell, float3 SphereCenter, float SphereRadius)
 
 		// Distance is stored so that 1.0 is the length of a voxel diagonal (=1.732)
 		const float Diagonal = sqrt(3);
-		float Dist = SDFSphere(AtlasPoint, SphereCenter, SphereRadius) / Diagonal;
+		float Dist = DistFn::Sphere(Sphere, AtlasPoint) / Diagonal;
 		Dist = clamp(Dist, -1.0, 1.0);
 		if (Dist < CurDist)
 		{
