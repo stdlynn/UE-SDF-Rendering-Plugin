@@ -5,11 +5,11 @@
 
 //________________________________________________________________________
 //																		  |	
-// GridCell   | uint3  | 0-64   | 3D PtrGrid cell index					  |
-// AtlasCell  |	uint2  | 0-128  | 2D Brick cell index in Atlas			  |
+// GridCell   | int3   | 0-64   | 3D PtrGrid cell index					  |
+// AtlasCell  |	int2   | 0-128  | 2D Brick cell index in Atlas			  |
 // WorldPos   |	float3 | inf    | World-space position					  |
-// AtlasPoint |	uint3  | 0-7    | 3D Atlas texel index					  |
-// BrickPoint |	uint3  | 0-1024 | Atlas texel, relative to brick's origin |
+// AtlasPoint |	int3   | 0-7    | 3D Atlas texel index					  |
+// BrickPoint |	int3   | 0-1024 | Atlas texel, relative to brick's origin |
 // AtlasUVW   |	float3 | 0-1    | Sampling coordinates for BrickAtlas	  |
 // Idx        |	uint   | 0-16k  | Index to a Brick stored in Ptr Grid	  |
 // GridIdx    | uint   | 0-262k | 1D index to sample Ptr Grid			  |
@@ -41,23 +41,21 @@ namespace AABB
 	}
 } // AABB
 
-bool IsInsideGrid(float3 WorldPos)
+float3 GridCellToWorldPos( int3 GridCell, float3 GridMin, float BrickSize )
 {
-    return all(WorldPos >= 0) && all(WorldPos < PtrGridSize * VoxelResolution);
+	return (GridCell * BrickSize) + GridMin;
 }
 
-float3 GridCellToWorldPos(uint3 GridCell)
+int3 WorldPosToGridCell( float3 WorldPos, float3 GridMin, float BrickSize )
 {
-	return GridCell * VoxelResolution;
+	return floor( (WorldPos - GridMin) / BrickSize );
 }
 
-uint3 WorldPosToGridCell(float3 World)
+// TODO: current to update
+float3 WorldToAtlasPoint( float3 WorldPos, float3 GridMin, float BrickSize )
 {
-    return uint3(floor(World / VoxelResolution));
-}
-
-float3 WorldToAtlasPoint(float3 World)
-{
+	// TODO: what this meant to do? Ask remi (probably rename)
+	return (WorldPos - GridMin)
 	return World % VoxelResolution;
 }
 
@@ -85,7 +83,7 @@ float3 WorldToAtlasUVW(float3 World)
 	return GetAtlasUVW(Idx, World);
 }
 
-bool IsBrickAllocated(uint Idx)
+bool IsBrickAllocated( uint Idx )
 {
 	return (PtrGrid[Idx] != 0xFFFFFFFF);
 }
@@ -109,8 +107,7 @@ void AllocateSafe(uint3 GridCell)
 {
 	// TODO: This isn't safe right now (the same ptr grid cell could increment the counter more than once)
 	// Won't be an issue when we upload a list of bricks to update
-	if (IsBrickAllocated(GridCell))
-		return;
+	if (IsBrickAllocated(GridCell)) { return; }
 
 	Allocate(GridCell);
 }

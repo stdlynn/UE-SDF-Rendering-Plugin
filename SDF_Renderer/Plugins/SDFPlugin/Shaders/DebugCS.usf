@@ -52,7 +52,7 @@ float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
         float CellDist = TMax[Axis] - CurrT;
 
         // Check if a brick is present in the current cell
-        if (PtrGrid[GridCellToGridIdx((uint3)GridCellCoord)] != 0xFFFFFFFF)
+        if (IsBrickAllocated( GridCellToGridIdx( GridCellCoord ) ))
         {
             // Intersection found
             NumHits++;

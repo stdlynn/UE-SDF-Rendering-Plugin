@@ -77,6 +77,11 @@ namespace AABB
 	}
 } // AABB
 
+bool IsPointInsideAABB( FAABB Bounds, float3 Pos )
+{
+	return all( Pos >= Bounds.Min ) && all( Pos <= Bounds.Max );
+}
+
 // https://iquilezles.org/articles/normalsSDF/
 float3 GetSphereNormal( FSDFEdit SDF, float3 Pos )
 {
