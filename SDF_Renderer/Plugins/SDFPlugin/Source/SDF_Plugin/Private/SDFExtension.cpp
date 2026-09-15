@@ -131,8 +131,8 @@ void FSDFExtension::TransferGridParamsToRenderThread()
 	auto TransferSettings{ [this, PtrGridPos = GT.Settings.PtrGridPos, VoxSize = GT.Settings.VoxSize]( FRHICommandList& ) mutable
 	{
 		// Copy the settings over to the render thread
-		RT.Settings.PtrGridPos = PtrGridPos;
-		RT.Settings.VoxSize = VoxSize;
+		RT.Settings.PtrGridPos = PtrGridPos / 100.0f;
+		RT.Settings.VoxSize = VoxSize / 100.0f;
 	} };
 
 	// Perform the transfer safely on the render thread
@@ -403,6 +403,8 @@ FScreenPassTexture FSDFExtension::RenderDebug(FRDGBuilder& GraphBuilder, const F
 		PassParameters->View = SceneView.ViewUniformBuffer;
 		PassParameters->PtrGrid = GraphBuilder.CreateSRV(PtrBufferRDG, PF_R32_UINT);
 		PassParameters->SceneColorViewport = GetScreenPassTextureViewportParameters(SceneColorViewport);
+		PassParameters->PtrGridPos = RT.Settings.PtrGridPos;
+		PassParameters->VoxSize = RT.Settings.VoxSize;
 		PassParameters->Output = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(OutputTexture));
 
 		FIntPoint PassViewSize = SceneColor.ViewRect.Size();
