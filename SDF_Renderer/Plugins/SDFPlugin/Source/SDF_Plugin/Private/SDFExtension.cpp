@@ -131,8 +131,8 @@ void FSDFExtension::TransferGridParamsToRenderThread()
 	auto TransferSettings{ [this, PtrGridPos = GT.Settings.PtrGridPos, VoxSize = GT.Settings.VoxSize]( FRHICommandList& ) mutable
 	{
 		// Copy the settings over to the render thread
-		RT.Settings.PtrGridPos = PtrGridPos / 100.0f;
-		RT.Settings.VoxSize = VoxSize / 100.0f;
+		RT.Settings.PtrGridPos = PtrGridPos;
+		RT.Settings.VoxSize = VoxSize;
 	} };
 
 	// Perform the transfer safely on the render thread

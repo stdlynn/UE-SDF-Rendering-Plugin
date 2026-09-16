@@ -110,15 +110,14 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
         return;
     }
 
+    // Screen UV
+	const float2 SampleUV = (float2(SceneColorViewport_ViewportMin) + DispatchThreadId + 0.5) * SceneColorViewport_ExtentInverse;
+	const float2 ViewportUV = (DispatchThreadId + 0.5) * SceneColorViewport_ViewportSizeInverse;
+	const float2 NDC = ViewportUV * float2(2, -2) + float2(-1, 1);
+
     // Ray setup
-	float2 SampleUV = (float2(SceneColorViewport_ViewportMin) + DispatchThreadId + 0.5) * SceneColorViewport_ExtentInverse;
-	float2 ViewportUV = (DispatchThreadId + 0.5) * SceneColorViewport_ViewportSizeInverse;
-	float2 NDC = ViewportUV * float2(2, -2) + float2(-1, 1);
-    float4 OriginalColor = OriginalSceneColor.SampleLevel(GlobalPointClampedSampler, SampleUV, 0);
-	float4 TranslatedWorldPosH = mul(float4(NDC, 0.5, 1), View.ClipToTranslatedWorld);
-	float3 Dir = normalize(TranslatedWorldPosH.xyz / TranslatedWorldPosH.w);
-	float3 Origin = View.ViewOriginHigh * UnitSize; // Convert unit size
-	FRay Ray = FRay::Create( Origin, Dir );
+	const float4 TranslatedWorldPosH = mul(float4(NDC, 0.5, 1), View.ClipToTranslatedWorld);
+	FRay Ray = FRay::Create( View.ViewOriginHigh, normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w ) );
 	
 	// Grid AABB check
     float AABBHitT;
@@ -133,6 +132,8 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
         NumHits = NumBrickHits( Ray, GridAABB.Min, BrickSize );
     }
     
+	// Compute output color
+    const float4 OriginalColor = OriginalSceneColor.SampleLevel(GlobalPointClampedSampler, SampleUV, 0);
     const float3 NewColor = (NumHits > 0) ? lerp( OriginalColor, InfernoQuintic(NumHits), 0.6 ) : OriginalColor;
     Output[SceneColorViewport_ViewportMin + DispatchThreadId] = float4(NewColor, OriginalColor.w);
 }
