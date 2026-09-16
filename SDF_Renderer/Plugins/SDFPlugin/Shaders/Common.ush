@@ -3,7 +3,6 @@
 #include "/Engine/Public/Platform.ush"
 
 static const float Infinity = asfloat( 0x7F7FFFFF );
-static const float MaxRayDist = 10e6;
 static const float SurfaceEpsilon = 5e-4;
 static const float AABBEpsilon = 5e-3;
 
@@ -17,7 +16,7 @@ struct FSDFEdit
 
 struct FRay
 {
-	static FRay Create( float3 Pos, float3 Dir, float T = MaxRayDist )
+	static FRay Create( float3 Pos, float3 Dir, float T = Infinity )
 	{
 		FRay Ray;
         Ray.Pos = Pos;

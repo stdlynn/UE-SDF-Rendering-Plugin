@@ -45,10 +45,10 @@ float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
 			        : TMax.y < TMax.z
 			        	    ? 1
 			        	    : 2;
-	GridCellCoord[Axis] += CellStep[Axis];
-    TMax[Axis] += TDelta[Axis];
-    float CurrT = TMax[Axis];
-    if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis] || CurrT > Ray.T) { return 0.0; }
+	//GridCellCoord[Axis] += CellStep[Axis];
+    //TMax[Axis] += TDelta[Axis];
+    float CurrT = 0.;//TMax[Axis];
+    //if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis] || CurrT > Ray.T) { return 0.0; }
 
     // Should be safe
     float TotalT = 0; // Total distance travelled within allocated bricks
