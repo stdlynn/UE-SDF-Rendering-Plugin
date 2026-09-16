@@ -112,7 +112,6 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
     }
 
     // Screen UV
-	const float2 SampleUV = (float2(SceneColorViewport_ViewportMin) + DispatchThreadId + 0.5) * SceneColorViewport_ExtentInverse;
 	const float2 ViewportUV = (DispatchThreadId + 0.5) * SceneColorViewport_ViewportSizeInverse;
 	const float2 NDC = ViewportUV * float2(2, -2) + float2(-1, 1);
 
@@ -134,6 +133,7 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
     }
     
 	// Compute output color
+	const float2 SampleUV = (float2(SceneColorViewport_ViewportMin) + DispatchThreadId + 0.5) * SceneColorViewport_ExtentInverse;
     const float4 OriginalColor = OriginalSceneColor.SampleLevel(GlobalPointClampedSampler, SampleUV, 0);
     const float3 NewColor = (NumHits > 0) ? lerp( OriginalColor, InfernoQuintic(NumHits), 0.6 ) : OriginalColor;
     Output[SceneColorViewport_ViewportMin + DispatchThreadId] = float4(NewColor, OriginalColor.w);
