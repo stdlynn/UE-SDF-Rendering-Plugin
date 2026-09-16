@@ -24,6 +24,8 @@ static const uint3 AtlasSize = NumAtlasBricks * BrickResolution;
 
 static const uint3 PtrGridSize = uint3(64, 64, 64);
 
+static const float InvDiagonal = 1.0 / sqrt(3.0);
+
 bool IsInsideGrid(float3 WorldPos)
 {
     return all(WorldPos >= 0) && all(WorldPos < PtrGridSize * VoxelResolution);

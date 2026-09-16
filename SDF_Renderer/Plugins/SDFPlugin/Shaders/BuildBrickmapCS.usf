@@ -1,10 +1,7 @@
-// Custom SceneViewExtension Template for Unreal Engine
-// Copyright 2023 - 2025 Ossi Luoto
-
 // TODO Probably not a good idea to keep these above the includes
 RWTexture3D<float> BrickAtlas;
 RWBuffer<uint> PtrGrid;
-RWBuffer<uint> BrickAllocCounter;
+RWBuffer<uint> BrickAllocCounter; // 0: next free brick in atlas, 1: size of deallocated list
 
 #include "/Engine/Public/Platform.ush"
 #include "BrickmapCommon.ush"
@@ -12,25 +9,213 @@ RWBuffer<uint> BrickAllocCounter;
 
 StructuredBuffer<FSDFEdit> SDFEdits;
 uint NumEdits;
+
 Buffer<uint> BrickList;
 uint NumUpdatedBricks;
 
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
 void BuildBrickmapCS(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID)
 {
-	if (GroupID.x >= NumUpdatedBricks) return;
+	if (GroupID.x >= NumUpdatedBricks)
+	{
+		return;
+	}
+	if (all(GroupThreadID == 0))
+	{
+		bDeallocateFlag = true;
+	}
+
+	// Sync so no thread can set the flag to false before it's set to true
+	GroupMemoryBarrierWithGroupSync();
+
+	const uint GridIdx = BrickList[GroupID.x];
+	const uint3 GridCell = GridIdxToGridCell(GridIdx);
+	const float3 WorldPos = GridCellToWorldPos(GridCell) + float3(GroupThreadID);
+	
+	float Nearest = MaxRayDist;
+	for (uint EditIdx = 0; EditIdx < NumEdits; EditIdx++)
+	{
+		const FSDFEdit Edit = SDFEdits[EditIdx];
+		Nearest = min(Nearest, SDFSphere(WorldPos, Edit.Pos, Edit.Radius));
+	}
+	if (abs(Nearest) <= sqrt(3))
+	{
+		bDeallocateFlag = false;
+	}
+
+	GroupMemoryBarrierWithGroupSync();
+
+	// Deallocate
+	if (all(GroupThreadID == 0) && bDeallocateFlag && PtrGrid[GridIdx] != 0xFFFFFFFFu)
+	{
+		uint Next;
+		InterlockedAdd(BrickAllocCounter[1], 1, Next);
+		// Here
+		DeallocatedList[Next] = PtrGrid[GridIdx];
+		PtrGrid[GridIdx] = 0xFFFFFFFFu;
+	}
+
+	if (!bDeallocateFlag)
+	{
+		if (all(GroupThreadID == 0))
+		{
+			uint AtlasIdx = PtrGrid[GridIdx];
+
+			// If not allocated, allocate
+			if (AtlasIdx == 0xFFFFFFFFu)
+			{
+				uint DeallocatedSize = BrickAllocCounter[1];
+
+				// Atomically claim atlas index from deallocated list
+				[allow_uav_condition]
+				while (DeallocatedSize != 0)
+				{
+					uint Original;
+					InterlockedCompareExchange(BrickAllocCounter[1], DeallocatedSize, DeallocatedSize - 1, Original);
+					if (Original == DeallocatedSize)
+					{
+						AtlasIdx = DeallocatedList[DeallocatedSize - 1];
+						break;
+					}
+
+					DeallocatedSize = Original;
+				}
+
+				// If failed (none free), claim next brick in atlas
+				if (AtlasIdx == 0xFFFFFFFFu)
+				{
+					InterlockedAdd(BrickAllocCounter[0], 1, AtlasIdx);
+				}
+
+				PtrGrid[GridIdx] = AtlasIdx;
+			}
+
+			AtlasIdxShared = AtlasIdx;
+		}
+
+		GroupMemoryBarrierWithGroupSync();
+
+		const uint3 AtlasPoint = uint3(IdxToAtlasCell(AtlasIdxShared) * BrickResolution, 0) + GroupThreadID;
+		const float Encoded = clamp(Nearest * InvDiagonal, -1.0, 1.0) * 0.5 + 0.5;
+		BrickAtlas[AtlasPoint] = Encoded;
+	}
+}
+
+Buffer<uint> FreeList;
+// NumFree is CounterFree
+RWBuffer<uint> DeallocatedList;
+// NumDeallocated is CounterPush
+
+groupshared bool bOccupiedShared;
+groupshared uint AtlasIdxShared;
+
+static const uint CounterAlloc = 0; // Next free unallocated brick in atlas
+static const uint CounterFree  = 1; // How many bricks are in the FreeList
+static const uint CounterPop   = 2; // Reset each frame. Pop pointer into FreeList
+static const uint CounterPush  = 3; // Reset each frame. Push pointer into DeallocatedList
+
+static const uint Empty = 0xFFFFFFFFu;
+
+[numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
+void Test(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID)
+{
+	/*
+	if (GroupID.x >= NumUpdatedBricks)
+		return;
+	
+	If thread 0:
+		bOccupiedShared = false
+
+	GroupSync
+
+	Closest = MaxRayDist
+	For every Edit:
+		Store closest distance
+	
+	If abs(Closest) <= VoxelDiagonal:
+		bOccupiedShared = true
+	
+	GroupSync
+
+	const bool bDeallocate = !bOccupiedShared;
+
+	If thread 0:
+		AtlasIdx = PtrGrid[GridIdx]
+		
+		If bDeallocate:
+			If AtlasIdx != Empty:
+				InterlockedAdd CounterPush
+		Else if AtlasIdx == Empty:
+			InterlockedAdd CounterPop
+			If CounterPop < CounterFree:
+				AtlasIdx = FreeList[CounterPop]
+			Else:
+				InterlockedAdd CounterAlloc
+				AtlasIdx = CounterAlloc
+
+			// TODO handle atlas overflow
+			PtrGrid[GridIdx] = AtlasIdx
+		
+		AtlasIdxShared = AtlasIdx
+	
+	GroupSync
+
+	If AtlasIdxShared == Empty:
+		return
+
+	AtlasPoint = uint3(IdxToAtlasCell(AtlasIdxShared) * BrickResolution, 0) + GroupThreadID;
+	BrickAtlas[AtlasPoint] = Encode(Closest)
+
+	*/
+}
+
+[numthreads(64, 1, 1)]
+void CompactFreeListCS(uint3 DispatchThreadID : SV_DispatchThreadID)
+{
+	/*
+	FreeCount = BrickAllocCounter[CounterFree];
+	NumPopped = min(BrickAllocCounter[CounterPop], FreeCount);
+	NumPushed = BrickAllocCounter[CounterPush];
+	NumCarried = FreeCount - NumPopped;
+
+	Idx = DispatchThreadID.x;
+	If Idx < NumCarried:
+		DeallocatedList[NumPushed + Idx] = FreeList[NumPopped + Idx];
+	*/
+}
+
+[numthreads(1, 1, 1)]
+void ResetCountersCS()
+{
+	/*
+	FreeCount = BrickAllocCounter[CounterFree];
+	NumPopped = min(BrickAllocCounter[CounterPop], FreeCount);
+	NumPushed = BrickAllocCounter[CounterPush];
+
+    BrickAllocCounter[CounterFree] = FreeCount - NumPopped + NumPushed;
+    BrickAllocCounter[CounterPop] = 0;
+    BrickAllocCounter[CounterPush] = 0;
+	*/
+}
+
+
+[numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
+void BuildBrickmapOld(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID)
+{
+	if (GroupID.x >= NumUpdatedBricks)
+		return;
 
 	const uint GridIdx = BrickList[GroupID.x];
 	const uint3 GridCell = GridIdxToGridCell(GridIdx);
 
 	// Allocate brick
 	if (all(GroupThreadID == 0) && PtrGrid[GridIdx] == 0xFFFFFFFFu)
-    {
-        uint Next;
-        InterlockedAdd(BrickAllocCounter[0], 1, Next);
-        PtrGrid[GridIdx] = Next;
-    }
-    AllMemoryBarrierWithGroupSync();
+	{
+		uint Next;
+		InterlockedAdd(BrickAllocCounter[0], 1, Next);
+		PtrGrid[GridIdx] = Next;
+	}
+	AllMemoryBarrierWithGroupSync();
 
 	const uint Idx = PtrGrid[GridCellToGridIdx(GridCell)];
 	const uint3 AtlasPoint = uint3(IdxToAtlasCell(Idx) * BrickResolution, 0) + GroupThreadID;
@@ -39,8 +224,8 @@ void BuildBrickmapCS(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupT
 	float Nearest = MaxRayDist;
 	for (uint EditIdx = 0; EditIdx < NumEdits; EditIdx++)
 	{
-	    const FSDFEdit Edit = SDFEdits[EditIdx];
-	    Nearest = min(Nearest, SDFSphere(WorldPos, Edit.Pos, Edit.Radius));
+		const FSDFEdit Edit = SDFEdits[EditIdx];
+		Nearest = min(Nearest, SDFSphere(WorldPos, Edit.Pos, Edit.Radius));
 	}
 
 	// Distance is stored so that 1.0 is the length of a voxel diagonal (=1.732)
@@ -49,40 +234,4 @@ void BuildBrickmapCS(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupT
 
 	const float PrevValue = BrickAtlas[AtlasPoint];
 	BrickAtlas[AtlasPoint] = min(Encoded, PrevValue);
-}
-
-[numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
-void TheoreticalAllocator(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID)
-{
-	if (GroupID.x >= NumUpdatedBricks) return;
-
-	// For every Edit:
-	//		store closest distance
-
-	// If within distance:
-	//		set deallocation flag false
-
-	// Barrier
-
-	// If deallocation and thread is 0:
-	//		Atomically append atlas index to deallocated list
-	//		Set PtrGrid to 0xffffffff
-	
-	// if not deallocate:
-	//		if thread 0:
-	//			Atomically claim atlas index from deallocated list
-	//			If failed (none free):
-	//				Claim next BrickAllocCounter in brick atlas
-	//			Write claimed value into PtrGrid
-	//		Barrier
-	//		Write distance value into our voxel within brick pointed to by PtrGrid
-
-	// Allocate brick
-	if (all(GroupThreadID == 0) && PtrGrid[GridIdx] == 0xFFFFFFFFu)
-    {
-        uint Next;
-        InterlockedAdd(BrickAllocCounter[0], 1, Next);
-        PtrGrid[GridIdx] = Next;
-    }
-    AllMemoryBarrierWithGroupSync();
 }

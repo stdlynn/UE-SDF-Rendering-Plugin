@@ -24,7 +24,7 @@ void FBrickmapBuilder::AllocateResources()
 	const FRDGBufferDesc PtrGridDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), GridSize);
 	RT.PtrGrid = AllocatePooledBuffer(PtrGridDesc, TEXT("SDF_BrickPtrBuffer"));
 
-	constexpr uint32 numCounters = 1;
+	constexpr uint32 numCounters = 4;
 	const FRDGBufferDesc CounterDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), numCounters);
 	RT.BrickAllocCounter = AllocatePooledBuffer(CounterDesc, TEXT("SDF_BrickAllocCounter"));
 
@@ -55,8 +55,12 @@ void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs)
 
 	const FIntVector3 GridMax = FIntVector3(PtrGridSize.X, PtrGridSize.Y, PtrGridSize.Z) - FIntVector3(1);
 
-	for (const auto& [SDF, Idx] : SDFs)
+	for (auto [SDF, Idx] : SDFs)
 	{
+		// TODO temporary hack to test deallocation (put const ref back when removing this)
+		// Grow the sphere so it also encapsulates its previous position
+		constexpr float RadiusOffset = VoxelResolution;
+		SDF.Radius += RadiusOffset;
 		FIntVector3 MinCell = WorldPosToGridCellSigned(SDF.Pos - SDF.Radius);
 		FIntVector3 MaxCell = WorldPosToGridCellSigned(SDF.Pos + SDF.Radius);
 
@@ -89,6 +93,7 @@ void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs)
 				FMath::Abs(SDF.Pos.X - Min.X) > FMath::Abs(SDF.Pos.X - Max.X) ? Min.X : Max.X,
 				FMath::Abs(SDF.Pos.Y - Min.Y) > FMath::Abs(SDF.Pos.Y - Max.Y) ? Min.Y : Max.Y,
 				FMath::Abs(SDF.Pos.Z - Min.Z) > FMath::Abs(SDF.Pos.Z - Max.Z) ? Min.Z : Max.Z);
+
 
 			if (SDFSphere(ClosestPoint, SDF.Pos, SDF.Radius) <= 0.0f
 				&& SDFSphere(FarthestPoint, SDF.Pos, SDF.Radius) >= 0.0f)
