@@ -18,6 +18,7 @@ float VoxSize;
 bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 {
 	// Step through the scene
+	float DistTravelled = 0.0;
 	for (uint Step = 0; Step < 64; ++Step)
 	{
 		// For each step, go over each SDF
@@ -26,7 +27,8 @@ bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 		{
 			// Evaluate the distance to the SDF
 			const FSDFEdit Edit = SDFEdits[EditIdx];
-			const float Dist = abs( DistFn::Sphere( Edit, Ray.Pos ) );
+			const float3 RayPos = (Ray.Pos - Edit.Pos) + (Ray.Dir * DistTravelled);
+			const float Dist = abs( DistFn::SphereOrigin( Edit, RayPos ) );
 			if (Dist < ClosestDist)
 			{
 				ClosestDist = Dist;
@@ -35,10 +37,14 @@ bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 		}
 
 		// Stop stepping if we hit a surface (or are close enough to one)
-		if (ClosestDist < SurfaceEpsilon) { return true; }
+		if (ClosestDist < SurfaceEpsilon)
+		{
+			Ray.Advance( DistTravelled );
+			return true;
+		}
 
 		// Step
-		Ray.Advance( ClosestDist );
+		DistTravelled += ClosestDist;
 	}
 
 	// No intersections found

@@ -66,6 +66,11 @@ namespace DistFn
     {
 	    return length( Pos - SDF.Pos ) - SDF.Radius;
     }
+
+    float SphereOrigin( FSDFEdit SDF, float3 Pos )
+    {
+	    return length( Pos ) - SDF.Radius;
+    }
 } // SDF
 
 // Bounding boxes
@@ -96,8 +101,8 @@ float3 GetSphereNormal( FSDFEdit SDF, float3 Pos )
     // This should be fine, as those should never be visible anyway
 	const float H = 4e-4; // magic value for now, read linked article for details
 	const float2 K = float2(1, -1);
-	return normalize( K.xyy * DistFn::Sphere( SDF, Pos + (K.xyy * H) ) +
-					  K.yyx * DistFn::Sphere( SDF, Pos + (K.yyx * H) ) +
-					  K.yxy * DistFn::Sphere( SDF, Pos + (K.yxy * H) ) +
-					  K.xxx * DistFn::Sphere( SDF, Pos + (K.xxx * H) ) );
+	return normalize( K.xyy * DistFn::SphereOrigin( SDF, Pos + (K.xyy * H) ) +
+					  K.yyx * DistFn::SphereOrigin( SDF, Pos + (K.yyx * H) ) +
+					  K.yxy * DistFn::SphereOrigin( SDF, Pos + (K.yxy * H) ) +
+					  K.xxx * DistFn::SphereOrigin( SDF, Pos + (K.xxx * H) ) );
 }
