@@ -7,6 +7,7 @@ Buffer<uint> PtrGrid;
 #include "BrickmapCommon.ush"
 
 Texture2D OriginalSceneColor;
+Texture2D DepthTex;
 SCREEN_PASS_TEXTURE_VIEWPORT(SceneColorViewport)
 RWTexture2D<float4> Output;
 
@@ -46,10 +47,10 @@ float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
 			        	    : 2;
 	GridCellCoord[Axis] += CellStep[Axis];
     TMax[Axis] += TDelta[Axis];
-    if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis]) { return 0.0; }
+    float CurrT = TMax[Axis];
+    if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis] || CurrT > Ray.T) { return 0.0; }
 
     // Should be safe
-    float CurrT = 0;
     float TotalT = 0; // Total distance travelled within allocated bricks
     uint NumHits = 0;
     while (true)
@@ -79,7 +80,7 @@ float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
         TMax[Axis] += TDelta[Axis];
 
         // Voxel object and ray bounds check
-        if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis]) // TODO: set Ray.T to G-buffer depth, check here
+        if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis] || CurrT > Ray.T)
         {
             break;
         }
@@ -128,7 +129,11 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
 
     // Ray setup
 	const float4 TranslatedWorldPosH = mul(float4(NDC, 0.5, 1), View.ClipToTranslatedWorld);
-	FRay Ray = FRay::Create( View.ViewOriginHigh, normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w ) );
+    const float3 Dir = normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w );
+    const uint2 DepthCoord = DispatchThreadId + SceneColorViewport_ViewportMin;
+    const float DepthSample = ConvertFromDeviceZ( DepthTex[DepthCoord].r );
+	const float Depth = DepthSample / dot( Dir, ResolvedView.ViewForward.xyz );
+	FRay Ray = FRay::Create( View.ViewOriginHigh, Dir, Depth ); // TODO: fix depth
 	
 	// Grid AABB check
     float AABBHitT;
@@ -139,7 +144,7 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
     {
 		// Grid DDA
         AABBHitT -= AABBEpsilon;
-        Ray.Pos += Ray.Dir * AABBHitT;
+        Ray.Advance( AABBHitT );
         NumHits = NumBrickHits( Ray, GridAABB.Min, BrickSize );
     }
     

@@ -404,6 +404,7 @@ FScreenPassTexture FSDFExtension::RenderDebug(FRDGBuilder& GraphBuilder, const F
 
 		FDebugShader::FParameters* PassParameters = GraphBuilder.AllocParameters<FDebugShader::FParameters>();
 		PassParameters->OriginalSceneColor = SceneColor.Texture;
+		PassParameters->DepthTex = Inputs.SceneTextures.SceneTextures->GetParameters()->SceneDepthTexture;
 		PassParameters->View = SceneView.ViewUniformBuffer;
 		PassParameters->PtrGrid = GraphBuilder.CreateSRV(PtrBufferRDG, PF_R32_UINT);
 		PassParameters->SceneColorViewport = GetScreenPassTextureViewportParameters(SceneColorViewport);

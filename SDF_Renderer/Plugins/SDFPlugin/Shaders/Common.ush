@@ -17,14 +17,20 @@ struct FSDFEdit
 
 struct FRay
 {
-	static FRay Create( float3 Pos, float3 Dir )
+	static FRay Create( float3 Pos, float3 Dir, float T = MaxRayDist )
 	{
 		FRay Ray;
         Ray.Pos = Pos;
         Ray.Dir = Dir;
         Ray.InvDir = 1.0 / Dir;
-        Ray.T = MaxRayDist;
+        Ray.T = T;
         return Ray;
+	}
+
+    void Advance( float Dist )
+	{
+		Pos += Dir * Dist;
+        T -= Dist;
 	}
 
     float3 Pos;
