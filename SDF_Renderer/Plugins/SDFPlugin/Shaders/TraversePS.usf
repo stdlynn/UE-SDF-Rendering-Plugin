@@ -30,7 +30,7 @@ bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 			if (Dist < ClosestDist)
 			{
 				ClosestDist = Dist;
-				EditHitIdx = Edit.Idx;
+				EditHitIdx = EditIdx;
 			}
 		}
 
@@ -64,45 +64,38 @@ void TraversePS(
 	const float3 Origin = View.ViewOriginHigh;
 	FRay Ray = FRay::Create( Origin, Dir );
 
+	// Sphere trace
+	// Discard this fragment if we don't hit anything, keep whatever was already in the GBuffer
 	uint EditHitIdx;
-	if (SphereTraceScene( Ray, EditHitIdx ))
-	{
-		FSDFEdit Edit = SDFEdits[EditHitIdx];
-		float3 Normal = GetSphereNormal(Edit, Ray.Pos);
+	if (!SphereTraceScene( Ray, EditHitIdx )) { discard; }
 		
-		float ViewZ = mul(float4(Ray.Pos - Origin, 1.0), View.TranslatedWorldToView).z;
-		OutDepth = ConvertToDeviceZ(ViewZ);
+	// Calculate output data
+	const FSDFEdit Edit = SDFEdits[EditHitIdx];
+	const float3 Normal = GetSphereNormal( Edit, Ray.Pos );
+	float ViewZ = mul(float4(Ray.Pos - Origin, 1.0), View.TranslatedWorldToView).z;
+	OutDepth = ConvertToDeviceZ(ViewZ);
 
-		bool bDebugCheck = false;
-		//if (BrickAtlas.SampleLevel(BrickSampler, float3(0.0, 0.0, 0.0), 0) >= 0.49) bDebugCheck = true;
-
-		FGBufferData GBuffer = (FGBufferData) 0;
-		GBuffer.BaseColor = float3(0.6, 0.6, 0.6);
-		GBuffer.WorldNormal = Normal;
-		GBuffer.Metallic = 0.0;
-		GBuffer.Specular = 0.5;
-		GBuffer.Roughness = 0.6;
-		GBuffer.PerObjectGBufferData = 0.0; // 0 means we don't have distance or height field for this mesh
-		GBuffer.SelectiveOutputMask = 0; // No selective output (we don't need this)
-		GBuffer.GBufferAO = 1.0; // No occlusion
-		GBuffer.PrecomputedShadowFactors = 1.0; // no shadowing
-		GBuffer.ShadingModelID = SHADINGMODELID_DEFAULT_LIT; // Normal lighting
-		
-		// Write to the packed GBuffer channels
-		float4 GA, GB, GC, GD, GE, GV;
-		EncodeGBuffer(GBuffer, GA, GB, GC, GD, GE, GV);
-		OutSceneColor = float4(100 * bDebugCheck, 0, 0, 0);
-		OutGBufferA = GA;
-		OutGBufferB = GB;
-		OutGBufferC = GC;
-		OutGBufferD = GD;
-		// Uncomment to add functionality for clear coat and velocity if needed
-		//OutTarget5 = GE;
-		//OutTarget6 = GV;
-	}
-	else
-	{
-		// Discard this fragment, keep whatever was already in the GBuffer
-		discard;
-	}
+	FGBufferData GBuffer = (FGBufferData) 0;
+	GBuffer.BaseColor = (0.6).xxx;
+	GBuffer.WorldNormal = Normal;
+	GBuffer.Metallic = 0.0;
+	GBuffer.Specular = 0.5;
+	GBuffer.Roughness = 0.6;
+	GBuffer.PerObjectGBufferData = 0.0; // 0 means we don't have distance or height field for this mesh
+	GBuffer.SelectiveOutputMask = 0; // No selective output (we don't need this)
+	GBuffer.GBufferAO = 1.0; // No occlusion
+	GBuffer.PrecomputedShadowFactors = 1.0; // no shadowing
+	GBuffer.ShadingModelID = SHADINGMODELID_DEFAULT_LIT; // Normal lighting
+	
+	// Write to the packed GBuffer channels
+	float4 GA, GB, GC, GD, GE, GV;
+	EncodeGBuffer(GBuffer, GA, GB, GC, GD, GE, GV);
+	OutSceneColor = (0).xxxx;
+	OutGBufferA = GA;
+	OutGBufferB = GB;
+	OutGBufferC = GC;
+	OutGBufferD = GD;
+	// Uncomment to add functionality for clear coat and velocity if needed
+	//OutTarget5 = GE;
+	//OutTarget6 = GV;
 }

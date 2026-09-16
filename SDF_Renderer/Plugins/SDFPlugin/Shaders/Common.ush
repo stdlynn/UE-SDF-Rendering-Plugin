@@ -88,10 +88,16 @@ bool IsPointInsideAABB( FAABB Bounds, float3 Pos )
 // https://iquilezles.org/articles/normalsSDF/
 float3 GetSphereNormal( FSDFEdit SDF, float3 Pos )
 {
-	const float H = 0.004; // magic value for now, read linked article for details
+    // Avoid precision issues by evaluating the SDF at (0, 0, 0)
+    Pos -= SDF.Pos;
+    SDF.Pos = (0).xxx;
+
+	// Note that the normals are reversed on the inside of geometry (so for negative distances)
+    // This should be fine, as those should never be visible anyway
+	const float H = 4e-4; // magic value for now, read linked article for details
 	const float2 K = float2(1, -1);
-	return normalize(K.xyy * DistFn::Sphere( SDF, Pos + K.xyy * H ) +
-					 K.yyx * DistFn::Sphere( SDF, Pos + K.yyx * H ) +
-					 K.yxy * DistFn::Sphere( SDF, Pos + K.yxy * H ) +
-					 K.xxx * DistFn::Sphere( SDF, Pos + K.xxx * H ));
+	return normalize( K.xyy * DistFn::Sphere( SDF, Pos + (K.xyy * H) ) +
+					  K.yyx * DistFn::Sphere( SDF, Pos + (K.yyx * H) ) +
+					  K.yxy * DistFn::Sphere( SDF, Pos + (K.yxy * H) ) +
+					  K.xxx * DistFn::Sphere( SDF, Pos + (K.xxx * H) ) );
 }
