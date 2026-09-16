@@ -16,7 +16,6 @@ float VoxSize;
 
 #define USE_DIST_INSTEAD_OF_HITS 0
 
-// TODO: change this to work in the right space
 float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
 {
     // [CREDITS] DDA algorithm from http://www.cs.yorku.ca/~amana/research/grid.pdf
@@ -123,16 +122,19 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
         return;
     }
 
+    // ...
+	ResolvedView = ResolveView();
+
     // Screen UV
+    const uint2 SampleCoord = SceneColorViewport_ViewportMin + DispatchThreadId;
 	const float2 ViewportUV = (DispatchThreadId + 0.5) * SceneColorViewport_ViewportSizeInverse;
 	const float2 NDC = ViewportUV * float2(2, -2) + float2(-1, 1);
 
     // Ray setup
 	const float4 TranslatedWorldPosH = mul(float4(NDC, 0.5, 1), View.ClipToTranslatedWorld);
     const float3 Dir = normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w );
-    const uint2 DepthCoord = DispatchThreadId + SceneColorViewport_ViewportMin;
-    const float DepthSample = ConvertFromDeviceZ( DepthTex[DepthCoord].r );
-	const float Depth = DepthSample / dot( Dir, ResolvedView.ViewForward.xyz );
+    const float DepthSample = ConvertFromDeviceZ( DepthTex[SampleCoord].r );
+	const float Depth = DepthSample / dot( Dir, ResolvedView.ViewForward.xyz ); // TODO: or ResolvedView
 	FRay Ray = FRay::Create( View.ViewOriginHigh, Dir, Depth ); // TODO: fix depth
 	
 	// Grid AABB check
@@ -146,11 +148,20 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
         AABBHitT -= AABBEpsilon;
         Ray.Advance( AABBHitT );
         NumHits = NumBrickHits( Ray, GridAABB.Min, BrickSize );
+        // Temporary visualization of the PtrGrid bounds
+		if (!NumHits)
+		{
+			const float2 SampleUV = (float2(SceneColorViewport_ViewportMin) + DispatchThreadId + 0.5) * SceneColorViewport_ExtentInverse;
+            const float4 OriginalColor = OriginalSceneColor.SampleLevel(GlobalPointClampedSampler, SampleUV, 0);
+			const float3 NewColor = lerp( OriginalColor, float3(1,0,0), 0.2 );
+			Output[SampleCoord] = float4(NewColor, OriginalColor.w);
+			//return;
+		}
     }
     
 	// Compute output color
 	const float2 SampleUV = (float2(SceneColorViewport_ViewportMin) + DispatchThreadId + 0.5) * SceneColorViewport_ExtentInverse;
     const float4 OriginalColor = OriginalSceneColor.SampleLevel(GlobalPointClampedSampler, SampleUV, 0);
     const float3 NewColor = (NumHits > 0) ? lerp( OriginalColor, InfernoQuintic(NumHits), 0.6 ) : OriginalColor;
-    Output[SceneColorViewport_ViewportMin + DispatchThreadId] = float4(NewColor, OriginalColor.w);
+    Output[SampleCoord] = float4(NewColor, OriginalColor.w);
 }
