@@ -12,6 +12,8 @@ RWBuffer<uint> BrickAllocCounter;
 
 StructuredBuffer<FSDFEdit> SDFEdits;
 uint NumEdits;
+float3 PtrGridPos;
+float VoxSize;
 
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
 void BuildBrickmapCS(uint3 ThreadId : SV_DispatchThreadID)
@@ -23,22 +25,28 @@ void BuildBrickmapCS(uint3 ThreadId : SV_DispatchThreadID)
 		return;
 	}
 
+	const float BrickSize = GetBrickSize( VoxSize );
+	const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
+
 	for (int Idx = 0; Idx < NumEdits; Idx++)
 	{
-		FSDFEdit Edit = SDFEdits[Idx];
-		FAABB SphereAABB = AABB::Sphere(Edit);
-		uint3 MinGridCell = WorldPosToGridCell(SphereAABB.Min);
-		uint3 MaxGridCell = WorldPosToGridCell(SphereAABB.Max);
+		const FSDFEdit Edit = SDFEdits[Idx];
+		const FAABB SphereAABB = AABB::Sphere(Edit);
+
+		const int3 MinGridCellUnbounded = WorldPosToGridCell( SphereAABB.Min, GridAABB.Min, BrickSize );
+		const int3 MaxGridCellUnbounded = WorldPosToGridCell( SphereAABB.Max, GridAABB.Min, BrickSize );
+		const uint3 MinGridCell = (uint3)clamp( MinGridCellUnbounded, int3( 0, 0, 0 ), (int3)MaxGridIdx );
+		const uint3 MaxGridCell = (uint3)clamp( MaxGridCellUnbounded, int3( 0, 0, 0 ), (int3)MaxGridIdx );
+		const uint3 NumCoveredBricks = MaxGridCell - MinGridCell + 1;
 		
-		uint3 NumBricks = abs(MaxGridCell - MinGridCell) + 1;
 		uint3 GridCellOffset;
-		for (GridCellOffset.z = 0; GridCellOffset.z < NumBricks.z; GridCellOffset.z++) {
-		for (GridCellOffset.y = 0; GridCellOffset.y < NumBricks.y; GridCellOffset.y++) {
-		for (GridCellOffset.x = 0; GridCellOffset.x < NumBricks.x; GridCellOffset.x++)
+		for (GridCellOffset.z = 0; GridCellOffset.z < NumCoveredBricks.z; GridCellOffset.z++) {
+		for (GridCellOffset.y = 0; GridCellOffset.y < NumCoveredBricks.y; GridCellOffset.y++) {
+		for (GridCellOffset.x = 0; GridCellOffset.x < NumCoveredBricks.x; GridCellOffset.x++)
 		{
-			uint3 GridCell = MinGridCell + GridCellOffset;
-			AllocateSafe(GridCell);
-			PopulateBrickSDF(Edit, GridCell);
+			const uint3 GridCell = MinGridCell + GridCellOffset;
+			AllocateSafe( GridCell );
+			PopulateBrickSDF( Edit, GridCell );
 		}}}
 	}
 }

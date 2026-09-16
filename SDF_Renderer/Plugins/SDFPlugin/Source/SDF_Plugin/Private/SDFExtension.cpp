@@ -184,6 +184,8 @@ void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, 
 		PassParameters->BrickAtlas = GraphBuilder.CreateUAV(BrickAtlasRDG);
 		PassParameters->PtrGrid = GraphBuilder.CreateUAV(PtrBufferRDG, PF_R32_UINT);
 		PassParameters->BrickAllocCounter = GraphBuilder.CreateUAV(AtomicCounterRDG, PF_R32_UINT);
+		PassParameters->PtrGridPos = RT.Settings.PtrGridPos;
+		PassParameters->VoxSize = RT.Settings.VoxSize;
 		PassParameters->GridSize = PtrGridSize;
 		PassParameters->AtlasSize = AtlasSize;
 
@@ -317,6 +319,8 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBu
 		PassParameters->BrickAtlas = GraphBuilder.CreateSRV(BrickAtlasRDG);
 		PassParameters->BrickSampler = BrickSampler;
 		PassParameters->PtrGrid = GraphBuilder.CreateSRV(PtrBufferRDG, PF_R32_UINT);
+		PassParameters->PtrGridPos = RT.Settings.PtrGridPos;
+		PassParameters->VoxSize = RT.Settings.VoxSize;
 		PassParameters->RenderTargets = RenderTargets;
 		PassParameters->RenderTargets.DepthStencil = FDepthStencilBinding(
 			DepthTexture,

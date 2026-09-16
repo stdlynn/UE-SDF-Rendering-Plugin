@@ -21,11 +21,12 @@
 static const uint BrickResolution = 8;
 static const uint VoxelResolution = BrickResolution - 1;
 
-static const uint3 NumAtlasBricks = uint3(128, 128, 1);
+static const uint3 NumAtlasBricks = uint3( 128, 128, 1) ;
 static const uint3 AtlasSize = NumAtlasBricks * BrickResolution;
 
 // TODO: expose as setting
-static const uint3 PtrGridSize = uint3(64, 64, 64);
+static const uint3 PtrGridSize = uint3( 64, 64, 64 );
+static const uint3 MaxGridIdx = PtrGridSize - 1;
 
 float GetBrickSize( float VoxSize )
 {
@@ -58,7 +59,7 @@ uint GridCellToGridIdx( uint3 GridCell )
 {
 	return GridCell.x 
 		   + (GridCell.y * PtrGridSize.x) 
-		   + (GridCell.z * PtrGridSize.x * PtrGridSize.w);
+		   + (GridCell.z * PtrGridSize.x * PtrGridSize.y);
 }
 
 uint2 BrickIdxToAtlasCell( uint BrickIdx )
@@ -67,21 +68,16 @@ uint2 BrickIdxToAtlasCell( uint BrickIdx )
 	return uint2( BrickIdx - (Y * NumAtlasBricks.x), Y );
 }
 
-// TODO: current to update
-float3 GetAtlasUVW( uint BrickIdx, float3 WorldPos, float3 GridMin, float BrickSize )
+float3 WorldPosToAtlasUVW( float3 WorldPos, float3 GridMin, float BrickSize )
 {
-	const float3 LocalBrickPos = (WorldPos - GridMin) % BrickSize;
-
+	const uint3 GridCell = WorldPosToGridCell( WorldPos, GridMin, BrickSize );
+	const uint GridIdx = GridCellToGridIdx( GridCell );
+	const uint BrickIdx = PtrGrid[GridIdx];
 	const uint2 AtlasCell = BrickIdxToAtlasCell( BrickIdx );
-	const float3 Local = WorldToAtlasPoint( WorldPos, GridMin, BrickSize );
-	return (float3(AtlasCell * BrickResolution, 0) + Local) / AtlasSize;
-}
-
-float3 WorldToAtlasUVW(float3 World)
-{
-	uint3 GridCell = WorldPosToGridCell(World);
-	uint Idx = PtrGrid[GridCellToGridIdx(GridCell)];
-	return GetAtlasUVW(Idx, World);
+	const float3 BrickPos = float3( AtlasCell * BrickResolution, 0 );
+	const float3 LocalBrickOffset = (WorldPos - GridMin) % BrickSize;
+	const float3 LocalBrickPos = BrickPos + LocalBrickOffset;
+	return LocalBrickPos / AtlasSize;
 }
 
 bool IsBrickAllocated( uint Idx )
@@ -89,9 +85,9 @@ bool IsBrickAllocated( uint Idx )
 	return (PtrGrid[Idx] != 0xFFFFFFFF);
 }
 
-bool IsBrickAllocated(uint3 GridCell)
+bool IsBrickAllocated( uint3 GridCell )
 {
-    return IsBrickAllocated(GridCellToGridIdx(GridCell));
+    return IsBrickAllocated( GridCellToGridIdx( GridCell ) );
 }
 
 // Allocate a brick by storing its index in the pointer grid
@@ -117,7 +113,7 @@ void AllocateSafe(uint3 GridCell)
 void PopulateBrickSDF(FSDFEdit Sphere, uint3 GridCell)
 {
 	uint Idx = PtrGrid[GridCellToGridIdx(GridCell)];
-	uint3 AtlasCell = uint3(IdxToAtlasCell(Idx), 0) * BrickResolution;
+	uint3 AtlasCell = uint3(BrickIdxToAtlasCell(Idx), 0) * BrickResolution;
 
 	for (int z = 0; z < BrickResolution; z++) {
 	for (int y = 0; y < BrickResolution; y++) {

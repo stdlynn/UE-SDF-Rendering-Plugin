@@ -1,3 +1,5 @@
+Buffer<uint> PtrGrid;
+
 #include "/Engine/Public/Platform.ush"
 #include "/Engine/Private/Common.ush"
 #include "/Engine/Private/ScreenPass.ush"
@@ -8,7 +10,6 @@ Texture2D OriginalSceneColor;
 SCREEN_PASS_TEXTURE_VIEWPORT(SceneColorViewport)
 RWTexture2D<float4> Output;
 
-Buffer<uint> PtrGrid;
 float3 PtrGridPos;
 float VoxSize;
 

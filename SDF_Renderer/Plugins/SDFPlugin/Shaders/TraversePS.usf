@@ -1,6 +1,8 @@
 // Custom SceneViewExtension Template for Unreal Engine
 // Copyright 2023 - 2025 Ossi Luoto
 
+Buffer<uint> PtrGrid;
+
 #include "/Engine/Public/Platform.ush"
 #include "/Engine/Private/Common.ush"
 #include "/Engine/Private/DeferredShadingCommon.ush"
@@ -13,7 +15,8 @@ uint NumEdits;
 
 Texture3D<float> BrickAtlas;
 SamplerState BrickSampler;
-Buffer<uint> PtrGrid;
+float3 PtrGridPos;
+float VoxSize;
 
 void TraversePS(
 	float4	   InPosition	 : SV_POSITION,
@@ -30,7 +33,8 @@ void TraversePS(
 
 	// Ray setup
 	const float4 TranslatedWorldPosH = mul(float4(NDC, 0.5, 1), View.ClipToTranslatedWorld);
-	FRay Ray = FRay::Create( View.ViewOriginHigh, normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w ) );
+	const float3 Origin = View.ViewOriginHigh;
+	FRay Ray = FRay::Create( Origin, normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w ) );
 
 	// Traversal
 	bool bHit = false;
