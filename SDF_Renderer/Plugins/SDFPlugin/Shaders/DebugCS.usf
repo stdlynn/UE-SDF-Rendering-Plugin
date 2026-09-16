@@ -35,30 +35,41 @@ float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
         }
     }
     
-    // Should be safe
-    float CurrT = 0;
-    float TotalT = 0; // Total distance travelled within allocated bricks
-    uint NumHits = 0;
-    while (true)
-    {
-        // Find the axis on which we are the closest to the next cell
-        uint Axis = TMax.x < TMax.y
+	// Take the first step (into the grid)
+    // Necessary for finding the initial axis to move on
+    uint Axis = TMax.x < TMax.y
 			        ? TMax.x < TMax.z
 			             ? 0
 			             : 2
 			        : TMax.y < TMax.z
 			        	    ? 1
 			        	    : 2;
-        
-        float CellDist = TMax[Axis] - CurrT;
+	GridCellCoord[Axis] += CellStep[Axis];
+    TMax[Axis] += TDelta[Axis];
+    if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis]) { return 0.0; }
 
+    // Should be safe
+    float CurrT = 0;
+    float TotalT = 0; // Total distance travelled within allocated bricks
+    uint NumHits = 0;
+    while (true)
+    {
         // Check if a brick is present in the current cell
         if (IsBrickAllocated( GridCellToGridIdx( GridCellCoord ) ))
         {
             // Intersection found
             NumHits++;
-            TotalT += CellDist;
+            TotalT += TMax[Axis] - CurrT;
         }
+
+        // Find the axis on which we are the closest to the next cell
+        Axis = TMax.x < TMax.y
+		        ? TMax.x < TMax.z
+		             ? 0
+		             : 2
+		        : TMax.y < TMax.z
+			            ? 1
+			            : 2;
 
         // Store the distance travelled AFTER we step to the next cell
         CurrT = TMax[Axis];
@@ -68,7 +79,7 @@ float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
         TMax[Axis] += TDelta[Axis];
 
         // Voxel object and ray bounds check
-        if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis])
+        if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis]) // TODO: set Ray.T to G-buffer depth, check here
         {
             break;
         }
@@ -127,7 +138,7 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
 	if (IntersectAABB( GridAABB, Ray, AABBHitT ))
     {
 		// Grid DDA
-        AABBHitT += AABBEpsilon;
+        AABBHitT -= AABBEpsilon;
         Ray.Pos += Ray.Dir * AABBHitT;
         NumHits = NumBrickHits( Ray, GridAABB.Min, BrickSize );
     }
