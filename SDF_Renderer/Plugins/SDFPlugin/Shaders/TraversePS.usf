@@ -18,7 +18,7 @@ float VoxSize;
 bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 {
 	// Step through the scene
-	for (uint Step = 0; Step < 32; ++Step)
+	for (uint Step = 0; Step < 64; ++Step)
 	{
 		// For each step, go over each SDF
 		float ClosestDist = Infinity;
@@ -26,7 +26,7 @@ bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 		{
 			// Evaluate the distance to the SDF
 			const FSDFEdit Edit = SDFEdits[EditIdx];
-			const float Dist = DistFn::Sphere( Edit, Ray.Pos );
+			const float Dist = abs( DistFn::Sphere( Edit, Ray.Pos ) );
 			if (Dist < ClosestDist)
 			{
 				ClosestDist = Dist;
@@ -63,37 +63,6 @@ void TraversePS(
 	const float3 Dir = normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w );
 	const float3 Origin = View.ViewOriginHigh;
 	FRay Ray = FRay::Create( Origin, Dir );
-
-	// Traversal
-	//bool bHit = false;
-	//float DistTraveled = 0.0;
-	//uint EditHitIdx = 0xFFFFFFFF;
-	//for (int Sample = 0; Sample < 32; Sample++)
-	//{
-	//	float ClosestDist = MaxRayDist;
-	//	for (int EditIdx = 0; EditIdx < NumEdits; EditIdx++)
-	//	{
-	//		FSDFEdit Edit = SDFEdits[EditIdx];
-	//		float Dist = abs(DistFn::Sphere(Edit, Ray.Pos));
-	//		if (Dist < ClosestDist)
-	//		{
-	//			ClosestDist = Dist;
-	//			EditHitIdx = EditIdx;
-	//		}
-	//	}
-	//
-	//	if (ClosestDist < SurfaceEpsilon)
-	//	{
-	//		bHit = true;
-	//		break;
-	//	}
-	//	Ray.Pos += Ray.Dir * ClosestDist;
-	//	DistTraveled += ClosestDist;
-	//	if (DistTraveled > MaxRayDist)
-	//	{
-	//		break;
-	//	}
-	//}
 
 	uint EditHitIdx;
 	if (SphereTraceScene( Ray, EditHitIdx ))
