@@ -33,7 +33,6 @@ void BuildBrickmapCS(uint3 ThreadId : SV_DispatchThreadID)
 		const FSDFEdit Edit = SDFEdits[Idx];
 		const FAABB SphereAABB = AABB::Sphere(Edit);
 
-		//const int3 MinGridCellUnbounded = round( (SphereAABB.Min + BrickSize / 2.0 - GridAABB.Min) / BrickSize );
 		const int3 MinGridCellUnbounded = WorldPosToGridCell( SphereAABB.Min, GridAABB.Min, BrickSize );
 		const int3 MaxGridCellUnbounded = WorldPosToGridCell( SphereAABB.Max, GridAABB.Min, BrickSize ) + 1;
 		const uint3 MinGridCell = (uint3)clamp( MinGridCellUnbounded, int3( 0, 0, 0 ), (int3)MaxGridIdx );
