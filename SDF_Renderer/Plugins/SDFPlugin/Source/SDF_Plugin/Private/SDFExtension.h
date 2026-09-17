@@ -15,16 +15,19 @@
 #include "SceneRendering.h"
 #include "DataDrivenShaderPlatformInfo.h"
 
-// TODO: once the sun and moon align (and our branches), rename to FSDFExtension
-// TODO: also rename file
 // Our Scene Extension
 class FSDFExtension : public FSceneViewExtensionBase
 {
 public:
 
+	struct FSettings
+	{
+		FVector3f PtrGridPos;
+		float VoxSize;
+	};
+
 	struct FSDFResources
 	{
-		// TODO: also a uniform with 'NumEdits'
 		TRefCountPtr<FRDGPooledBuffer> Buff{ nullptr };
 		bool bDirty{ true }; // True to always allocate the buffer the first frame
 		bool bUpload{ false };
@@ -55,6 +58,7 @@ protected:
 private:
 
 	void TransferSDFsToRenderThread();
+	void TransferGridParamsToRenderThread();
 	void UpdateSDFBuffer();
 	FRDGBufferRef RegisterSDFBuffer(FRDGBuilder& GraphBuilder);
 		
@@ -62,16 +66,18 @@ private:
 	struct
 	{
 		TWeakObjectPtr<UWorld> World;
-	} GT;
+		FSettings Settings;
+	} GT{};
 
 	// Render thread
 	struct
 	{
+		FSettings Settings;
 		TArray<FGPUSDF> SDFs;
 		FSDFResources SDFResources;
 		FBrickmapResources BrickmapResources;
 		uint32 LastBrickmapBuildFrame = MAX_uint32;
-	} RT;
+	} RT{};
 
 }; // FSDFExtension
 
@@ -98,6 +104,8 @@ public:
 		SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture3D<float>, BrickAtlas)	// Brick Atlas
 		SHADER_PARAMETER_SAMPLER(SamplerState, BrickSampler)			// Brick Sampler
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, PtrGrid)		// Pointer Buffer
+		SHADER_PARAMETER(FVector3f, PtrGridPos)
+		SHADER_PARAMETER(float, VoxSize)
 		RENDER_TARGET_BINDING_SLOTS() // GBuffer Textures
 	END_SHADER_PARAMETER_STRUCT()
 
@@ -128,6 +136,8 @@ public:
 		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, BrickAllocCounter) // Atomic Counter
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FGPUSDF>, SDFEdits)
 		SHADER_PARAMETER(uint32, NumEdits)
+		SHADER_PARAMETER(FVector3f, PtrGridPos)
+		SHADER_PARAMETER(float, VoxSize)
 		SHADER_PARAMETER(FIntVector, GridSize)
 		SHADER_PARAMETER(FIntVector, AtlasSize)
 	END_SHADER_PARAMETER_STRUCT()
@@ -155,9 +165,12 @@ public:
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER_STRUCT(FScreenPassTextureViewportParameters, SceneColorViewport)
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, OriginalSceneColor)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, DepthTex)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<float4>, Output)
 		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, PtrGrid)
+		SHADER_PARAMETER(FVector3f, PtrGridPos)
+		SHADER_PARAMETER(float, VoxSize)
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)

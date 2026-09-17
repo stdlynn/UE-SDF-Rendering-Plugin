@@ -3,6 +3,7 @@
 
 // Plugin
 #include "SDFExtension.h"
+#include "SDFSettings.h"
 
 // UE
 #include "EngineUtils.h"
@@ -23,7 +24,7 @@ static const FIntVector PtrGridSize = FIntVector(64, 64, 64);
 namespace
 {
 	TAutoConsoleVariable<int32> CVarShaderOn(
-		TEXT("r.SDFPlugin"),
+		TEXT("r.SDF.Plugin"),
 		1,
 		TEXT("Enable SDF Plugin \n")
 		TEXT(" 0: OFF;")
@@ -31,7 +32,7 @@ namespace
 		ECVF_RenderThreadSafe);
 
 	TAutoConsoleVariable<int32> CVarDebugGrid(
-		TEXT("r.SDFDebugGrid"),
+		TEXT("r.SDF.Debug.Grid"),
 		0,
 		TEXT("Enable debug view of the pointer grid \n")
 		TEXT(" 0: OFF;")
@@ -79,6 +80,7 @@ void FSDFExtension::BeginRenderViewFamily( FSceneViewFamily& InViewFamily )
 
 	// We call this from here so it runs on the Game Thread
 	TransferSDFsToRenderThread();
+	TransferGridParamsToRenderThread();
 };
 
 void FSDFExtension::TransferSDFsToRenderThread()
@@ -115,6 +117,27 @@ void FSDFExtension::TransferSDFsToRenderThread()
 	ENQUEUE_RENDER_COMMAND( SDFParamsThreadTransfer )( TransferParams );
 }
 
+void FSDFExtension::TransferGridParamsToRenderThread()
+{
+	// Check if any of the settings are dirty
+	const USDFSettings* SDFSettings{ GetDefault<USDFSettings>() };
+	if (GT.Settings.PtrGridPos == SDFSettings->PtrGridPos && GT.Settings.VoxSize == SDFSettings->VoxSize) { return; }
+	
+	GT.Settings.PtrGridPos = SDFSettings->PtrGridPos;
+	GT.Settings.VoxSize = SDFSettings->VoxSize;
+
+	// Transfer lambda
+	// Capture the parameters by copy, their state on the game thread might change before the lambda runs
+	auto TransferSettings{ [this, PtrGridPos = GT.Settings.PtrGridPos, VoxSize = GT.Settings.VoxSize]( FRHICommandList& ) mutable
+	{
+		// Copy the settings over to the render thread
+		RT.Settings.PtrGridPos = PtrGridPos;
+		RT.Settings.VoxSize = VoxSize;
+	} };
+
+	// Perform the transfer safely on the render thread
+	ENQUEUE_RENDER_COMMAND( SDFSettingsThreadTransfer )( TransferSettings );
+}
 void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily)
 {
 	if (CVarShaderOn.GetValueOnRenderThread() == 0)
@@ -161,6 +184,8 @@ void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, 
 		PassParameters->BrickAtlas = GraphBuilder.CreateUAV(BrickAtlasRDG);
 		PassParameters->PtrGrid = GraphBuilder.CreateUAV(PtrBufferRDG, PF_R32_UINT);
 		PassParameters->BrickAllocCounter = GraphBuilder.CreateUAV(AtomicCounterRDG, PF_R32_UINT);
+		PassParameters->PtrGridPos = RT.Settings.PtrGridPos;
+		PassParameters->VoxSize = RT.Settings.VoxSize;
 		PassParameters->GridSize = PtrGridSize;
 		PassParameters->AtlasSize = AtlasSize;
 
@@ -294,6 +319,8 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBu
 		PassParameters->BrickAtlas = GraphBuilder.CreateSRV(BrickAtlasRDG);
 		PassParameters->BrickSampler = BrickSampler;
 		PassParameters->PtrGrid = GraphBuilder.CreateSRV(PtrBufferRDG, PF_R32_UINT);
+		PassParameters->PtrGridPos = RT.Settings.PtrGridPos;
+		PassParameters->VoxSize = RT.Settings.VoxSize;
 		PassParameters->RenderTargets = RenderTargets;
 		PassParameters->RenderTargets.DepthStencil = FDepthStencilBinding(
 			DepthTexture,
@@ -377,9 +404,12 @@ FScreenPassTexture FSDFExtension::RenderDebug(FRDGBuilder& GraphBuilder, const F
 
 		FDebugShader::FParameters* PassParameters = GraphBuilder.AllocParameters<FDebugShader::FParameters>();
 		PassParameters->OriginalSceneColor = SceneColor.Texture;
+		PassParameters->DepthTex = Inputs.SceneTextures.SceneTextures->GetParameters()->SceneDepthTexture;
 		PassParameters->View = SceneView.ViewUniformBuffer;
 		PassParameters->PtrGrid = GraphBuilder.CreateSRV(PtrBufferRDG, PF_R32_UINT);
 		PassParameters->SceneColorViewport = GetScreenPassTextureViewportParameters(SceneColorViewport);
+		PassParameters->PtrGridPos = RT.Settings.PtrGridPos;
+		PassParameters->VoxSize = RT.Settings.VoxSize;
 		PassParameters->Output = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(OutputTexture));
 
 		FIntPoint PassViewSize = SceneColor.ViewRect.Size();

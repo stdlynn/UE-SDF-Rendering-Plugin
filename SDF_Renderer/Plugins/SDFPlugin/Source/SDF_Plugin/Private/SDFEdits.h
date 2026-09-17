@@ -17,10 +17,9 @@ struct FGameSDF
 // SDF edit representation sent to the render thread
 struct FRenderSDF
 {
-	// Convert unit sizes
 	FRenderSDF( const FGameSDF& GameSDF, FVector3f Pos )
-		: Pos{ Pos / 100.0f }
-		, Radius{ GameSDF.Radius / 100.0f }
+		: Pos{ Pos }
+		, Radius{ GameSDF.Radius }
 	{}
 
 	FVector3f Pos;
