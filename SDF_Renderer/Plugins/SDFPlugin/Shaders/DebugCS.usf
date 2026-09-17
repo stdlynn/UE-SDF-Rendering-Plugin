@@ -138,7 +138,7 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
     const float3 Dir = normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w );
     const float DepthSample = ConvertFromDeviceZ( DepthTex[SampleCoord].r );
 	const float Depth = DepthSample / dot( Dir, ResolvedView.ViewForward.xyz );
-	FRay Ray = FRay::Create( View.ViewOriginHigh * UnitScale, Dir, Depth ); // Convert unit size
+	FRay Ray = FRay::Create( View.ViewOriginHigh * UnitScale, Dir, Depth * UnitScale ); // Convert unit size
 
 	// Grid AABB check
     float AABBHitT, AABBOutT;
