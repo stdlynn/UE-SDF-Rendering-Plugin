@@ -29,12 +29,14 @@ struct FRay
     void Advance( float Dist )
 	{
 		Pos += Dir * Dist;
+        // TODO: when this is MaxT, don't subtract, it isn't ""RemainingT""
         T -= Dist;
 	}
 
     float3 Pos;
     float3 Dir;
     float3 InvDir;
+    // TODO: change to MaxT, also add a T (so we don't need to advance the ray pos itself)
 	float T;
 };
 
@@ -46,16 +48,15 @@ struct FAABB
 
 // Returns true if there is an intersection
 // If true, hit_t is the intersection time
-bool IntersectAABB( FAABB Bounds, FRay Ray, out float HitT )
+bool IntersectAABB( FAABB Bounds, FRay Ray, out float TNear, out float TFar )
 {
     const float3 TToMin = (Bounds.Min - Ray.Pos) * Ray.InvDir;
     const float3 TToMax = (Bounds.Max - Ray.Pos) * Ray.InvDir;
     const float3 TMin = min( TToMin, TToMax );
     const float3 TMax = max( TToMin, TToMax );
-    const float TNear = max( max3( TMin.x, TMin.y, TMin.z ), 0 );
-    const float TFar = min( min3( TMax.x, TMax.y, TMax.z ), Infinity );
-
-    HitT = TNear;
+    TNear = max( max3( TMin.x, TMin.y, TMin.z ), 0 );
+    TFar = min( min3( TMax.x, TMax.y, TMax.z ), Ray.T );
+    
     return TNear <= TFar;
 }
 
