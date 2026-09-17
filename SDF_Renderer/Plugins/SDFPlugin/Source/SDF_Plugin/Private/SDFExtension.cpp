@@ -145,46 +145,64 @@ void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, 
 			RT.BrickmapBuilder.GetBrickAtlas(), ERDGTextureFlags::MultiFrame);
 		const FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(
 			RT.BrickmapBuilder.GetPtrGrid(), ERDGBufferFlags::MultiFrame);
-		const FRDGBufferRef AtomicCounterRDG = GraphBuilder.RegisterExternalBuffer(
+		const FRDGBufferRef AllocCountersRDG = GraphBuilder.RegisterExternalBuffer(
 			RT.BrickmapBuilder.GetBrickAllocCounter(), ERDGBufferFlags::MultiFrame);
+		const FRDGBufferRef FreedListRDG = GraphBuilder.RegisterExternalBuffer(
+			RT.BrickmapBuilder.GetFreedList(), ERDGBufferFlags::MultiFrame);
+		const FRDGBufferRef DeallocatedListRDG = GraphBuilder.RegisterExternalBuffer(
+			RT.BrickmapBuilder.GetDeallocatedList(), ERDGBufferFlags::MultiFrame);
 
 		const FRDGBufferRef SDFBuffRDG{ RegisterSDFBuffer( GraphBuilder ) };
-		const FRDGBufferUAVRef AtomicCounterUAV = GraphBuilder.CreateUAV(AtomicCounterRDG, PF_R32_UINT);
+		const FRDGBufferUAVRef FreedListUAV = GraphBuilder.CreateUAV(FreedListRDG, PF_R32_UINT);
+		const FRDGBufferUAVRef DeallocatedListUAV = GraphBuilder.CreateUAV(DeallocatedListRDG, PF_R32_UINT);
+		const FRDGBufferUAVRef AllocCountersUAV = GraphBuilder.CreateUAV(AllocCountersRDG, PF_R32_UINT);
 
-		//AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(BrickAtlasRDG), 1.0f);
-		//AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(PtrBufferRDG, PF_R32_UINT), 0xFFFFFFFFu);
-		//AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(AtomicCounterRDG, PF_R32_UINT), 0);
+		if (RT.BrickmapBuilder.bReset)
+		{
+			AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(PtrBufferRDG, PF_R32_UINT), 0xFFFFFFFFu);
+			AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(BrickAtlasRDG), 1.0f);
+			AddClearUAVPass(GraphBuilder, FreedListUAV, 0xFFFFFFFFu);
+			AddClearUAVPass(GraphBuilder, DeallocatedListUAV, 0xFFFFFFFFu);
+			AddClearUAVPass(GraphBuilder, AllocCountersUAV, 0u);
+			RT.BrickmapBuilder.bReset = false;
+		}
 
 		FBuildBrickmapShader::FParameters* ParametersBuild =
 			GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
-		ParametersBuild->SDFEdits = GraphBuilder.CreateSRV(SDFBuffRDG);
-		ParametersBuild->NumEdits = RT.SDFs.Num();
-		ParametersBuild->BrickList = GraphBuilder.CreateSRV(BrickListRDG, PF_R32_UINT);
-		ParametersBuild->NumUpdatedBricks = RT.BrickmapBuilder.GetNumUpdatedBricks();
+		ParametersBuild->NumEdits   = RT.SDFs.Num();
+		ParametersBuild->SDFEdits   = GraphBuilder.CreateSRV(SDFBuffRDG);
+		ParametersBuild->PtrGrid    = GraphBuilder.CreateUAV(PtrBufferRDG, PF_R32_UINT);
 		ParametersBuild->BrickAtlas = GraphBuilder.CreateUAV(BrickAtlasRDG);
-		ParametersBuild->PtrGrid = GraphBuilder.CreateUAV(PtrBufferRDG, PF_R32_UINT);
-		ParametersBuild->BrickAllocCounter = AtomicCounterUAV;
-		ParametersBuild->GridSize = FIntVector3(PtrGridSize);
-		ParametersBuild->AtlasSize = FIntVector3(AtlasSize);
+		ParametersBuild->GridSize   = FIntVector3(PtrGridSize);
+		ParametersBuild->AtlasSize  = FIntVector3(AtlasSize);
+		ParametersBuild->NumUpdated = RT.BrickmapBuilder.GetNumUpdatedBricks();
+		ParametersBuild->UpdateList  = GraphBuilder.CreateSRV(BrickListRDG, PF_R32_UINT);
+		ParametersBuild->FreedList  = FreedListUAV;
+		ParametersBuild->DeallocatedList = DeallocatedListUAV;
+		ParametersBuild->AllocCounters = AllocCountersUAV;
 
 		FTransferDeallocatedShader::FParameters* ParametersTransfer =
 			GraphBuilder.AllocParameters<FTransferDeallocatedShader::FParameters>();
-		ParametersTransfer->BrickAllocCounter = AtomicCounterUAV;
+		ParametersTransfer->FreedList = FreedListUAV;
+		ParametersTransfer->DeallocatedList = DeallocatedListUAV;
+		ParametersTransfer->AllocCounters = AllocCountersUAV;
 
 		FResetCountersShader::FParameters* ParametersReset =
 			GraphBuilder.AllocParameters<FResetCountersShader::FParameters>();
-		ParametersReset->BrickAllocCounter = AtomicCounterUAV;
+		ParametersReset->FreedList = FreedListUAV;
+		ParametersReset->DeallocatedList = DeallocatedListUAV;
+		ParametersReset->AllocCounters = AllocCountersUAV;
 
 		const FIntVector GroupCountBuild {
-			FMath::DivideAndRoundUp(static_cast<int>(ParametersBuild->NumUpdatedBricks * BrickResolution), 8),
+			FMath::DivideAndRoundUp(static_cast<int>(ParametersBuild->NumUpdated * BrickResolution), 8),
 			FMath::DivideAndRoundUp(static_cast<int>(BrickResolution), 8),
 			FMath::DivideAndRoundUp(static_cast<int>(BrickResolution), 8)
 		};
-		const FIntVector GroupCountReset {
-			1, 1, 1
-		};
 		const FIntVector GroupCountTransfer{
 			FMath::DivideAndRoundUp(static_cast<int>(RT.BrickmapBuilder.GetNumUpdatedBricks()), 64), 1, 1
+		};
+		const FIntVector GroupCountReset {
+			1, 1, 1
 		};
 
 		const TShaderMapRef<FBuildBrickmapShader> ComputeBuild(GlobalShaderMap);

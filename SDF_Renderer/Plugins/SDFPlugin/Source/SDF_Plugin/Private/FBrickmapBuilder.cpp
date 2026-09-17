@@ -19,11 +19,11 @@ void FBrickmapBuilder::AllocateResources()
 	const FRDGBufferDesc CounterDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), NumCounters);
 	RT.BrickAllocCounters = AllocatePooledBuffer(CounterDesc, TEXT("SDF_BrickAllocCounter"));
 
-	constexpr uint32 DeallocatorCapacity = NumAtlasBricks.X * NumAtlasBricks.Y * NumAtlasBricks.Z;
+	const uint32 DeallocatorCapacity = NumAtlasBricks.X * NumAtlasBricks.Y * NumAtlasBricks.Z;
 	const FRDGBufferDesc FreedListDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), DeallocatorCapacity);
 	const FRDGBufferDesc DeallocatedListDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), DeallocatorCapacity);
 	RT.FreedListResource = AllocatePooledBuffer(FreedListDesc,		 TEXT("SDF_BrickFreedList"));
-	RT.FreedListResource = AllocatePooledBuffer(DeallocatedListDesc, TEXT("SDF_BrickDeallocatedList"));
+	RT.DeallocatedListResource = AllocatePooledBuffer(DeallocatedListDesc, TEXT("SDF_BrickDeallocatedList"));
 
 	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Allocated Brickmap"));
 	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Allocated Brickmap"));
@@ -36,6 +36,8 @@ void FBrickmapBuilder::ReleaseResources()
 	RT.PtrGrid.SafeRelease();
 	RT.BrickAllocCounters.SafeRelease();
 	RT.UpdateListResource.SafeRelease();
+	RT.FreedListResource.SafeRelease();
+	RT.DeallocatedListResource.SafeRelease();
 }
 
 bool FBrickmapBuilder::AreResourcesValid() const
@@ -43,7 +45,9 @@ bool FBrickmapBuilder::AreResourcesValid() const
 	return RT.BrickAtlas.IsValid() 
 		&& RT.PtrGrid.IsValid()
 		&& RT.BrickAllocCounters.IsValid()
-		&& RT.UpdateListResource.IsValid();
+		&& RT.UpdateListResource.IsValid()
+		&& RT.FreedListResource.IsValid()
+		&& RT.DeallocatedListResource.IsValid();
 }
 
 void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs)
@@ -55,11 +59,12 @@ void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs)
 	for (auto [SDF, Idx] : SDFs)
 	{
 		// TODO temporary hack to test deallocation (put const ref back when removing this)
-		// Grow the sphere so it also encapsulates its previous position
-		constexpr float RadiusOffset = VoxelResolution;
-		SDF.Radius += RadiusOffset;
-		FIntVector3 MinCell = WorldPosToGridCellSigned(SDF.Pos - SDF.Radius);
-		FIntVector3 MaxCell = WorldPosToGridCellSigned(SDF.Pos + SDF.Radius);
+		// Add some thickness so it also encapsulates its previous position
+		constexpr float Thickness = VoxelResolution * 4;
+		const float Extent = SDF.Radius + Thickness;
+
+		FIntVector3 MinCell = WorldPosToGridCellSigned(SDF.Pos - Extent);
+		FIntVector3 MaxCell = WorldPosToGridCellSigned(SDF.Pos + Extent);
 
 		MinCell = FIntVector3(
 			FMath::Clamp(MinCell.X, 0, GridMax.X),
@@ -91,9 +96,8 @@ void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs)
 				FMath::Abs(SDF.Pos.Y - Min.Y) > FMath::Abs(SDF.Pos.Y - Max.Y) ? Min.Y : Max.Y,
 				FMath::Abs(SDF.Pos.Z - Min.Z) > FMath::Abs(SDF.Pos.Z - Max.Z) ? Min.Z : Max.Z);
 
-
-			if (SDFSphere(ClosestPoint, SDF.Pos, SDF.Radius) <= 0.0f
-				&& SDFSphere(FarthestPoint, SDF.Pos, SDF.Radius) >= 0.0f)
+			if (SDFSphere(ClosestPoint, SDF.Pos, SDF.Radius) <= Thickness
+				&& SDFSphere(FarthestPoint, SDF.Pos, SDF.Radius) >= -Thickness)
 			{
 				RT.UpdateListCPU.Add(GridCellToGridIdx(GridCell));
 			}
