@@ -24,7 +24,18 @@ static const uint3 AtlasSize = NumAtlasBricks * BrickResolution;
 
 static const uint3 PtrGridSize = uint3(64, 64, 64);
 
+static const float Diagonal = sqrt(3.0);
 static const float InvDiagonal = 1.0 / sqrt(3.0);
+
+float EncodeDistance(float Distance)
+{
+	return clamp(Distance * InvDiagonal, -1.0, 1.0) * 0.5 + 0.5;
+}
+
+float DecodeDistance(float Distance)
+{
+	return (Distance - 0.5) * 2.0 * Diagonal;
+}
 
 bool IsInsideGrid(float3 WorldPos)
 {

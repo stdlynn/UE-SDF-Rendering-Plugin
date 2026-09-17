@@ -144,6 +144,44 @@ public:
 	}
 };
 
+// Transfer Deallocated Shader
+class SDFPLUGIN_API FTransferDeallocatedShader : public FGlobalShader
+{
+public:
+	DECLARE_GLOBAL_SHADER(FTransferDeallocatedShader)
+
+	SHADER_USE_PARAMETER_STRUCT(FTransferDeallocatedShader, FGlobalShader)
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, BrickAllocCounter)
+	END_SHADER_PARAMETER_STRUCT()
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+	}
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment) {}
+};
+
+// Reset Counters Shader
+class SDFPLUGIN_API FResetCountersShader : public FGlobalShader
+{
+public:
+	DECLARE_GLOBAL_SHADER(FResetCountersShader)
+
+	SHADER_USE_PARAMETER_STRUCT(FResetCountersShader, FGlobalShader)
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, BrickAllocCounter)
+	END_SHADER_PARAMETER_STRUCT()
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+	}
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment) {}
+};
+
 // Debug Shader
 class SDFPLUGIN_API FDebugShader : public FGlobalShader
 {

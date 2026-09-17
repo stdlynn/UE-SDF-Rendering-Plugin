@@ -16,9 +16,9 @@ public:
 
 	[[nodiscard]] IPooledRenderTarget* GetBrickAtlas() const { return RT.BrickAtlas; }
 	[[nodiscard]] FRDGPooledBuffer* GetPtrGrid() const { return RT.PtrGrid; }
-	[[nodiscard]] FRDGPooledBuffer* GetBrickAllocCounter() const { return RT.BrickAllocCounter; }
+	[[nodiscard]] FRDGPooledBuffer* GetBrickAllocCounter() const { return RT.BrickAllocCounters; }
 	[[nodiscard]] uint32 GetLastBuildFrame() const { return RT.LastBuildFrame; }
-	[[nodiscard]] uint32 GetNumUpdatedBricks() const { return RT.BrickListCPU.Num(); }
+	[[nodiscard]] uint32 GetNumUpdatedBricks() const { return RT.UpdateListCPU.Num(); }
 	void SetLastBuildFrame(const uint32 Frame) { RT.LastBuildFrame = Frame; }
 
 	void AllocateResources();
@@ -37,13 +37,16 @@ private:
 	// Render thread
 	struct
 	{
+		uint32 LastBuildFrame = MAX_uint32;
 		TRefCountPtr<IPooledRenderTarget> BrickAtlas;
 		TRefCountPtr<FRDGPooledBuffer> PtrGrid;
-		TRefCountPtr<FRDGPooledBuffer> BrickAllocCounter;
-		uint32 LastBuildFrame = MAX_uint32;
 
-		TRefCountPtr<FRDGPooledBuffer> BrickListResource;
-		TSet<uint32> BrickListCPU;
+		TSet<uint32> UpdateListCPU;
+		TRefCountPtr<FRDGPooledBuffer> UpdateListResource;
+		TRefCountPtr<FRDGPooledBuffer> BrickAllocCounters;
+		TRefCountPtr<FRDGPooledBuffer> FreedListResource;
+		TRefCountPtr<FRDGPooledBuffer> DeallocatedListResource;
+
 	} RT;
 
 }; // BrickmapBuilder

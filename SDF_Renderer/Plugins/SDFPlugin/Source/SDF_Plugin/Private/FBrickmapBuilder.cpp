@@ -2,15 +2,6 @@
 #include "FBrickmapBuilder.h"
 #include "BrickmapCommon.h"
 
-// UE
-#include "EngineUtils.h"
-
-struct FAABB
-{
-	FVector3f Min;
-	FVector3f Max;
-};
-
 void FBrickmapBuilder::AllocateResources()
 {
 	check(IsInRenderingThread());
@@ -24,9 +15,15 @@ void FBrickmapBuilder::AllocateResources()
 	const FRDGBufferDesc PtrGridDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), GridSize);
 	RT.PtrGrid = AllocatePooledBuffer(PtrGridDesc, TEXT("SDF_BrickPtrBuffer"));
 
-	constexpr uint32 numCounters = 4;
-	const FRDGBufferDesc CounterDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), numCounters);
-	RT.BrickAllocCounter = AllocatePooledBuffer(CounterDesc, TEXT("SDF_BrickAllocCounter"));
+	constexpr uint32 NumCounters = 4;
+	const FRDGBufferDesc CounterDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), NumCounters);
+	RT.BrickAllocCounters = AllocatePooledBuffer(CounterDesc, TEXT("SDF_BrickAllocCounter"));
+
+	constexpr uint32 DeallocatorCapacity = NumAtlasBricks.X * NumAtlasBricks.Y * NumAtlasBricks.Z;
+	const FRDGBufferDesc FreedListDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), DeallocatorCapacity);
+	const FRDGBufferDesc DeallocatedListDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), DeallocatorCapacity);
+	RT.FreedListResource = AllocatePooledBuffer(FreedListDesc,		 TEXT("SDF_BrickFreedList"));
+	RT.FreedListResource = AllocatePooledBuffer(DeallocatedListDesc, TEXT("SDF_BrickDeallocatedList"));
 
 	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Allocated Brickmap"));
 	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Allocated Brickmap"));
@@ -37,21 +34,21 @@ void FBrickmapBuilder::ReleaseResources()
 	check(IsInRenderingThread());
 	RT.BrickAtlas.SafeRelease();
 	RT.PtrGrid.SafeRelease();
-	RT.BrickAllocCounter.SafeRelease();
-	RT.BrickListResource.SafeRelease();
+	RT.BrickAllocCounters.SafeRelease();
+	RT.UpdateListResource.SafeRelease();
 }
 
 bool FBrickmapBuilder::AreResourcesValid() const
 {
 	return RT.BrickAtlas.IsValid() 
 		&& RT.PtrGrid.IsValid()
-		&& RT.BrickAllocCounter.IsValid()
-		&& RT.BrickListResource.IsValid();
+		&& RT.BrickAllocCounters.IsValid()
+		&& RT.UpdateListResource.IsValid();
 }
 
 void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs)
 {
-	RT.BrickListCPU.Empty();
+	RT.UpdateListCPU.Empty();
 
 	const FIntVector3 GridMax = FIntVector3(PtrGridSize.X, PtrGridSize.Y, PtrGridSize.Z) - FIntVector3(1);
 
@@ -98,7 +95,7 @@ void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs)
 			if (SDFSphere(ClosestPoint, SDF.Pos, SDF.Radius) <= 0.0f
 				&& SDFSphere(FarthestPoint, SDF.Pos, SDF.Radius) >= 0.0f)
 			{
-				RT.BrickListCPU.Add(GridCellToGridIdx(GridCell));
+				RT.UpdateListCPU.Add(GridCellToGridIdx(GridCell));
 			}
 		}}}
 		// @formatter:on
@@ -108,20 +105,20 @@ void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs)
 void FBrickmapBuilder::AllocateBrickList()
 {
 	// TODO look into if this should be a per-frame allocated buffer
-	if (not RT.BrickListResource.IsValid() || RT.BrickListCPU.Num() > RT.BrickListResource->GetSize() / sizeof(uint32))
+	if (not RT.UpdateListResource.IsValid() || RT.UpdateListCPU.Num() > RT.UpdateListResource->GetSize() / sizeof(uint32))
 	{
-		const uint32 Capacity = FMath::Max(RT.BrickListCPU.Num(), 1);
+		const uint32 Capacity = FMath::Max(RT.UpdateListCPU.Num(), 1);
 
 		FRDGBufferDesc BufferDesc = FRDGBufferDesc::CreateUploadDesc(sizeof(uint32), Capacity);
-		RT.BrickListResource = AllocatePooledBuffer(BufferDesc, TEXT("Brick List Update Buffer"));
+		RT.UpdateListResource = AllocatePooledBuffer(BufferDesc, TEXT("Brick List Update Buffer"));
 	}
 }
 
 FRDGBufferRef FBrickmapBuilder::RegisterBrickListBuffer(FRDGBuilder& GraphBuilder) const
 {
-	TArray<uint32> BrickArray = RT.BrickListCPU.Array();
+	TArray<uint32> BrickArray = RT.UpdateListCPU.Array();
 	
-	const FRDGBufferRef BrickListRDG{ GraphBuilder.RegisterExternalBuffer(RT.BrickListResource, 
+	const FRDGBufferRef BrickListRDG{ GraphBuilder.RegisterExternalBuffer(RT.UpdateListResource, 
 																		  ERDGBufferFlags::MultiFrame) };
 
 	GraphBuilder.QueueBufferUpload(BrickListRDG, BrickArray.GetData(), 
