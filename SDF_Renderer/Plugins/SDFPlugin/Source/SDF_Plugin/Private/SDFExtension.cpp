@@ -23,10 +23,21 @@ static const FIntVector PtrGridSize = FIntVector(64, 64, 64);
 
 namespace
 {
-	TAutoConsoleVariable<int32> CVarShaderOn(
+	// TODO: if this is turned on, we need to do a full rebuilt of the brickmap
+	// TODO: since X frames of update lists have been skipped
+	// TODO: Also note that this should be checked before running ANY shader
+	TAutoConsoleVariable<int32> CVarShadersOn(
 		TEXT("r.SDF.Plugin"),
 		1,
 		TEXT("Enable SDF Plugin \n")
+		TEXT(" 0: OFF;")
+		TEXT(" 1: ON."),
+		ECVF_RenderThreadSafe);
+
+	TAutoConsoleVariable<int32> CVarRenderEdits(
+		TEXT("r.SDF.Edits"),
+		1,
+		TEXT("Enable SDF rendering \n")
 		TEXT(" 0: OFF;")
 		TEXT(" 1: ON."),
 		ECVF_RenderThreadSafe);
@@ -151,7 +162,7 @@ void FSDFExtension::TransferSDFsToRenderThread()
 
 void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily)
 {
-	if (CVarShaderOn.GetValueOnRenderThread() == 0)
+	if (CVarShadersOn.GetValueOnRenderThread() == 0)
 	{
 		return;
 	}
@@ -288,7 +299,8 @@ void FSDFExtension::AllocateBrickmap()
 
 void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
 {
-	if (CVarShaderOn.GetValueOnRenderThread() == 0)
+	if (CVarShadersOn.GetValueOnRenderThread() == 0
+		 || CVarRenderEdits.GetValueOnRenderThread() == 0)
 	{
 		return;
 	}
@@ -384,10 +396,11 @@ void FSDFExtension::SubscribeToPostProcessingPass(
 FScreenPassTexture FSDFExtension::RenderDebug(FRDGBuilder& GraphBuilder, const FSceneView& SceneView, const FPostProcessMaterialInputs& Inputs)
 {
 	const FSceneViewFamily& ViewFamily = *SceneView.Family;
-
 	const FScreenPassTexture& SceneColor = FScreenPassTexture::CopyFromSlice(GraphBuilder, Inputs.GetInput(EPostProcessMaterialInput::SceneColor));
 
-	if (!SceneColor.IsValid() || CVarDebugGrid.GetValueOnRenderThread() == 0)
+	if (!SceneColor.IsValid() 
+		 || CVarShadersOn.GetValueOnRenderThread() == 0
+		 || CVarDebugGrid.GetValueOnRenderThread() == 0)
 	{
 		return SceneColor;
 	}

@@ -21,8 +21,8 @@ public:
 
 	UPROPERTY( EditAnywhere, Config, Category = "Grid", 
 			   meta = (DisplayName = "GPU Unit Scale", 
-						ClampMin = "0.005", 
-						ClampMax = "1.0") )
+						UIMin = "0.001", 
+						UIMax = "0.1") )
 	float GPUUnitScale{ 1e-2f };
 
 	virtual FName GetCategoryName() const override { return TEXT( "Plugins" ); }
