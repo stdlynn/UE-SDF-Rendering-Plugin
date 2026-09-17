@@ -81,7 +81,8 @@ void FSDFExtension::BeginRenderViewFamily( FSceneViewFamily& InViewFamily )
 	// We call this from here so it runs on the Game Thread
 	TransferSettingsToRenderThread(); // This first! We use 'RT.Settings.UnitScale' for the rest
 	TransferSDFsToRenderThread();
-};
+	GT.Settings.bUnitScaleDirty = false;
+}
 
 void FSDFExtension::TransferSettingsToRenderThread()
 {
@@ -97,6 +98,7 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	GT.Settings.PtrGridPos = SDFSettings->PtrGridPos;
 	GT.Settings.VoxSize = SDFSettings->VoxSize;
 	GT.Settings.GPUUnitScale = SDFSettings->GPUUnitScale;
+	GT.Settings.bUnitScaleDirty = true;
 
 	// Transfer lambda
 	// Capture the parameters by copy, their state on the game thread might change before the lambda runs
@@ -117,7 +119,7 @@ void FSDFExtension::TransferSDFsToRenderThread()
 {
 	// Only update if dirty
 	USDFSubsystem* SDFSubsystem{ GT.World->GetSubsystem<USDFSubsystem>() };
-	if (not SDFSubsystem->GetAndResetDirty()) { return; }
+	if (not SDFSubsystem->GetAndResetDirty() && not GT.Settings.bUnitScaleDirty) { return; }
 
 	// TODO: remove before PR (also other debug messages)
 	// Debug

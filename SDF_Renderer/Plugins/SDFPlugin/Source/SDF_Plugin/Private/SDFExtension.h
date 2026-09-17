@@ -25,6 +25,7 @@ public:
 		FVector3f PtrGridPos;
 		float VoxSize;
 		float GPUUnitScale;
+		bool bUnitScaleDirty{ true };
 	};
 
 	struct FSDFResources
