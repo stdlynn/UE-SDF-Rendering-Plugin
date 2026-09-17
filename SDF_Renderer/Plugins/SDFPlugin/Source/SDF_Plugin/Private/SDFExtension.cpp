@@ -179,19 +179,19 @@ void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, 
 		ParametersBuild->UpdateList  = GraphBuilder.CreateSRV(BrickListRDG, PF_R32_UINT);
 		ParametersBuild->FreedList  = FreedListUAV;
 		ParametersBuild->DeallocatedList = DeallocatedListUAV;
-		ParametersBuild->AllocCounters = AllocCountersUAV;
+		ParametersBuild->BrickAllocCounters = AllocCountersUAV;
 
 		FTransferDeallocatedShader::FParameters* ParametersTransfer =
 			GraphBuilder.AllocParameters<FTransferDeallocatedShader::FParameters>();
 		ParametersTransfer->FreedList = FreedListUAV;
 		ParametersTransfer->DeallocatedList = DeallocatedListUAV;
-		ParametersTransfer->AllocCounters = AllocCountersUAV;
+		ParametersTransfer->BrickAllocCounters = AllocCountersUAV;
 
 		FResetCountersShader::FParameters* ParametersReset =
 			GraphBuilder.AllocParameters<FResetCountersShader::FParameters>();
 		ParametersReset->FreedList = FreedListUAV;
 		ParametersReset->DeallocatedList = DeallocatedListUAV;
-		ParametersReset->AllocCounters = AllocCountersUAV;
+		ParametersReset->BrickAllocCounters = AllocCountersUAV;
 
 		const FIntVector GroupCountBuild {
 			FMath::DivideAndRoundUp(static_cast<int>(ParametersBuild->NumUpdated * BrickResolution), 8),

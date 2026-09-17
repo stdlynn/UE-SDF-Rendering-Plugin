@@ -132,7 +132,7 @@ public:
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint32>, UpdateList)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, FreedList)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, DeallocatedList)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, AllocCounters)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, BrickAllocCounters)
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -158,7 +158,7 @@ public:
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, FreedList)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, DeallocatedList)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, AllocCounters)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, BrickAllocCounters)
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
@@ -179,7 +179,7 @@ public:
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, FreedList)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, DeallocatedList)
-		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, AllocCounters)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, BrickAllocCounters)
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
