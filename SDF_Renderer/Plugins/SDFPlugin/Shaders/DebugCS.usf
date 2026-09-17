@@ -13,6 +13,7 @@ RWTexture2D<float4> Output;
 
 float3 PtrGridPos;
 float VoxSize;
+float UnitScale;
 
 #define USE_DIST_INSTEAD_OF_HITS 0
 
@@ -137,7 +138,7 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
     const float3 Dir = normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w );
     const float DepthSample = ConvertFromDeviceZ( DepthTex[SampleCoord].r );
 	const float Depth = DepthSample / dot( Dir, ResolvedView.ViewForward.xyz );
-	FRay Ray = FRay::Create( View.ViewOriginHigh, Dir, Depth );
+	FRay Ray = FRay::Create( View.ViewOriginHigh * UnitScale, Dir, Depth ); // Convert unit size
 
 	// Grid AABB check
     float AABBHitT, AABBOutT;
@@ -147,7 +148,8 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
 	if (IntersectAABB( GridAABB, Ray, AABBHitT, AABBOutT ))
     {
 		// Grid DDA
-        AABBHitT = max( AABBHitT - AABBEpsilon, 0 );
+        const float Epsilon = AABBEpsilon * UnitScale;
+        AABBHitT = max( AABBHitT - Epsilon, 0 );
         Ray.T = AABBOutT;
         Ray.Advance( AABBHitT );
         NumHits = NumBrickHits( Ray, GridAABB.Min, BrickSize );

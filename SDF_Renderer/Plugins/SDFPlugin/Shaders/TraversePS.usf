@@ -14,9 +14,12 @@ Texture3D<float> BrickAtlas;
 SamplerState BrickSampler;
 float3 PtrGridPos;
 float VoxSize;
+float UnitScale;
 
 bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 {
+	const float Epsilon = SurfaceEpsilon * UnitScale;
+
 	// Step through the scene
 	float DistTravelled = 0.0;
 	for (uint Step = 0; Step < 64; ++Step)
@@ -37,7 +40,7 @@ bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 		}
 
 		// Stop stepping if we hit a surface (or are close enough to one)
-		if (ClosestDist < SurfaceEpsilon)
+		if (ClosestDist < Epsilon)
 		{
 			Ray.Advance( DistTravelled );
 			return true;
@@ -67,7 +70,7 @@ void TraversePS(
 	// Ray setup
 	const float4 TranslatedWorldPosH = mul(float4(NDC, 0.5, 1), View.ClipToTranslatedWorld);
 	const float3 Dir = normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w );
-	const float3 Origin = View.ViewOriginHigh;
+	const float3 Origin = View.ViewOriginHigh * UnitScale; // Convert unit size
 	FRay Ray = FRay::Create( Origin, Dir );
 
 	// Sphere trace
@@ -78,7 +81,8 @@ void TraversePS(
 	// Calculate output data
 	const FSDFEdit Edit = SDFEdits[EditHitIdx];
 	const float3 Normal = GetSphereNormal( Edit, Ray.Pos );
-	float ViewZ = mul(float4(Ray.Pos - Origin, 1.0), View.TranslatedWorldToView).z;
+	// Convert unit size
+	float ViewZ = mul(float4((Ray.Pos - Origin) / UnitScale, 1.0), View.TranslatedWorldToView).z;
 	OutDepth = ConvertToDeviceZ(ViewZ);
 
 	FGBufferData GBuffer = (FGBufferData) 0;

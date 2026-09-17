@@ -19,7 +19,10 @@ public:
 	UPROPERTY( EditAnywhere, Config, Category = "Grid" )
 	float VoxSize{ 100.0f / 7.0f };
 
-	UPROPERTY( EditAnywhere, Config, Category = "Grid" )
+	UPROPERTY( EditAnywhere, Config, Category = "Grid", 
+			   meta = (DisplayName = "GPU Unit Scale", 
+						ClampMin = "0.005", 
+						ClampMax = "1.0") )
 	float GPUUnitScale{ 1e-2f };
 
 	virtual FName GetCategoryName() const override { return TEXT( "Plugins" ); }

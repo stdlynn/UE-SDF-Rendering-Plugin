@@ -79,9 +79,9 @@ private:
 	UPROPERTY( EditAnywhere,
 			   BlueprintReadOnly, // Edit through setters
 			   Category = "SDF",
-			   meta = (DisplayName = "Shape"),
-			   meta = (ShowOnlyInnerProperties),
-			   meta = (AllowPrivateAccess = "true") )
+			   meta = (DisplayName = "Shape",
+						ShowOnlyInnerProperties,
+						AllowPrivateAccess = "true") )
 	FGameSDF GameSDF{};
 	uint64 ID;
 
