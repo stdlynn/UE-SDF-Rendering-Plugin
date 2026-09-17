@@ -19,6 +19,9 @@ public:
 	UPROPERTY( EditAnywhere, Config, Category = "Grid" )
 	float VoxSize{ 100.0f / 7.0f };
 
+	UPROPERTY( EditAnywhere, Config, Category = "Grid" )
+	float GPUUnitScale{ 1e-2f };
+
 	virtual FName GetCategoryName() const override { return TEXT( "Plugins" ); }
 
 	// TODO: add PtrGridSize (uint3) and AtlasCapacity (measured in bricks)
