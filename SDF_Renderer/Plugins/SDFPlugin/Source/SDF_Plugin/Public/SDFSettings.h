@@ -19,7 +19,12 @@ public:
 	UPROPERTY( EditAnywhere, Config, Category = "Grid" )
 	float VoxSize{ 100.0f / 7.0f };
 
-	UPROPERTY( EditAnywhere, Config, Category = "Grid", 
+	UPROPERTY( EditAnywhere, Config, Category = "Debug Visualizations", 
+			   meta = (DisplayName = "Max Bricks in Trace", 
+						ClampMin = "1") )
+	uint32 DbgVisMaxBricks{ 50 };
+
+	UPROPERTY( EditAnywhere, Config, Category = "Misc.", 
 			   meta = (DisplayName = "GPU Unit Scale", 
 						UIMin = "0.001", 
 						UIMax = "0.1") )

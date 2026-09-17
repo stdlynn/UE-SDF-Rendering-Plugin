@@ -25,6 +25,7 @@ public:
 		FVector3f PtrGridPos;
 		float VoxSize;
 		float GPUUnitScale;
+		uint32 DbgVisMaxBricks;
 		bool bUnitScaleDirty{ true };
 	};
 
@@ -176,6 +177,7 @@ public:
 		SHADER_PARAMETER(FVector3f, PtrGridPos)
 		SHADER_PARAMETER(float, VoxSize)
 		SHADER_PARAMETER(float, UnitScale)
+		SHADER_PARAMETER(uint32, DbgVisMaxBricks)
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)

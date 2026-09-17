@@ -101,14 +101,17 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	const USDFSettings* SDFSettings{ GetDefault<USDFSettings>() };
 	if (GT.Settings.PtrGridPos == SDFSettings->PtrGridPos 
 		 && GT.Settings.VoxSize == SDFSettings->VoxSize
-		 && GT.Settings.GPUUnitScale == SDFSettings->GPUUnitScale)
+		 && GT.Settings.GPUUnitScale == SDFSettings->GPUUnitScale
+		 && GT.Settings.DbgVisMaxBricks == SDFSettings->DbgVisMaxBricks)
 	{
 		return;
 	}
 
+	// Store settings to compare next frame
 	GT.Settings.PtrGridPos = SDFSettings->PtrGridPos;
 	GT.Settings.VoxSize = SDFSettings->VoxSize;
 	GT.Settings.GPUUnitScale = SDFSettings->GPUUnitScale;
+	GT.Settings.DbgVisMaxBricks = SDFSettings->DbgVisMaxBricks;
 	GT.Settings.bUnitScaleDirty = true;
 
 	// Transfer lambda
@@ -116,10 +119,11 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	auto TransferSettings{ [this, Settings = GT.Settings]( FRHICommandList& ) mutable
 	{
 		// Copy the settings over to the render thread
+		RT.Settings = Settings;
+
 		// Convert to GPU unit scale
-		RT.Settings.PtrGridPos = Settings.PtrGridPos * Settings.GPUUnitScale;
-		RT.Settings.VoxSize = Settings.VoxSize * Settings.GPUUnitScale;
-		RT.Settings.GPUUnitScale = Settings.GPUUnitScale;
+		RT.Settings.PtrGridPos *= Settings.GPUUnitScale;
+		RT.Settings.VoxSize *= Settings.GPUUnitScale;
 	} };
 
 	// Perform the transfer safely on the render thread
@@ -437,6 +441,7 @@ FScreenPassTexture FSDFExtension::RenderDebug(FRDGBuilder& GraphBuilder, const F
 		PassParameters->PtrGridPos = RT.Settings.PtrGridPos;
 		PassParameters->VoxSize = RT.Settings.VoxSize;
 		PassParameters->UnitScale = RT.Settings.GPUUnitScale;
+		PassParameters->DbgVisMaxBricks = RT.Settings.DbgVisMaxBricks;
 		PassParameters->Output = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(OutputTexture));
 
 		FIntPoint PassViewSize = SceneColor.ViewRect.Size();
