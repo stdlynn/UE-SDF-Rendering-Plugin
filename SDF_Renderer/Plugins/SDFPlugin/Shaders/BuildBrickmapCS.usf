@@ -28,76 +28,89 @@ static const uint Empty = 0xFFFFFFFFu;
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
 void BuildBrickmapCS(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID)
 {
-	if (GroupID.x >= NumUpdated) return;
+	if (GroupID.x >= NumUpdated) { return; }
 
-	if (all(GroupThreadID == 0))
-	{
-		bContainsSurfaceShared = false;
-	}
-
+	// Start out assuming the brick contains no surfaces
+	// If any thread/brick point finds out the contrary, it sets the boolean to true
+	if (all(GroupThreadID == 0)) { bContainsSurfaceShared = false; }
 	GroupMemoryBarrierWithGroupSync();
 
+	// Get the data for this thread's brick point
 	const uint GridIdx = UpdateList[GroupID.x];
 	const uint3 GridCell = GridIdxToGridCell(GridIdx);
 	const float3 WorldPos = GridCellToWorldPos(GridCell) + float3(GroupThreadID);
 	uint AtlasIdx = PtrGrid[GridIdx];
 
+	// Find the closest SDF to the brick point
 	float Closest = MaxRayDist;
 	for (uint EditIdx = 0; EditIdx < NumEdits; EditIdx++)
 	{
 		const FSDFEdit Edit = SDFEdits[EditIdx];
 		Closest = min(Closest, SDFSphere(WorldPos, Edit.Pos, Edit.Radius));
 	}
-	if (abs(Closest) <= Diagonal)
-	{
-		bContainsSurfaceShared = true;
-	}
 
+	// Indicate if any geometry is within allocation distance
+	// Sync so any thread gets the chance to indicate a surface within range
+	if (abs(Closest) <= Diagonal) { bContainsSurfaceShared = true; }
 	GroupMemoryBarrierWithGroupSync();
 
+	// One thread is in charge of (de)allocation
 	const bool bDeallocate = !bContainsSurfaceShared;
-
 	if (all(GroupThreadID == 0))
 	{
+		// Deallocate if we own a brick but there is no longer any geometry in range
 		if (bDeallocate)
 		{
             if (AtlasIdx != Empty)
             {
-				// Deallocate
-				uint PrevDealloc;
-				InterlockedAdd(BrickAllocCounters[CounterDealloced], 1, PrevDealloc);
-				DeallocatedList[PrevDealloc] = AtlasIdx;
+				// Claim an index within the deallocation list
+				uint DeallocListIdx; 
+				InterlockedAdd(BrickAllocCounters[CounterDealloced], 1, DeallocListIdx);
+
+				// Move our brick index into the deallocated list
+				// It can be claimed starting next frame
+				DeallocatedList[DeallocListIdx] = AtlasIdx;
 				PtrGrid[GridIdx] = Empty;
 				AtlasIdx = Empty;
             }
 		}
+		// Our grid cell contains geometry
+		// If we don't own a brick, allocate one
 		else if (AtlasIdx == Empty)
 		{
-			// Allocate
+
+			// Claim an index within the freed list
+			uint FreedListIdx;
+			InterlockedAdd(BrickAllocCounters[CounterClaimed], 1, FreedListIdx);
+
+			// Get the number of available bricks to claim this frame
+			// If our index is within [0, NumFree), it's a valid spot to claim
 			uint NumFree = BrickAllocCounters[NumFreed];
-			uint PrevClaimed;
-			InterlockedAdd(BrickAllocCounters[CounterClaimed], 1, PrevClaimed);
-			if (PrevClaimed < NumFree)
+			if (FreedListIdx < NumFree)
 			{
-				// Allocate from FreedList
-				AtlasIdx = FreedList[NumFree - PrevClaimed - 1];
+				AtlasIdx = FreedList[NumFree - FreedListIdx - 1];
 			}
+			// There are no more available bricks in the freed list this frame
+			// We have to allocate directly from the atlas
 			else
 			{
-				// Allocate from Atlas
 				InterlockedAdd(BrickAllocCounters[CounterAtlas], 1, AtlasIdx);
 			}
+			// Update our grid cell with our new index
             PtrGrid[GridIdx] = AtlasIdx;
         }
 
+		// Write our new index into groupshared memory so threads don't have to individually fetch it
 		AtlasIdxShared = AtlasIdx;
 	}
-
+	
+	// Sync so each thread in the group knows about the current atlas index of our brick
 	GroupMemoryBarrierWithGroupSync();
 
 	AtlasIdx = AtlasIdxShared;
-	if (AtlasIdx == Empty) return;
+	if (AtlasIdx == Empty) { return; }
 
+	// Write the closest distance into this thread's brick point
 	uint3 AtlasPoint = uint3(IdxToAtlasCell(AtlasIdxShared) * BrickResolution, 0) + GroupThreadID;
 	BrickAtlas[AtlasPoint] = EncodeDistance(Closest);
 }
@@ -106,10 +119,14 @@ void BuildBrickmapCS(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupT
 void TransferDeallocatedCS(uint3 DispatchThreadID : SV_DispatchThreadID)
 {
 	uint NumFree = BrickAllocCounters[NumFreed];
+	// Clamp to the maximum number of bricks that can have possibly been claimed
+	// because claim attempts still increment the counter regardless of if the claim is successful
 	uint NumClaimed = min(BrickAllocCounters[CounterClaimed], NumFree);
 	uint NumDeallocated = BrickAllocCounters[CounterDealloced];
 	uint NumCarried = NumFree - NumClaimed;
 
+	// Move newly deallocated bricks into the freed list
+	// so they can be claimed starting next frame
 	uint Idx = DispatchThreadID.x;
 	if(Idx < NumDeallocated)
 	{
@@ -121,6 +138,8 @@ void TransferDeallocatedCS(uint3 DispatchThreadID : SV_DispatchThreadID)
 void ResetCountersCS()
 {
 	uint NumFree = BrickAllocCounters[NumFreed];
+	// Clamp to the maximum number of bricks that can have possibly been claimed
+	// because claim attempts still increment the counter regardless of if the claim is successful
 	uint NumClaimed = min(BrickAllocCounters[CounterClaimed], NumFree);
 	uint NumDeallocated = BrickAllocCounters[CounterDealloced];
 
@@ -128,84 +147,3 @@ void ResetCountersCS()
 	BrickAllocCounters[CounterClaimed] = 0;
 	BrickAllocCounters[CounterDealloced] = 0;
 }
-
-/*
-Pseudocode
-
-[numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
-void Test(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID)
-{
-	if (GroupID.x >= NumUpdated)
-		return;
-	
-	If thread 0:
-		bContainsSurfaceShared = false
-
-	GroupSync
-
-	Closest = MaxRayDist
-	For every Edit:
-		Store closest distance
-	
-	If abs(Closest) <= VoxelDiagonal:
-		bContainsSurfaceShared = true
-	
-	GroupSync
-
-	const bool bDeallocate = !bContainsSurfaceShared;
-
-	If thread 0:
-		AtlasIdx = PtrGrid[GridIdx]
-		
-		If bDeallocate:
-			If AtlasIdx != Empty:
-				InterlockedAdd CounterDealloced
-				PtrGrid[GridIdx] = Empty;
-				Add to the DeallocatedList
-		Else if AtlasIdx == Empty:
-			InterlockedAdd CounterClaimed
-			If CounterClaimed < CounterFree:
-				AtlasIdx = FreedList[CounterClaimed]
-			Else:
-				InterlockedAdd CounterAtlas
-				AtlasIdx = CounterAtlas
-
-			PtrGrid[GridIdx] = AtlasIdx
-		
-		AtlasIdxShared = AtlasIdx
-	
-	GroupSync
-
-	If AtlasIdxShared == Empty:
-		return
-
-	AtlasPoint = uint3(IdxToAtlasCell(AtlasIdxShared) * BrickResolution, 0) + GroupThreadID;
-	BrickAtlas[AtlasPoint] = Encode(Closest)
-}
-
-// IndirectDispatch of NumDeallocated
-[numthreads(64, 1, 1)]
-void TransferDeallocated(uint3 DispatchThreadID : SV_DispatchThreadID)
-{
-	uint NumFreed = BrickAllocCounters[CounterFree];
-	uint NumClaimed = min(BrickAllocCounters[CounterClaimed], NumFreed);
-	uint NumDeallocated = BrickAllocCounters[CounterDealloced];
-	uint NumCarried = NumFreed - NumClaimed;
-
-	Idx = DispatchThreadID.x;
-	If Idx < NumDeallocated:
-		FreedList[NumCarried + Idx] = DeallocatedList[Idx];
-}
-
-[numthreads(1, 1, 1)]
-void ResetCounters()
-{
-	uint NumFreed = BrickAllocCounters[CounterFree];
-	uint NumClaimed = min(BrickAllocCounters[CounterClaimed], NumFreed);
-	uint NumDeallocated = BrickAllocCounters[CounterDealloced];
-
-	BrickAllocCounters[CounterFreed] = NumFreed - NumClaimed + NumDeallocated;
-	BrickAllocCounters[CounterClaimeded] = NumFreed - NumClaimed + NumDeallocated + 1;
-	BrickAllocCounters[CounterDealloced] = 0;
-}
-*/

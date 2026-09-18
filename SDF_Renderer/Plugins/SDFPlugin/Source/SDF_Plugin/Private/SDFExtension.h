@@ -73,14 +73,6 @@ private:
 
 }; // FSDFExtension
 
-//BEGIN_UNIFORM_BUFFER_STRUCT(FPtrBuffer, )
-//	SHADER_PARAMETER(uint32, Idx)
-//END_UNIFORM_BUFFER_STRUCT()
-//
-//BEGIN_UNIFORM_BUFFER_STRUCT(FBrickAllocCounter, )
-//	SHADER_PARAMETER(uint32, Counter)
-//END_UNIFORM_BUFFER_STRUCT()
-
 // Traversal Shader
 class SDFPLUGIN_API FSDFTraverseShader : public FGlobalShader
 {
