@@ -27,11 +27,11 @@ float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
     float3 TMax = (NextCellCoordWorldSpace - Ray.Pos) * Ray.InvDir; // The distance to the next cell for each axis, in world space
 
     // Handle ray direction being zero
-    for (uint Axis = 0; Axis < 3; ++Axis)
+    for (uint AxisIdx = 0; AxisIdx < 3; ++AxisIdx)
     {
-        if (Ray.Dir[Axis] == 0)
+        if (Ray.Dir[AxisIdx] == 0)
         {
-            TMax[Axis] = 1e38;
+            TMax[AxisIdx] = 1e38;
         }
     }
     
