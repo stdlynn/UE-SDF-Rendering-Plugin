@@ -174,7 +174,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, 
 	}
 	RT.BrickmapBuilder.SetLastBuildFrame(InViewFamily.FrameCounter);
 
-	RT.BrickmapBuilder.SetBrickUpdateList(RT.SDFs);
+	RT.BrickmapBuilder.SetBrickUpdateList(RT.SDFs, RT.Settings.PtrGridPos, RT.Settings.VoxSize);
 
 	// Update upload buffers
 	UpdateSDFBuffer();

@@ -27,7 +27,8 @@ public:
 	void ReleaseResources();
 	bool AreResourcesValid() const;
 
-	void SetBrickUpdateList(const TArray<FGPUSDF>& SDFs);
+	// All variables passed should have the GPU unit size conversions applied
+	void SetBrickUpdateList(const TArray<FGPUSDF>& SDFs, const FVector3f& PtrGridPos, float VoxSize);
 	void AllocateBrickList();
 	FRDGBufferRef RegisterBrickListBuffer(FRDGBuilder& GraphBuilder) const;
 

@@ -50,21 +50,24 @@ bool FBrickmapBuilder::AreResourcesValid() const
 		&& RT.DeallocatedListResource.IsValid();
 }
 
-void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs)
+void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs, const FVector3f& PtrGridPos, float VoxSize)
 {
 	RT.UpdateListCPU.Empty();
 
+	const float BrickSize{ GetBrickSize( VoxSize ) };
+	const FVector3f GridMin{ GetGridMin( PtrGridPos, BrickSize ) };
+	// TODO:
 	const FIntVector3 GridMax = FIntVector3(PtrGridSize.X, PtrGridSize.Y, PtrGridSize.Z) - FIntVector3(1);
+	const float Thickness = VoxSize * VoxelResolution * 4;
 
 	for (auto [Pos, Radius, Idx] : SDFs)
 	{
 		// TODO temporary hack to test deallocation (put const ref back when removing this)
 		// Add some thickness so it also encapsulates its previous position
-		constexpr float Thickness = VoxelResolution * 4;
 		const float Extent = Radius + Thickness;
 
-		FIntVector3 MinCell = WorldPosToGridCellSigned(Pos - Extent);
-		FIntVector3 MaxCell = WorldPosToGridCellSigned(Pos + Extent);
+		FIntVector3 MinCell = WorldPosToGridCell(Pos - Extent, GridMin, BrickSize);
+		FIntVector3 MaxCell = WorldPosToGridCell(Pos + Extent, GridMin, BrickSize);
 
 		MinCell = FIntVector3(
 			FMath::Clamp(MinCell.X, 0, GridMax.X),
@@ -80,10 +83,9 @@ void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs)
 		for (int32 y = MinCell.Y; y <= MaxCell.Y; y++) {
 		for (int32 x = MinCell.X; x <= MaxCell.X; x++)
 		{
-			const FUintVector3 GridCell(
-				static_cast<uint32>(x), static_cast<uint32>(y), static_cast<uint32>(z));
+			const FIntVector3 GridCell(x, y, z);
 
-			const FVector3f Min = GridCellToWorldPos(GridCell);
+			const FVector3f Min = GridCellToWorldPos(GridCell, GridMin, BrickSize);
 			const FVector3f Max = Min + FVector3f(VoxelResolution);
 
 			const FVector3f ClosestPoint(
@@ -99,7 +101,7 @@ void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs)
 			if (SDFSphere(ClosestPoint, Pos, Radius) <= Thickness
 				&& SDFSphere(FarthestPoint, Pos, Radius) >= -Thickness)
 			{
-				RT.UpdateListCPU.Add(GridCellToGridIdx(GridCell));
+				RT.UpdateListCPU.Add(GridCellToGridIdx(FUintVector3{GridCell}));
 			}
 		}}}
 		// @formatter:on
