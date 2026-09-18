@@ -17,10 +17,10 @@ RWBuffer<uint> FreedList;
 RWBuffer<uint> DeallocatedList;
 
 RWBuffer<uint> BrickAllocCounters;
-static const uint CounterAtlas		= 0; // Next free unallocated brick in atlas
-static const uint CounterClaimed	= 1; // Reset each frame. Pop pointer into FreedList
-static const uint CounterDealloced	= 2; // Reset each frame. Push pointer into DeallocatedList
-static const uint NumFreed			= 3; // How many bricks are in the FreedList (read-only during build pass)
+static const uint CounterAtlas		 = 0; // Next free unallocated brick in atlas
+static const uint CounterClaimed	 = 1; // Reset each frame. Pop pointer into FreedList
+static const uint CounterDeallocated = 2; // Reset each frame. Push pointer into DeallocatedList
+static const uint NumFreed			 = 3; // How many bricks are in the FreedList (read-only during build pass)
 
 groupshared bool bContainsSurfaceShared;
 groupshared uint AtlasIdxShared;
@@ -71,7 +71,7 @@ void BuildBrickmapCS(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupT
             {
 				// Claim an index within the deallocation list
 				uint DeallocListIdx; 
-				InterlockedAdd(BrickAllocCounters[CounterDealloced], 1, DeallocListIdx);
+				InterlockedAdd(BrickAllocCounters[CounterDeallocated], 1, DeallocListIdx);
 
 				// Move our brick index into the deallocated list
 				// It can be claimed starting next frame
@@ -128,7 +128,7 @@ void TransferDeallocatedCS(uint3 DispatchThreadID : SV_DispatchThreadID)
 	// Clamp to the maximum number of bricks that can have possibly been claimed
 	// because claim attempts still increment the counter regardless of if the claim is successful
 	uint NumClaimed = min(BrickAllocCounters[CounterClaimed], NumFree);
-	uint NumDeallocated = BrickAllocCounters[CounterDealloced];
+	uint NumDeallocated = BrickAllocCounters[CounterDeallocated];
 	uint NumCarried = NumFree - NumClaimed;
 
 	// Move newly deallocated bricks into the freed list
@@ -147,9 +147,9 @@ void ResetCountersCS()
 	// Clamp to the maximum number of bricks that can have possibly been claimed
 	// because claim attempts still increment the counter regardless of if the claim is successful
 	uint NumClaimed = min(BrickAllocCounters[CounterClaimed], NumFree);
-	uint NumDeallocated = BrickAllocCounters[CounterDealloced];
+	uint NumDeallocated = BrickAllocCounters[CounterDeallocated];
 
 	BrickAllocCounters[NumFreed] = NumFree - NumClaimed + NumDeallocated;
 	BrickAllocCounters[CounterClaimed] = 0;
-	BrickAllocCounters[CounterDealloced] = 0;
+	BrickAllocCounters[CounterDeallocated] = 0;
 }

@@ -59,7 +59,7 @@ void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs, const FVe
 	const FIntVector3 GridMax = FIntVector3(PtrGridSize.X, PtrGridSize.Y, PtrGridSize.Z);
 	const float Thickness = BrickSize * 4;
 
-	for (auto [Pos, Radius, Idx] : SDFs)
+	for (auto [Pos, Radius, ID] : SDFs)
 	{
 		// TODO temporary hack to test deallocation (put const ref back when removing this)
 		// Add some thickness so it also encapsulates its previous position

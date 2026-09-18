@@ -30,15 +30,15 @@ struct FRenderSDF
 struct alignas(16) FGPUSDF
 {
 	// Convert to GPU unit scale
-	FGPUSDF( const FRenderSDF& RenderSDF, uint32 Idx, float GPUUnitScale )
+	FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
 		: Pos{ RenderSDF.Pos * GPUUnitScale }
 		, Radius{ RenderSDF.Radius * GPUUnitScale }
-		, Idx{ Idx }
+		, ID{ ID }
 	{}
 
 	FVector3f Pos;
 	float Radius;
-	uint32 Idx;
+	uint32 ID;
 };
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
