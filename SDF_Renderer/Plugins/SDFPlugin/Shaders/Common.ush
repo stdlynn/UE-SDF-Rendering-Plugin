@@ -10,7 +10,7 @@ struct FSDFEdit
 {
     float3 Pos;
     float Radius;
-    uint Idx;
+    uint ID;
     uint Padding[3];
 };
 
