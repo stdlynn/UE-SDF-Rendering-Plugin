@@ -1,10 +1,6 @@
-// Custom SceneViewExtension Template for Unreal Engine
-// Copyright 2023 - 2025 Ossi Luoto
-
 // TODO Probably not a good idea to keep these above the includes
 RWTexture3D<float> BrickAtlas;
 RWBuffer<uint> PtrGrid;
-RWBuffer<uint> BrickAllocCounter;
 
 #include "/Engine/Public/Platform.ush"
 #include "BrickmapCommon.ush"
@@ -12,33 +8,148 @@ RWBuffer<uint> BrickAllocCounter;
 
 StructuredBuffer<FSDFEdit> SDFEdits;
 uint NumEdits;
+float3 PtrGridPos;
+float VoxSize;
+
+Buffer<uint> UpdateList;
+uint NumUpdated;
+RWBuffer<uint> FreedList;
+RWBuffer<uint> DeallocatedList;
+
+RWBuffer<uint> BrickAllocCounters;
+static const uint CounterAtlas		= 0; // Next free unallocated brick in atlas
+static const uint CounterClaimed	= 1; // Reset each frame. Pop pointer into FreedList
+static const uint CounterDealloced	= 2; // Reset each frame. Push pointer into DeallocatedList
+static const uint NumFreed			= 3; // How many bricks are in the FreedList (read-only during build pass)
+
+groupshared bool bContainsSurfaceShared;
+groupshared uint AtlasIdxShared;
+
+static const uint Empty = 0xFFFFFFFFu;
 
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
-void BuildBrickmapCS(uint3 ThreadId : SV_DispatchThreadID)
+void BuildBrickmapCS(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID)
 {
-	//if (any(ThreadId >= AtlasSize))
-	//    return;
-	if (any(ThreadId != 0))
+	if (GroupID.x >= NumUpdated) { return; }
+
+	// Start out assuming the brick contains no surfaces
+	// If any thread/brick point finds out the contrary, it sets the boolean to true
+	if (all(GroupThreadID == 0)) { bContainsSurfaceShared = false; }
+	GroupMemoryBarrierWithGroupSync();
+
+	const float BrickSize = GetBrickSize( VoxSize );
+	const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
+
+	// Get the data for this thread's brick point
+	const uint GridIdx = UpdateList[GroupID.x];
+	const uint3 GridCell = GridIdxToGridCell(GridIdx);
+	const float3 WorldPos = GridCellToWorldPos(GridCell, GridAABB.Min, BrickSize) + float3(GroupThreadID) * VoxSize;
+	uint AtlasIdx = PtrGrid[GridIdx];
+
+	// Find the closest SDF to the brick point
+	float Closest = Infinity;
+	for (uint EditIdx = 0; EditIdx < NumEdits; EditIdx++)
 	{
-		return;
+		const FSDFEdit Edit = SDFEdits[EditIdx];
+		Closest = min(Closest, DistFn::SphereOrigin(Edit, WorldPos - Edit.Pos));
 	}
 
-	for (int Idx = 0; Idx < NumEdits; Idx++)
+	// Indicate if any geometry is within allocation distance
+	// Sync so any thread gets the chance to indicate a surface within range
+	const float Diagonal = GetDiagonal( VoxSize );
+	if (abs(Closest) <= Diagonal) { bContainsSurfaceShared = true; }
+	GroupMemoryBarrierWithGroupSync();
+
+	// One thread is in charge of (de)allocation
+	const bool bDeallocate = !bContainsSurfaceShared;
+	if (all(GroupThreadID == 0))
 	{
-		FSDFEdit Edit = SDFEdits[Idx];
-		AABB SphereAABB = GetSphereAABB(Edit.Pos, Edit.Radius);
-		uint3 MinGridCell = WorldPosToGridCell(SphereAABB.Min);
-		uint3 MaxGridCell = WorldPosToGridCell(SphereAABB.Max);
-		
-		uint3 NumBricks = abs(MaxGridCell - MinGridCell) + 1;
-		uint3 GridCellOffset;
-		for (GridCellOffset.z = 0; GridCellOffset.z < NumBricks.z; GridCellOffset.z++) {
-		for (GridCellOffset.y = 0; GridCellOffset.y < NumBricks.y; GridCellOffset.y++) {
-		for (GridCellOffset.x = 0; GridCellOffset.x < NumBricks.x; GridCellOffset.x++)
+		// Deallocate if we own a brick but there is no longer any geometry in range
+		if (bDeallocate)
 		{
-			uint3 GridCell = MinGridCell + GridCellOffset;
-			AllocateSafe(GridCell);
-			PopulateBrickSDF(GridCell, Edit.Pos, Edit.Radius);
-		}}}
+            if (AtlasIdx != Empty)
+            {
+				// Claim an index within the deallocation list
+				uint DeallocListIdx; 
+				InterlockedAdd(BrickAllocCounters[CounterDealloced], 1, DeallocListIdx);
+
+				// Move our brick index into the deallocated list
+				// It can be claimed starting next frame
+				DeallocatedList[DeallocListIdx] = AtlasIdx;
+				PtrGrid[GridIdx] = Empty;
+				AtlasIdx = Empty;
+            }
+		}
+		// Our grid cell contains geometry
+		// If we don't own a brick, allocate one
+		else if (AtlasIdx == Empty)
+		{
+
+			// Claim an index within the freed list
+			uint FreedListIdx;
+			InterlockedAdd(BrickAllocCounters[CounterClaimed], 1, FreedListIdx);
+
+			// Get the number of available bricks to claim this frame
+			// If our index is within [0, NumFree), it's a valid spot to claim
+			uint NumFree = BrickAllocCounters[NumFreed];
+			if (FreedListIdx < NumFree)
+			{
+				AtlasIdx = FreedList[NumFree - FreedListIdx - 1];
+			}
+			// There are no more available bricks in the freed list this frame
+			// We have to allocate directly from the atlas
+			else
+			{
+				InterlockedAdd(BrickAllocCounters[CounterAtlas], 1, AtlasIdx);
+			}
+			// Update our grid cell with our new index
+            PtrGrid[GridIdx] = AtlasIdx;
+        }
+
+		// Write our new index into groupshared memory so threads don't have to individually fetch it
+		AtlasIdxShared = AtlasIdx;
 	}
+	
+	// Sync so each thread in the group knows about the current atlas index of our brick
+	GroupMemoryBarrierWithGroupSync();
+
+	AtlasIdx = AtlasIdxShared;
+	if (AtlasIdx == Empty) { return; }
+
+	// Write the closest distance into this thread's brick point
+	uint3 AtlasPoint = uint3(AtlasIdxToAtlasCell(AtlasIdxShared) * BrickResolution, 0) + GroupThreadID;
+	BrickAtlas[AtlasPoint] = EncodeDistance(Closest, 1.0 / Diagonal);
+}
+
+[numthreads(64, 1, 1)]
+void TransferDeallocatedCS(uint3 DispatchThreadID : SV_DispatchThreadID)
+{
+	uint NumFree = BrickAllocCounters[NumFreed];
+	// Clamp to the maximum number of bricks that can have possibly been claimed
+	// because claim attempts still increment the counter regardless of if the claim is successful
+	uint NumClaimed = min(BrickAllocCounters[CounterClaimed], NumFree);
+	uint NumDeallocated = BrickAllocCounters[CounterDealloced];
+	uint NumCarried = NumFree - NumClaimed;
+
+	// Move newly deallocated bricks into the freed list
+	// so they can be claimed starting next frame
+	uint Idx = DispatchThreadID.x;
+	if(Idx < NumDeallocated)
+	{
+		FreedList[NumCarried + Idx] = DeallocatedList[Idx];
+	}
+}
+
+[numthreads(1, 1, 1)]
+void ResetCountersCS()
+{
+	uint NumFree = BrickAllocCounters[NumFreed];
+	// Clamp to the maximum number of bricks that can have possibly been claimed
+	// because claim attempts still increment the counter regardless of if the claim is successful
+	uint NumClaimed = min(BrickAllocCounters[CounterClaimed], NumFree);
+	uint NumDeallocated = BrickAllocCounters[CounterDealloced];
+
+	BrickAllocCounters[NumFreed] = NumFree - NumClaimed + NumDeallocated;
+	BrickAllocCounters[CounterClaimed] = 0;
+	BrickAllocCounters[CounterDealloced] = 0;
 }

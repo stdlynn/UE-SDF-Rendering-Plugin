@@ -2,10 +2,9 @@
 
 #include "/Engine/Public/Platform.ush"
 
-static const float UnitSize = 0.01;
-
-static const float MaxRayDist = 1000.0;
-static const float SurfaceEpsilon = 0.0005;
+static const float Infinity = asfloat( 0x7F7FFFFF );
+static const float SurfaceEpsilon = 5e-4;
+static const float AABBEpsilon = 5e-3;
 
 struct FSDFEdit
 {
@@ -15,32 +14,96 @@ struct FSDFEdit
     uint Padding[3];
 };
 
-struct AABB
+struct FRay
+{
+	static FRay Create( float3 Pos, float3 Dir, float T = Infinity )
+	{
+		FRay Ray;
+        Ray.Pos = Pos;
+        Ray.Dir = Dir;
+        Ray.InvDir = 1.0 / Dir;
+        Ray.T = T;
+        return Ray;
+	}
+
+    void Advance( float Dist )
+	{
+		Pos += Dir * Dist;
+        // TODO: when this is MaxT, don't subtract, it isn't ""RemainingT""
+        T -= Dist;
+	}
+
+    float3 Pos;
+    float3 Dir;
+    float3 InvDir;
+    // TODO: change to MaxT, also add a T (so we don't need to advance the ray pos itself)
+	float T;
+};
+
+struct FAABB
 {
 	float3 Min;
 	float3 Max;
 };
 
-float SDFSphere(float3 Point, float3 Center, float Radius)
+// Returns true if there is an intersection
+// If true, hit_t is the intersection time
+bool IntersectAABB( FAABB Bounds, FRay Ray, out float TNear, out float TFar )
 {
-	return length(Point - Center) - Radius;
+    const float3 TToMin = (Bounds.Min - Ray.Pos) * Ray.InvDir;
+    const float3 TToMax = (Bounds.Max - Ray.Pos) * Ray.InvDir;
+    const float3 TMin = min( TToMin, TToMax );
+    const float3 TMax = max( TToMin, TToMax );
+    TNear = max( max3( TMin.x, TMin.y, TMin.z ), 0 );
+    TFar = min( min3( TMax.x, TMax.y, TMax.z ), Ray.T );
+    
+    return TNear <= TFar;
+}
+
+// Distance functions
+namespace DistFn
+{
+    float Sphere( FSDFEdit SDF, float3 Pos )
+    {
+	    return length( Pos - SDF.Pos ) - SDF.Radius;
+    }
+
+    float SphereOrigin( FSDFEdit SDF, float3 Pos )
+    {
+	    return length( Pos ) - SDF.Radius;
+    }
+} // SDF
+
+// Bounding boxes
+namespace AABB
+{
+	FAABB Sphere( FSDFEdit SDF )
+	{
+        FAABB Bounds;
+		Bounds.Min = SDF.Pos - SDF.Radius;
+		Bounds.Max = SDF.Pos + SDF.Radius;
+        return Bounds;
+	}
+} // AABB
+
+bool IsPointInsideAABB( FAABB Bounds, float3 Pos )
+{
+	return all( Pos >= Bounds.Min ) && all( Pos <= Bounds.Max );
 }
 
 // https://iquilezles.org/articles/normalsSDF/
-float3 GetSphereNormal(float3 Point, float3 Center, float Radius)
+float3 GetSphereNormal( FSDFEdit SDF, float3 Pos )
 {
-	const float H = 0.004; // magic value for now, read linked article for details
-	const float2 K = float2(1, -1);
-	return normalize(K.xyy * SDFSphere(Point + K.xyy * H, Center, Radius) +
-					 K.yyx * SDFSphere(Point + K.yyx * H, Center, Radius) +
-					 K.yxy * SDFSphere(Point + K.yxy * H, Center, Radius) +
-					 K.xxx * SDFSphere(Point + K.xxx * H, Center, Radius));
-}
+    // Avoid precision issues by evaluating the SDF at (0, 0, 0)
+    Pos -= SDF.Pos;
+    SDF.Pos = (0).xxx;
 
-AABB GetSphereAABB(float3 Center, float Radius)
-{
-	AABB Result;
-	Result.Min = float3(Center - Radius);
-	Result.Max = float3(Center + Radius);
-	return Result;
+	// Note that the normals are reversed on the inside of geometry (so for negative distances)
+    // This should be fine, as those should never be visible anyway
+	const float H = 4e-4; // magic value for now, read linked article for details
+	const float2 K = float2(1, -1);
+	return normalize( K.xyy * DistFn::SphereOrigin( SDF, Pos + (K.xyy * H) ) +
+					  K.yyx * DistFn::SphereOrigin( SDF, Pos + (K.yyx * H) ) +
+					  K.yxy * DistFn::SphereOrigin( SDF, Pos + (K.yxy * H) ) +
+					  K.xxx * DistFn::SphereOrigin( SDF, Pos + (K.xxx * H) ) );
 }

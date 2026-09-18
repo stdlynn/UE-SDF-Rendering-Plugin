@@ -3,74 +3,121 @@
 #include "/Engine/Public/Platform.ush"
 #include "Common.ush"
 
-//________________________________________________________________________
-//																		  |	
-// GridCell   | uint3  | 0-64   | 3D PtrGrid cell index					  |
-// AtlasCell  |	uint2  | 0-128  | 2D Brick cell index in Atlas			  |
-// WorldPos   |	float3 | inf    | World-space position					  |
-// AtlasPoint |	uint3  | 0-7    | 3D Atlas texel index					  |
-// BrickPoint |	uint3  | 0-1024 | Atlas texel, relative to brick's origin |
-// AtlasUVW   |	float3 | 0-1    | Sampling coordinates for BrickAtlas	  |
-// Idx        |	uint   | 0-16k  | Index to a Brick stored in Ptr Grid	  |
-// GridIdx    | uint   | 0-262k | 1D index to sample Ptr Grid			  |
-//________________________________________________________________________|
-
+//_______________________________________________________________________
+// The numbers below are measured in voxels								|	
+//																		|
+// WorldPos   |	float3 | inf    | World-space position					|
+// GridCell   | int3   | 0-63   | PtrGrid cell index					|
+// AtlasCell  |	int2   | 0-127  | 2D Brick cell index in Atlas			|
+// AtlasUVW   |	float3 | 0-1    | Atlas sample coord (trilinear)		|
+// AtlasPoint |	int3   | *		| Atlas texel coord						|
+// BrickPoint |	int3   | 0-7	| Atlas texel coord, local to brick		|
+// BrickIdx   |	uint   | 0-16k  | Index to a Brick (stored in PtrGrid)	|
+// GridIdx    | uint   | 0-262k | index to a GridCell					|
+//																		|
+// * (0-127, 0-127, 0-7)												|
+//______________________________________________________________________|
 
 static const uint BrickResolution = 8;
 static const uint VoxelResolution = BrickResolution - 1;
 
-static const uint3 NumAtlasBricks = uint3(128, 128, 1);
+static const uint3 NumAtlasBricks = uint3( 128, 128, 1 ) ;
 static const uint3 AtlasSize = NumAtlasBricks * BrickResolution;
 
-static const uint3 PtrGridSize = uint3(64, 64, 64);
+static const uint3 PtrGridSize = uint3( 256, 256, 256 );
+static const uint3 MaxGridIdx = PtrGridSize - 1;
 
-float3 GridCellToWorldPos(uint3 GridCell)
+float GetBrickSize( float VoxSize )
 {
-	return GridCell * VoxelResolution;
+	return VoxSize * VoxelResolution;
 }
 
-uint3 WorldPosToGridCell(float3 World)
+float GetDiagonal( float VoxSize )
 {
-	return floor(World / VoxelResolution);
+	return sqrt(3) * VoxSize;
 }
 
-float3 WorldToAtlasPoint(float3 World)
+float EncodeDistance(float Distance, float InvDiagonal)
 {
-	return World % VoxelResolution;
+	return clamp(Distance * InvDiagonal, -1.0, 1.0) * 0.5 + 0.5;
 }
 
-uint GridCellToGridIdx(uint3 GridCell)
+float DecodeDistance(float Distance, float Diagonal)
 {
-	return GridCell.x + (GridCell.y * PtrGridSize.x) + (GridCell.z * PtrGridSize.y * PtrGridSize.z);
+	return (Distance - 0.5) * 2.0 * Diagonal;
 }
 
-uint2 IdxToAtlasCell(uint Idx)
+namespace AABB
 {
-	return uint2(Idx % NumAtlasBricks.x, (Idx / NumAtlasBricks.x) % NumAtlasBricks.y);
+	FAABB PtrGrid( float3 Pos, float BrickSize )
+	{
+		const float3 HalfExtent = PtrGridSize * BrickSize / 2.0;
+		FAABB Bounds;
+		Bounds.Min = Pos - HalfExtent;
+		Bounds.Max = Pos + HalfExtent;
+        return Bounds;
+	}
+} // AABB
+
+float3 GridCellToWorldPos( int3 GridCell, float3 GridMin, float BrickSize )
+{
+	return (GridCell * BrickSize) + GridMin;
 }
 
-float3 GetAtlasUVW(uint Idx, float3 World)
+int3 WorldPosToGridCell( float3 WorldPos, float3 GridMin, float BrickSize )
 {
-	uint2 AtlasBrickCell = IdxToAtlasCell(Idx);
-	float3 Local = WorldToAtlasPoint(World);
-	return (float3(AtlasBrickCell * BrickResolution, 0) + Local) / AtlasSize;
+	return floor( (WorldPos - GridMin) / BrickSize );
 }
 
-float3 WorldToAtlasUVW(float3 World)
+uint GridCellToGridIdx( uint3 GridCell )
 {
-	uint3 GridCell = WorldPosToGridCell(World);
-	uint Idx = PtrGrid[GridCellToGridIdx(GridCell)];
-	return GetAtlasUVW(Idx, World);
+	return GridCell.x 
+		   + (GridCell.y * PtrGridSize.x) 
+		   + (GridCell.z * PtrGridSize.x * PtrGridSize.y);
 }
 
-bool IsBrickAllocated(uint Idx)
+uint3 GridIdxToGridCell(uint GridIdx)
+{
+	const uint Z = GridIdx / (PtrGridSize.x * PtrGridSize.y);
+	const uint Intermediate = GridIdx - (Z * PtrGridSize.x * PtrGridSize.y);
+	const uint Y = Intermediate / PtrGridSize.x;
+	const uint X = Intermediate - (Y * PtrGridSize.x);
+	return uint3(X, Y, Z);
+}
+
+uint2 BrickIdxToAtlasCell( uint BrickIdx )
+{
+	const uint Y = BrickIdx / NumAtlasBricks.x;
+	return uint2( BrickIdx - (Y * NumAtlasBricks.x), Y );
+}
+
+uint2 AtlasIdxToAtlasCell( uint AtlasIdx )
+{
+	return uint2( AtlasIdx % NumAtlasBricks.x, AtlasIdx / NumAtlasBricks.x );
+}
+
+float3 WorldPosToAtlasUVW( float3 WorldPos, float3 GridMin, float VoxSize )
+{
+	const float BrickSize = GetBrickSize( VoxSize );
+	const uint3 GridCell = WorldPosToGridCell( WorldPos, GridMin, BrickSize );
+	const uint GridIdx = GridCellToGridIdx( GridCell );
+	const uint BrickIdx = PtrGrid[GridIdx];
+	const uint2 AtlasCell = BrickIdxToAtlasCell( BrickIdx );
+	const float3 BrickPos = float3( AtlasCell * BrickResolution, 0 );
+	// TODO: wrong?
+	const float3 LocalBrickOffset = ((WorldPos - GridMin) % BrickSize) / VoxSize;
+	const float3 LocalBrickPos = BrickPos + LocalBrickOffset;
+	return LocalBrickPos / AtlasSize;
+}
+
+bool IsBrickAllocated( uint Idx )
 {
 	return (PtrGrid[Idx] != 0xFFFFFFFF);
 }
 
-bool IsBrickAllocated(uint3 GridCell)
+bool IsBrickAllocated( uint3 GridCell )
 {
-    return IsBrickAllocated(GridCellToGridIdx(GridCell));
+    return IsBrickAllocated( GridCellToGridIdx( GridCell ) );
 }
 
 // Allocate a brick by storing its index in the pointer grid
@@ -87,32 +134,7 @@ void AllocateSafe(uint3 GridCell)
 {
 	// TODO: This isn't safe right now (the same ptr grid cell could increment the counter more than once)
 	// Won't be an issue when we upload a list of bricks to update
-	if (IsBrickAllocated(GridCell))
-		return;
+	if (IsBrickAllocated(GridCell)) { return; }
 
 	Allocate(GridCell);
-}
-
-// Assumes the cell is already allocated
-void PopulateBrickSDF(uint3 GridCell, float3 SphereCenter, float SphereRadius)
-{
-	uint Idx = PtrGrid[GridCellToGridIdx(GridCell)];
-	uint3 AtlasCell = uint3(IdxToAtlasCell(Idx), 0) * BrickResolution;
-
-	for (int z = 0; z < BrickResolution; z++) {
-	for (int y = 0; y < BrickResolution; y++) {
-	for (int x = 0; x < BrickResolution; x++) 
-	{
-		uint3 AtlasPoint = AtlasCell + uint3(x, y, z);
-		float CurDist = BrickAtlas[AtlasPoint];
-
-		// Distance is stored so that 1.0 is the length of a voxel diagonal (=1.732)
-		const float Diagonal = sqrt(3);
-		float Dist = SDFSphere(AtlasPoint, SphereCenter, SphereRadius) / Diagonal;
-		Dist = clamp(Dist, -1.0, 1.0);
-		if (Dist < CurDist)
-		{
-			BrickAtlas[AtlasPoint] = Dist;
-		}
-	}}}
 }

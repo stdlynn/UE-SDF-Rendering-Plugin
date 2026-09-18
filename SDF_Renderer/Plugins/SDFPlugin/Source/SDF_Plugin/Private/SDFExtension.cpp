@@ -3,27 +3,46 @@
 
 // Plugin
 #include "SDFExtension.h"
-#include "PostProcess/SceneRenderTargets.h"
-#include "RenderGraphUtils.h"
+#include "SDFSettings.h"
+#include "BrickmapCommon.h"
 
 // UE
 #include "EngineUtils.h"
+#include "RenderGraphUtils.h"
+#include "PostProcess/PostProcessMaterialInputs.h"
+#include "PostProcess/SceneRenderTargets.h"
 
 IMPLEMENT_GLOBAL_SHADER(FSDFTraverseShader, "/Plugins/SDFPlugin/TraversePS.usf", "TraversePS", SF_Pixel);
 IMPLEMENT_GLOBAL_SHADER(FBuildBrickmapShader, "/Plugins/SDFPlugin/BuildBrickmapCS.usf", "BuildBrickmapCS", SF_Compute);
-
-IMPLEMENT_UNIFORM_BUFFER_STRUCT(FPtrBuffer, "PtrGridBuff");
-IMPLEMENT_UNIFORM_BUFFER_STRUCT(FBrickAllocCounter, "BrickAllocCounterBuff");
-
-static const FIntVector AtlasSize = FIntVector(512, 512, 8);
-static const FIntVector PtrGridSize = FIntVector(64, 64, 64);
+IMPLEMENT_GLOBAL_SHADER(FTransferDeallocatedShader, "/Plugins/SDFPlugin/BuildBrickmapCS.usf", "TransferDeallocatedCS", SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FResetCountersShader, "/Plugins/SDFPlugin/BuildBrickmapCS.usf", "ResetCountersCS", SF_Compute);
+IMPLEMENT_GLOBAL_SHADER(FDebugShader, "/Plugins/SDFPlugin/DebugCS.usf", "DebugCS", SF_Compute);
 
 namespace
 {
-	TAutoConsoleVariable<int32> CVarShaderOn(
-		TEXT("r.SDFPlugin"),
+	// TODO: if this is turned on, we need to do a full rebuilt of the brickmap
+	// TODO: since X frames of update lists have been skipped
+	// TODO: Also note that this should be checked before running ANY shader
+	TAutoConsoleVariable<int32> CVarShadersOn(
+		TEXT("r.SDF.Plugin"),
 		1,
 		TEXT("Enable SDF Plugin \n")
+		TEXT(" 0: OFF;")
+		TEXT(" 1: ON."),
+		ECVF_RenderThreadSafe);
+
+	TAutoConsoleVariable<int32> CVarRenderEdits(
+		TEXT("r.SDF.Edits"),
+		1,
+		TEXT("Enable SDF rendering \n")
+		TEXT(" 0: OFF;")
+		TEXT(" 1: ON."),
+		ECVF_RenderThreadSafe);
+
+	TAutoConsoleVariable<int32> CVarDebugGrid(
+		TEXT("r.SDF.Debug.Grid"),
+		0,
+		TEXT("Enable debug view of the pointer grid \n")
 		TEXT(" 0: OFF;")
 		TEXT(" 1: ON."),
 		ECVF_RenderThreadSafe);
@@ -37,7 +56,7 @@ FSDFExtension::FSDFExtension(const FAutoRegister& AutoRegister, UWorld* InWorld)
 
 void FSDFExtension::ReleaseResources()
 {
-	RT.BrickmapResources.Release();
+	RT.BrickmapBuilder.ReleaseResources();
 }
 
 bool FSDFExtension::IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const
@@ -68,14 +87,51 @@ void FSDFExtension::BeginRenderViewFamily( FSceneViewFamily& InViewFamily )
 	// A view family is a group of views that gets rendered together for the same frame/setup
 
 	// We call this from here so it runs on the Game Thread
+	TransferSettingsToRenderThread(); // This first! We use 'RT.Settings.UnitScale' for the rest
 	TransferSDFsToRenderThread();
-};
+	GT.Settings.bUnitScaleDirty = false;
+}
+
+void FSDFExtension::TransferSettingsToRenderThread()
+{
+	// Check if any of the settings are dirty
+	const USDFSettings* SDFSettings{ GetDefault<USDFSettings>() };
+	if (GT.Settings.PtrGridPos == SDFSettings->PtrGridPos 
+		 && GT.Settings.VoxSize == SDFSettings->VoxSize
+		 && GT.Settings.GPUUnitScale == SDFSettings->GPUUnitScale
+		 && GT.Settings.DbgVisMaxBricks == SDFSettings->DbgVisMaxBricks)
+	{
+		return;
+	}
+
+	// Store settings to compare next frame
+	GT.Settings.PtrGridPos = SDFSettings->PtrGridPos;
+	GT.Settings.VoxSize = SDFSettings->VoxSize;
+	GT.Settings.GPUUnitScale = SDFSettings->GPUUnitScale;
+	GT.Settings.DbgVisMaxBricks = SDFSettings->DbgVisMaxBricks;
+	GT.Settings.bUnitScaleDirty = true;
+
+	// Transfer lambda
+	// Capture the parameters by copy, their state on the game thread might change before the lambda runs
+	auto TransferSettings{ [this, Settings = GT.Settings]( FRHICommandList& ) mutable
+	{
+		// Copy the settings over to the render thread
+		RT.Settings = Settings;
+
+		// Convert to GPU unit scale
+		RT.Settings.PtrGridPos *= Settings.GPUUnitScale;
+		RT.Settings.VoxSize *= Settings.GPUUnitScale;
+	} };
+
+	// Perform the transfer safely on the render thread
+	ENQUEUE_RENDER_COMMAND( SDFSettingsThreadTransfer )( TransferSettings );
+}
 
 void FSDFExtension::TransferSDFsToRenderThread()
 {
 	// Only update if dirty
 	USDFSubsystem* SDFSubsystem{ GT.World->GetSubsystem<USDFSubsystem>() };
-	if (not SDFSubsystem->GetAndResetDirty()) { return; }
+	if (not SDFSubsystem->GetAndResetDirty() && not GT.Settings.bUnitScaleDirty) { return; }
 
 	// TODO: remove before PR (also other debug messages)
 	// Debug
@@ -94,9 +150,9 @@ void FSDFExtension::TransferSDFsToRenderThread()
 		// Copy the SDF data over to the render thread
 		RT.SDFs.Empty();
 		RT.SDFs.Reserve( SDFs.Num() );
-		for (auto& Pair : SDFs)
+		for (const auto& Pair : SDFs)
 		{
-			RT.SDFs.Emplace( MoveTemp( Pair.Value ), Pair.Key );
+			RT.SDFs.Emplace( Pair.Value, Pair.Key, RT.Settings.GPUUnitScale );
 		}
 		RT.SDFResources.bDirty = true;
 	} };
@@ -107,62 +163,124 @@ void FSDFExtension::TransferSDFsToRenderThread()
 
 void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily)
 {
-	UpdateSDFBuffer();
+	if (CVarShadersOn.GetValueOnRenderThread() == 0)
+	{
+		return;
+	}
 
-	if (InViewFamily.FrameCounter == RT.LastBrickmapBuildFrame || InViewFamily.FrameCounter > 1)
+	if (InViewFamily.FrameCounter == RT.BrickmapBuilder.GetLastBuildFrame())
 	{
 		return; // Already built brickmap this frame
 	}
-	RT.LastBrickmapBuildFrame = InViewFamily.FrameCounter;
+	RT.BrickmapBuilder.SetLastBuildFrame(InViewFamily.FrameCounter);
 
-	if (!RT.BrickmapResources.IsValid())
+	RT.BrickmapBuilder.SetBrickUpdateList(RT.SDFs, RT.Settings.PtrGridPos, RT.Settings.VoxSize);
+
+	// Update upload buffers
+	UpdateSDFBuffer();
+	RT.BrickmapBuilder.AllocateBrickList();
+
+	if (!RT.BrickmapBuilder.AreResourcesValid())
 	{
-		AllocateBrickmap();
+		RT.BrickmapBuilder.AllocateResources();
 	}
 
-	// For now, just build it once and never again
-	RDG_EVENT_SCOPE(GraphBuilder, "SDF_Build_Brickmap");
+	RDG_EVENT_SCOPE(GraphBuilder, "SDF_Brickmap");
 	{
 		const FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(InViewFamily.GetFeatureLevel());
 
+		const FRDGBufferRef BrickListRDG = RT.BrickmapBuilder.RegisterBrickListBuffer(GraphBuilder);
 		const FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture(
-			RT.BrickmapResources.BrickAtlas, ERDGTextureFlags::MultiFrame);
+			RT.BrickmapBuilder.GetBrickAtlas(), ERDGTextureFlags::MultiFrame);
 		const FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(
-			RT.BrickmapResources.PtrGrid, ERDGBufferFlags::MultiFrame);
-		const FRDGBufferRef AtomicCounterRDG = GraphBuilder.RegisterExternalBuffer(
-			RT.BrickmapResources.BrickAllocCounter, ERDGBufferFlags::MultiFrame);
+			RT.BrickmapBuilder.GetPtrGrid(), ERDGBufferFlags::MultiFrame);
+		const FRDGBufferRef AllocCountersRDG = GraphBuilder.RegisterExternalBuffer(
+			RT.BrickmapBuilder.GetBrickAllocCounter(), ERDGBufferFlags::MultiFrame);
+		const FRDGBufferRef FreedListRDG = GraphBuilder.RegisterExternalBuffer(
+			RT.BrickmapBuilder.GetFreedList(), ERDGBufferFlags::MultiFrame);
+		const FRDGBufferRef DeallocatedListRDG = GraphBuilder.RegisterExternalBuffer(
+			RT.BrickmapBuilder.GetDeallocatedList(), ERDGBufferFlags::MultiFrame);
 
 		const FRDGBufferRef SDFBuffRDG{ RegisterSDFBuffer( GraphBuilder ) };
+		const FRDGBufferUAVRef FreedListUAV = GraphBuilder.CreateUAV(FreedListRDG, PF_R32_UINT);
+		const FRDGBufferUAVRef DeallocatedListUAV = GraphBuilder.CreateUAV(DeallocatedListRDG, PF_R32_UINT);
+		const FRDGBufferUAVRef AllocCountersUAV = GraphBuilder.CreateUAV(AllocCountersRDG, PF_R32_UINT);
 
-		// Clear the brickmap every frame for now
-		AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(BrickAtlasRDG), 1.0f);
-		AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(PtrBufferRDG, PF_R32_UINT), 0xFFFFFFFFu);
-		AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(AtomicCounterRDG, PF_R32_UINT), 0);
+		if (RT.BrickmapBuilder.bReset)
+		{
+			AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(PtrBufferRDG, PF_R32_UINT), 0xFFFFFFFFu);
+			AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(BrickAtlasRDG), 1.0f);
+			AddClearUAVPass(GraphBuilder, FreedListUAV, 0xFFFFFFFFu);
+			AddClearUAVPass(GraphBuilder, DeallocatedListUAV, 0xFFFFFFFFu);
+			AddClearUAVPass(GraphBuilder, AllocCountersUAV, 0u);
+			RT.BrickmapBuilder.bReset = false;
+		}
 
-		FBuildBrickmapShader::FParameters* PassParameters =
+		FBuildBrickmapShader::FParameters* ParametersBuild =
 			GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
-		PassParameters->SDFEdits = GraphBuilder.CreateSRV(SDFBuffRDG); // Create the SDF buffer view (which specifies how the shader should read it)
-		PassParameters->NumEdits = RT.SDFs.Num();
-		PassParameters->BrickAtlas = GraphBuilder.CreateUAV(BrickAtlasRDG);
-		PassParameters->PtrGrid = GraphBuilder.CreateUAV(PtrBufferRDG, PF_R32_UINT);
-		PassParameters->BrickAllocCounter = GraphBuilder.CreateUAV(AtomicCounterRDG, PF_R32_UINT);
-		PassParameters->GridSize = PtrGridSize;
-		PassParameters->AtlasSize = AtlasSize;
+		ParametersBuild->NumEdits   = RT.SDFs.Num();
+		ParametersBuild->SDFEdits   = GraphBuilder.CreateSRV(SDFBuffRDG);
+		ParametersBuild->PtrGrid    = GraphBuilder.CreateUAV(PtrBufferRDG, PF_R32_UINT);
+		ParametersBuild->BrickAtlas = GraphBuilder.CreateUAV(BrickAtlasRDG);
+		ParametersBuild->GridSize   = FIntVector3(PtrGridSize);
+		ParametersBuild->AtlasSize  = FIntVector3(AtlasSize);
+		ParametersBuild->PtrGridPos 	= RT.Settings.PtrGridPos;
+		ParametersBuild->VoxSize 	= RT.Settings.VoxSize;
+		ParametersBuild->UnitScale 	= RT.Settings.GPUUnitScale;
+		ParametersBuild->NumUpdated = RT.BrickmapBuilder.GetNumUpdatedBricks();
+		ParametersBuild->UpdateList = GraphBuilder.CreateSRV(BrickListRDG, PF_R32_UINT);
+		ParametersBuild->FreedList  = FreedListUAV;
+		ParametersBuild->DeallocatedList = DeallocatedListUAV;
+		ParametersBuild->BrickAllocCounters = AllocCountersUAV;
 
-		const FIntVector GroupCount{
-			FMath::DivideAndRoundUp(1, 8),
-			FMath::DivideAndRoundUp(1, 8),
-			FMath::DivideAndRoundUp(1, 8)
+		FTransferDeallocatedShader::FParameters* ParametersTransfer =
+			GraphBuilder.AllocParameters<FTransferDeallocatedShader::FParameters>();
+		ParametersTransfer->FreedList = FreedListUAV;
+		ParametersTransfer->DeallocatedList = DeallocatedListUAV;
+		ParametersTransfer->BrickAllocCounters = AllocCountersUAV;
+
+		FResetCountersShader::FParameters* ParametersReset =
+			GraphBuilder.AllocParameters<FResetCountersShader::FParameters>();
+		ParametersReset->FreedList = FreedListUAV;
+		ParametersReset->DeallocatedList = DeallocatedListUAV;
+		ParametersReset->BrickAllocCounters = AllocCountersUAV;
+
+		const FIntVector GroupCountBuild {
+			FMath::DivideAndRoundUp(static_cast<int>(ParametersBuild->NumUpdated * BrickResolution), 8),
+			FMath::DivideAndRoundUp(static_cast<int>(BrickResolution), 8),
+			FMath::DivideAndRoundUp(static_cast<int>(BrickResolution), 8)
+		};
+		const FIntVector GroupCountTransfer{
+			FMath::DivideAndRoundUp(static_cast<int>(RT.BrickmapBuilder.GetNumUpdatedBricks()), 64), 1, 1
+		};
+		const FIntVector GroupCountReset {
+			1, 1, 1
 		};
 
-		const TShaderMapRef<FBuildBrickmapShader> ComputeShader(GlobalShaderMap);
+		const TShaderMapRef<FBuildBrickmapShader> ComputeBuild(GlobalShaderMap);
+		const TShaderMapRef<FTransferDeallocatedShader> ComputeTransfer(GlobalShaderMap);
+		const TShaderMapRef<FResetCountersShader> ComputeReset(GlobalShaderMap);
 
 		FComputeShaderUtils::AddPass(
 			GraphBuilder,
 			RDG_EVENT_NAME("Brickmap_Build"),
-			ComputeShader,
-			PassParameters,
-			GroupCount);
+			ComputeBuild,
+			ParametersBuild,
+			GroupCountBuild);
+
+		FComputeShaderUtils::AddPass(
+			GraphBuilder,
+			RDG_EVENT_NAME("Brickmap_Transfer"),
+			ComputeTransfer,
+			ParametersTransfer,
+			GroupCountTransfer);
+
+		FComputeShaderUtils::AddPass(
+			GraphBuilder,
+			RDG_EVENT_NAME("Brickmap_Reset"),
+			ComputeReset,
+			ParametersReset,
+			GroupCountReset);
 	}
 }
 
@@ -209,31 +327,14 @@ FRDGBufferRef FSDFExtension::RegisterSDFBuffer(FRDGBuilder& GraphBuilder)
 	return SDFBuffRDG;
 }
 
-void FSDFExtension::AllocateBrickmap()
-{
-	check(IsInRenderingThread());
-
-	const FRDGTextureDesc BrickAtlasDesc = FRDGTextureDesc::Create3D(
-		AtlasSize, PF_R8, FClearValueBinding::None,
-		TexCreate_ShaderResource | TexCreate_UAV);
-	RT.BrickmapResources.BrickAtlas = 
-		AllocatePooledTexture(BrickAtlasDesc, TEXT("SDF_BrickAtlas"));
-
-	const uint32 GridSize = PtrGridSize.X * PtrGridSize.Y * PtrGridSize.Z;
-	const FRDGBufferDesc PtrGridDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), GridSize);
-	RT.BrickmapResources.PtrGrid = 
-		AllocatePooledBuffer(PtrGridDesc, TEXT("SDF_BrickPtrBuffer"));
-	
-	const FRDGBufferDesc CounterDesc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), 1);
-	RT.BrickmapResources.BrickAllocCounter =
-		AllocatePooledBuffer(CounterDesc, TEXT("SDF_BrickAllocCounter"));
-
-	UE_LOG(LogTemp, Log, TEXT("SDFPlugin: Allocated Brickmap"));
-	GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Green, TEXT("Allocated Brickmap"));
-}
-
 void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
 {
+	if (CVarShadersOn.GetValueOnRenderThread() == 0
+		 || CVarRenderEdits.GetValueOnRenderThread() == 0)
+	{
+		return;
+	}
+
 	const FRDGTextureRef DepthTexture = RenderTargets.DepthStencil.GetTexture();
 	if (!DepthTexture)
 	{
@@ -242,7 +343,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBu
 		return;
 	}
 
-	if (!RT.BrickmapResources.IsValid())
+	if (!RT.BrickmapBuilder.AreResourcesValid())
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red, TEXT("Brickmap Resources aren't valid!"));
 		return;
@@ -258,9 +359,9 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBu
 		const FRDGBufferRef SDFBuffRDG{ RegisterSDFBuffer( GraphBuilder ) };
 
 		const FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture(
-			RT.BrickmapResources.BrickAtlas, ERDGTextureFlags::MultiFrame);
+			RT.BrickmapBuilder.GetBrickAtlas(), ERDGTextureFlags::MultiFrame);
 		const FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(
-			RT.BrickmapResources.PtrGrid, ERDGBufferFlags::MultiFrame);
+			RT.BrickmapBuilder.GetPtrGrid(), ERDGBufferFlags::MultiFrame);
 		FRHISamplerState* BrickSampler = 
 			TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
 
@@ -272,6 +373,9 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBu
 		PassParameters->BrickAtlas = GraphBuilder.CreateSRV(BrickAtlasRDG);
 		PassParameters->BrickSampler = BrickSampler;
 		PassParameters->PtrGrid = GraphBuilder.CreateSRV(PtrBufferRDG, PF_R32_UINT);
+		PassParameters->PtrGridPos = RT.Settings.PtrGridPos;
+		PassParameters->VoxSize = RT.Settings.VoxSize;
+		PassParameters->UnitScale = RT.Settings.GPUUnitScale;
 		PassParameters->RenderTargets = RenderTargets;
 		PassParameters->RenderTargets.DepthStencil = FDepthStencilBinding(
 			DepthTexture,
@@ -308,4 +412,78 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBu
 			DepthStencilState,
 			StencilRef);
 	}
+}
+
+void FSDFExtension::SubscribeToPostProcessingPass(
+	EPostProcessingPass PassId, const FSceneView& InView, FAfterPassCallbackDelegateArray& InOutPassCallbacks, bool bIsPassEnabled)
+{
+	if (PassId == EPostProcessingPass::MotionBlur)
+	{
+		InOutPassCallbacks.Add(FAfterPassCallbackDelegate::CreateRaw(this, &FSDFExtension::RenderDebug));
+	}
+}
+
+FScreenPassTexture FSDFExtension::RenderDebug(FRDGBuilder& GraphBuilder, const FSceneView& SceneView, const FPostProcessMaterialInputs& Inputs)
+{
+	const FSceneViewFamily& ViewFamily = *SceneView.Family;
+	const FScreenPassTexture& SceneColor = FScreenPassTexture::CopyFromSlice(GraphBuilder, Inputs.GetInput(EPostProcessMaterialInput::SceneColor));
+
+	if (!SceneColor.IsValid() 
+		 || CVarShadersOn.GetValueOnRenderThread() == 0
+		 || CVarDebugGrid.GetValueOnRenderThread() == 0)
+	{
+		return SceneColor;
+	}
+
+	const FScreenPassTextureViewport SceneColorViewport(SceneColor);
+
+	RDG_EVENT_SCOPE(GraphBuilder, "SDF_Debug");
+	{
+		FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(ViewFamily.GetFeatureLevel());
+
+		FRDGTextureDesc OutputDesc;
+		{
+			OutputDesc = SceneColor.Texture->Desc;
+
+			OutputDesc.Reset();
+			OutputDesc.Flags |= TexCreate_UAV;
+			OutputDesc.Flags &= ~(TexCreate_RenderTargetable | TexCreate_FastVRAM);
+
+			FLinearColor ClearColor(0., 0., 0., 0.);
+			OutputDesc.ClearValue = FClearValueBinding(ClearColor);
+		}
+
+		FRDGTextureRef OutputTexture = GraphBuilder.CreateTexture(OutputDesc, TEXT("Custom Effect Output Texture"));
+
+		FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(
+			RT.BrickmapBuilder.GetPtrGrid(), ERDGBufferFlags::MultiFrame);
+
+		FDebugShader::FParameters* PassParameters = GraphBuilder.AllocParameters<FDebugShader::FParameters>();
+		PassParameters->OriginalSceneColor = SceneColor.Texture;
+		PassParameters->DepthTex = Inputs.SceneTextures.SceneTextures->GetParameters()->SceneDepthTexture;
+		PassParameters->View = SceneView.ViewUniformBuffer;
+		PassParameters->PtrGrid = GraphBuilder.CreateSRV(PtrBufferRDG, PF_R32_UINT);
+		PassParameters->SceneColorViewport = GetScreenPassTextureViewportParameters(SceneColorViewport);
+		PassParameters->PtrGridPos = RT.Settings.PtrGridPos;
+		PassParameters->VoxSize = RT.Settings.VoxSize;
+		PassParameters->UnitScale = RT.Settings.GPUUnitScale;
+		PassParameters->DbgVisMaxBricks = RT.Settings.DbgVisMaxBricks;
+		PassParameters->Output = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(OutputTexture));
+
+		FIntPoint PassViewSize = SceneColor.ViewRect.Size();
+		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount(PassViewSize, FComputeShaderUtils::kGolden2DGroupSize);
+
+		TShaderMapRef<FDebugShader> ComputeShader(GlobalShaderMap);
+
+		FComputeShaderUtils::AddPass(
+			GraphBuilder,
+			RDG_EVENT_NAME("SDF Debug Post Processing CS Shader %dx%d", PassViewSize.X, PassViewSize.Y),
+			ComputeShader,
+			PassParameters,
+			GroupCount);
+
+		AddCopyTexturePass(GraphBuilder, OutputTexture, SceneColor.Texture);
+	}
+
+	return SceneColor;
 }
