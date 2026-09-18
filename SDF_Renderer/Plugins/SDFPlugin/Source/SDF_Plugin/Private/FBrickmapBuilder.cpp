@@ -56,9 +56,8 @@ void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs, const FVe
 
 	const float BrickSize{ GetBrickSize( VoxSize ) };
 	const FVector3f GridMin{ GetGridMin( PtrGridPos, BrickSize ) };
-	// TODO:
-	const FIntVector3 GridMax = FIntVector3(PtrGridSize.X, PtrGridSize.Y, PtrGridSize.Z) - FIntVector3(1);
-	const float Thickness = VoxSize * VoxelResolution * 4;
+	const FIntVector3 GridMax = FIntVector3(PtrGridSize.X, PtrGridSize.Y, PtrGridSize.Z);
+	const float Thickness = BrickSize * 4;
 
 	for (auto [Pos, Radius, Idx] : SDFs)
 	{
@@ -86,7 +85,7 @@ void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs, const FVe
 			const FIntVector3 GridCell(x, y, z);
 
 			const FVector3f Min = GridCellToWorldPos(GridCell, GridMin, BrickSize);
-			const FVector3f Max = Min + FVector3f(VoxelResolution);
+			const FVector3f Max = Min + BrickSize;
 
 			const FVector3f ClosestPoint(
 				FMath::Clamp(Pos.X, Min.X, Max.X),
@@ -98,6 +97,7 @@ void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs, const FVe
 				FMath::Abs(Pos.Y - Min.Y) > FMath::Abs(Pos.Y - Max.Y) ? Min.Y : Max.Y,
 				FMath::Abs(Pos.Z - Min.Z) > FMath::Abs(Pos.Z - Max.Z) ? Min.Z : Max.Z);
 
+			// TODO: maybe do local to SDF
 			if (SDFSphere(ClosestPoint, Pos, Radius) <= Thickness
 				&& SDFSphere(FarthestPoint, Pos, Radius) >= -Thickness)
 			{

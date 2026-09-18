@@ -14,7 +14,7 @@ static const FUintVector3 PtrGridSize = FUintVector3(64, 64, 64);
 // TODO move to separate SDFCommon.h file
 inline float SDFSphere(const FVector3f& Point, const FVector3f& Center, float Radius)
 {
-	FVector3f Diff = Point - Center;
+	const FVector3f Diff = Point - Center;
 	return Diff.Size() - Radius;
 }
 
