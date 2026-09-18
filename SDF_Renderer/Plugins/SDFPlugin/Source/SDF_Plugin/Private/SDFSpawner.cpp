@@ -1,7 +1,7 @@
 #include "SDFSpawner.h"
 
 static TAutoConsoleVariable<int32> CVarSDFCount(
-    TEXT("r.SDFPlugin.ProfileCount"), -1,
+    TEXT("r.SDF.ProfileCount"), -1,
     TEXT("Number of spheres to spawn for performance testing"));
 
 void ASDFSpawner::BeginPlay()
