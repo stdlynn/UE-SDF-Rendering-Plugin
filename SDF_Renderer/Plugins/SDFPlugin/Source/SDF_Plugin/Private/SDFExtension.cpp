@@ -224,9 +224,9 @@ void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, 
 		ParametersBuild->BrickAtlas = GraphBuilder.CreateUAV(BrickAtlasRDG);
 		ParametersBuild->GridSize   = FIntVector3(PtrGridSize);
 		ParametersBuild->AtlasSize  = FIntVector3(AtlasSize);
-		PassParameters->PtrGridPos 	= RT.Settings.PtrGridPos;
-		PassParameters->VoxSize 	= RT.Settings.VoxSize;
-		PassParameters->UnitScale 	= RT.Settings.GPUUnitScale;
+		ParametersBuild->PtrGridPos 	= RT.Settings.PtrGridPos;
+		ParametersBuild->VoxSize 	= RT.Settings.VoxSize;
+		ParametersBuild->UnitScale 	= RT.Settings.GPUUnitScale;
 		ParametersBuild->NumUpdated = RT.BrickmapBuilder.GetNumUpdatedBricks();
 		ParametersBuild->UpdateList = GraphBuilder.CreateSRV(BrickListRDG, PF_R32_UINT);
 		ParametersBuild->FreedList  = FreedListUAV;

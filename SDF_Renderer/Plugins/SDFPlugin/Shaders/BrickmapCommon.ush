@@ -91,6 +91,11 @@ uint2 BrickIdxToAtlasCell( uint BrickIdx )
 	return uint2( BrickIdx - (Y * NumAtlasBricks.x), Y );
 }
 
+uint2 AtlasIdxToAtlasCell( uint AtlasIdx )
+{
+	return uint2( AtlasIdx % NumAtlasBricks.x, AtlasIdx / NumAtlasBricks.x );
+}
+
 float3 WorldPosToAtlasUVW( float3 WorldPos, float3 GridMin, float VoxSize )
 {
 	const float BrickSize = GetBrickSize( VoxSize );

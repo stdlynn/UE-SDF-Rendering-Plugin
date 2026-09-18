@@ -56,15 +56,15 @@ void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs)
 
 	const FIntVector3 GridMax = FIntVector3(PtrGridSize.X, PtrGridSize.Y, PtrGridSize.Z) - FIntVector3(1);
 
-	for (auto [SDF, Idx] : SDFs)
+	for (auto [Pos, Radius, Idx] : SDFs)
 	{
 		// TODO temporary hack to test deallocation (put const ref back when removing this)
 		// Add some thickness so it also encapsulates its previous position
 		constexpr float Thickness = VoxelResolution * 4;
-		const float Extent = SDF.Radius + Thickness;
+		const float Extent = Radius + Thickness;
 
-		FIntVector3 MinCell = WorldPosToGridCellSigned(SDF.Pos - Extent);
-		FIntVector3 MaxCell = WorldPosToGridCellSigned(SDF.Pos + Extent);
+		FIntVector3 MinCell = WorldPosToGridCellSigned(Pos - Extent);
+		FIntVector3 MaxCell = WorldPosToGridCellSigned(Pos + Extent);
 
 		MinCell = FIntVector3(
 			FMath::Clamp(MinCell.X, 0, GridMax.X),
@@ -87,17 +87,17 @@ void FBrickmapBuilder::SetBrickUpdateList(const TArray<FGPUSDF>& SDFs)
 			const FVector3f Max = Min + FVector3f(VoxelResolution);
 
 			const FVector3f ClosestPoint(
-				FMath::Clamp(SDF.Pos.X, Min.X, Max.X),
-				FMath::Clamp(SDF.Pos.Y, Min.Y, Max.Y),
-				FMath::Clamp(SDF.Pos.Z, Min.Z, Max.Z));
+				FMath::Clamp(Pos.X, Min.X, Max.X),
+				FMath::Clamp(Pos.Y, Min.Y, Max.Y),
+				FMath::Clamp(Pos.Z, Min.Z, Max.Z));
 
 			const FVector3f FarthestPoint(
-				FMath::Abs(SDF.Pos.X - Min.X) > FMath::Abs(SDF.Pos.X - Max.X) ? Min.X : Max.X,
-				FMath::Abs(SDF.Pos.Y - Min.Y) > FMath::Abs(SDF.Pos.Y - Max.Y) ? Min.Y : Max.Y,
-				FMath::Abs(SDF.Pos.Z - Min.Z) > FMath::Abs(SDF.Pos.Z - Max.Z) ? Min.Z : Max.Z);
+				FMath::Abs(Pos.X - Min.X) > FMath::Abs(Pos.X - Max.X) ? Min.X : Max.X,
+				FMath::Abs(Pos.Y - Min.Y) > FMath::Abs(Pos.Y - Max.Y) ? Min.Y : Max.Y,
+				FMath::Abs(Pos.Z - Min.Z) > FMath::Abs(Pos.Z - Max.Z) ? Min.Z : Max.Z);
 
-			if (SDFSphere(ClosestPoint, SDF.Pos, SDF.Radius) <= Thickness
-				&& SDFSphere(FarthestPoint, SDF.Pos, SDF.Radius) >= -Thickness)
+			if (SDFSphere(ClosestPoint, Pos, Radius) <= Thickness
+				&& SDFSphere(FarthestPoint, Pos, Radius) >= -Thickness)
 			{
 				RT.UpdateListCPU.Add(GridCellToGridIdx(GridCell));
 			}
