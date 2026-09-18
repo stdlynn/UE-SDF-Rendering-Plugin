@@ -8,6 +8,8 @@ RWBuffer<uint> PtrGrid;
 
 StructuredBuffer<FSDFEdit> SDFEdits;
 uint NumEdits;
+float3 PtrGridPos;
+float VoxSize;
 
 Buffer<uint> UpdateList;
 uint NumUpdated;
@@ -35,10 +37,13 @@ void BuildBrickmapCS(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupT
 	if (all(GroupThreadID == 0)) { bContainsSurfaceShared = false; }
 	GroupMemoryBarrierWithGroupSync();
 
+	const float BrickSize = GetBrickSize( VoxSize );
+	const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
+
 	// Get the data for this thread's brick point
 	const uint GridIdx = UpdateList[GroupID.x];
 	const uint3 GridCell = GridIdxToGridCell(GridIdx);
-	const float3 WorldPos = GridCellToWorldPos(GridCell) + float3(GroupThreadID);
+	const float3 WorldPos = GridCellToWorldPos(GridCell, GridAABB.Min, BrickSize) + float3(GroupThreadID);
 	uint AtlasIdx = PtrGrid[GridIdx];
 
 	// Find the closest SDF to the brick point
@@ -46,7 +51,7 @@ void BuildBrickmapCS(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupT
 	for (uint EditIdx = 0; EditIdx < NumEdits; EditIdx++)
 	{
 		const FSDFEdit Edit = SDFEdits[EditIdx];
-		Closest = min(Closest, SDFSphere(WorldPos, Edit.Pos, Edit.Radius));
+		Closest = min(Closest, DistFn::SphereOrigin(Edit, WorldPos - Edit.Pos));
 	}
 
 	// Indicate if any geometry is within allocation distance
@@ -112,7 +117,7 @@ void BuildBrickmapCS(uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupT
 
 	// Write the closest distance into this thread's brick point
 	uint3 AtlasPoint = uint3(IdxToAtlasCell(AtlasIdxShared) * BrickResolution, 0) + GroupThreadID;
-	BrickAtlas[AtlasPoint] = EncodeDistance(Closest);
+	BrickAtlas[AtlasPoint] = EncodeDistance(Closest, 1.0 / GetDiagonal(VoxSize));
 }
 
 [numthreads(64, 1, 1)]

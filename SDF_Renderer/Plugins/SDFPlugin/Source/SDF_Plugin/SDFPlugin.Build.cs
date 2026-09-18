@@ -18,6 +18,7 @@ public class SDFPlugin : ModuleRules
             "Renderer",
             "RHI",
             "Projects",
+            "DeveloperSettings"
             });
 
         var EngineDir = Path.GetFullPath(Target.RelativeEnginePath);

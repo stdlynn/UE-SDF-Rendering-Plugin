@@ -1,3 +1,5 @@
+Buffer<uint> PtrGrid;
+
 #include "/Engine/Public/Platform.ush"
 #include "/Engine/Private/Common.ush"
 #include "/Engine/Private/ScreenPass.ush"
@@ -5,80 +7,69 @@
 #include "BrickmapCommon.ush"
 
 Texture2D OriginalSceneColor;
+Texture2D DepthTex;
 SCREEN_PASS_TEXTURE_VIEWPORT(SceneColorViewport)
 RWTexture2D<float4> Output;
 
-Buffer<uint> PtrGrid;
+float3 PtrGridPos;
+float VoxSize;
+float UnitScale;
+uint DbgVisMaxBricks;
 
-#define USE_DIST_INSTEAD_OF_HITS 0
-
-// Returns true if there is an intersection
-// If true, hit_t is the intersection time
-bool IntersectRayPtrGrid( float3 RayPos, float3 RayDir, out float HitT )
+float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
 {
-    // TODO: should probably be calculated once and stored
-    float3 InvRayDir = 1.0 / RayDir;
-
-    float3 TToMin = (float3(0,0,0) - RayPos) * InvRayDir;
-    float3 TToMax = (PtrGridSize * VoxelResolution - RayPos) * InvRayDir;
-    float3 TMin = min(TToMin, TToMax);
-    float3 TMax = max(TToMin, TToMax);
-    float TNear = max(max3(TMin.x, TMin.y, TMin.z), 0);
-    float TFar = min(min3(TMax.x, TMax.y, TMax.z), 1e38);
-
-    HitT = TNear;
-    return TNear <= TFar;
-}
-
-float NumBrickHits( float3 RayPos, float3 RayDir )
-{
-    // TODO: Missing constants
-    const float GridCellSize = VoxelResolution;
-
-    // TODO: should probably be calculated once and stored
-    float3 InvRayDir = 1.0 / RayDir;
-
     // [CREDITS] DDA algorithm from http://www.cs.yorku.ca/~amana/research/grid.pdf
-    int3 GridCellCoord = int3(floor((RayPos - float3(0,0,0)) / GridCellSize)); // The ray origin in pointer-grid space
-    const int3 CellStep = int3(sign(RayDir)); // The step direction for each axis (-1, 0, or 1), in pointer-grid space
-    const float3 TDelta = abs(GridCellSize * InvRayDir); // The step size (to move the length of a voxel along a certain axis) for each axis, in world space
+    int3 GridCellCoord = int3(floor((Ray.Pos - BoundsMin) / BrickSize)); // The ray origin in pointer-grid space
+    const int3 CellStep = int3(sign(Ray.Dir)); // The step direction for each axis (-1, 0, or 1), in pointer-grid space
+    const float3 TDelta = abs(BrickSize * Ray.InvDir); // The step size (to move the length of a voxel along a certain axis) for each axis, in world space
     const int3 NextCellCoord = GridCellCoord + (CellStep + 1) / 2; // The next cell to be hit (on a certain axis) for each axis, in pointer-grid space
-    const float3 NextCellCoordWorldSpace = float3(NextCellCoord) * GridCellSize + float3(0, 0, 0); // The next cells to be hit (on a certain axis) for each axis, in world space
-    float3 TMax = (NextCellCoordWorldSpace - RayPos) * InvRayDir; // The distance to the next cell for each axis, in world space
+    const float3 NextCellCoordWorldSpace = float3(NextCellCoord) * BrickSize + BoundsMin; // The next cells to be hit (on a certain axis) for each axis, in world space
+    float3 TMax = (NextCellCoordWorldSpace - Ray.Pos) * Ray.InvDir; // The distance to the next cell for each axis, in world space
 
     // Handle ray direction being zero
     for (uint Axis = 0; Axis < 3; ++Axis)
     {
-        if (RayDir[Axis] == 0)
+        if (Ray.Dir[Axis] == 0)
         {
             TMax[Axis] = 1e38;
         }
     }
     
-    // Should be safe
-    float CurrT = 0;
-    float TotalT = 0; // Total distance travelled within allocated bricks
-    uint NumHits = 0;
-    while (true)
-    {
-        // Find the axis on which we are the closest to the next cell
-        uint Axis = TMax.x < TMax.y
+	// Take the first step (into the grid)
+    // Necessary for finding the initial axis to move on
+    uint Axis = TMax.x < TMax.y
 			        ? TMax.x < TMax.z
 			             ? 0
 			             : 2
 			        : TMax.y < TMax.z
 			        	    ? 1
 			        	    : 2;
-        
-        float CellDist = TMax[Axis] - CurrT;
+	GridCellCoord[Axis] += CellStep[Axis];
+    TMax[Axis] += TDelta[Axis];
+    if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis]) { return 0.0; }
+    float CurrT = TMax[Axis];
 
+    // Should be safe
+    float TotalT = 0; // Total distance travelled within allocated bricks
+    uint NumHits = 0;
+    while (true)
+    {
         // Check if a brick is present in the current cell
-        if (PtrGrid[GridCellToGridIdx((uint3)GridCellCoord)] != 0xFFFFFFFF)
+        if (IsBrickAllocated( GridCellToGridIdx( GridCellCoord ) ))
         {
             // Intersection found
-            NumHits++;
-            TotalT += CellDist;
+            TotalT += TMax[Axis] - CurrT;
+            if (++NumHits >= DbgVisMaxBricks) { break; }
         }
+
+        // Find the axis on which we are the closest to the next cell
+        Axis = TMax.x < TMax.y
+		        ? TMax.x < TMax.z
+		             ? 0
+		             : 2
+		        : TMax.y < TMax.z
+			            ? 1
+			            : 2;
 
         // Store the distance travelled AFTER we step to the next cell
         CurrT = TMax[Axis];
@@ -88,17 +79,13 @@ float NumBrickHits( float3 RayPos, float3 RayDir )
         TMax[Axis] += TDelta[Axis];
 
         // Voxel object and ray bounds check
-        if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis])
+        if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis] || CurrT > Ray.T)
         {
             break;
         }
     }
-
-#if USE_DIST_INSTEAD_OF_HITS
-	return TotalT / 20.0;
-#else
-    return NumHits / 12.0;
-#endif
+    
+    return NumHits / (float)DbgVisMaxBricks;
 }
 
 // [CREDITS] https://www.shadertoy.com/view/XtGGzG
@@ -131,58 +118,40 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
         return;
     }
 
-	float2 SampleUV = (float2(SceneColorViewport_ViewportMin) + DispatchThreadId + 0.5) * SceneColorViewport_ExtentInverse;
-	float2 ViewportUV = (DispatchThreadId + 0.5) * SceneColorViewport_ViewportSizeInverse;
-	float2 NDC = ViewportUV * float2(2, -2) + float2(-1, 1);
-    float4 OriginalColor = OriginalSceneColor.SampleLevel(GlobalPointClampedSampler, SampleUV, 0);
-    float3 Color = float3(0, 0, 0);
+    // ...
+	ResolvedView = ResolveView();
 
-	float4 TranslatedWorldPosH = mul(float4(NDC, 0.5, 1), View.ClipToTranslatedWorld);
-	float3 Dir = normalize(TranslatedWorldPosH.xyz / TranslatedWorldPosH.w);
-	float3 Origin = View.ViewOriginHigh * UnitSize; // Convert unit size
-	float3 RayPos = Origin;
-	
-	const float StepSize = 0.5;
-	uint3 LastGridCell = uint3(0, 0, 0);
-	float Hits = 0;
+    // Screen UV
+    const uint2 SampleCoord = SceneColorViewport_ViewportMin + DispatchThreadId;
+	const float2 SampleUV = ((float2)SampleCoord + 0.5) * SceneColorViewport_ExtentInverse;
+	const float2 ViewportUV = (DispatchThreadId + 0.5) * SceneColorViewport_ViewportSizeInverse;
+	const float2 NDC = ViewportUV * float2(2, -2) + float2(-1, 1);
 
-#if 1
-    float AABBHitT;
-    if (IntersectRayPtrGrid( RayPos, Dir, AABBHitT ))
+    // TODO: DEPTH IS DIFFERENT DEPENDING ON VIEWPORT SIZE
+    // Ray setup
+	const float4 TranslatedWorldPosH = mul(float4(NDC, 0.5, 1), View.ClipToTranslatedWorld);
+    const float3 Dir = normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w );
+    const float DepthSample = ConvertFromDeviceZ( DepthTex[SampleCoord].r );
+	const float Depth = DepthSample / dot( Dir, ResolvedView.ViewForward.xyz );
+	FRay Ray = FRay::Create( View.ViewOriginHigh * UnitScale, Dir, Depth * UnitScale ); // Convert unit size
+
+	// Grid AABB check
+    float AABBHitT, AABBOutT;
+	float NumHits = 0;
+    const float BrickSize = GetBrickSize( VoxSize );
+    const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
+	if (IntersectAABB( GridAABB, Ray, AABBHitT, AABBOutT ))
     {
-        const float AABBEpsilon = 1e-4;
-        AABBHitT += AABBEpsilon;
-        RayPos += Dir * AABBHitT;
-        Hits = NumBrickHits( RayPos, Dir );
+		// Grid DDA
+        const float Epsilon = AABBEpsilon * UnitScale;
+        AABBHitT = max( AABBHitT - Epsilon, 0 );
+        Ray.T = AABBOutT;
+        Ray.Advance( AABBHitT );
+        NumHits = NumBrickHits( Ray, GridAABB.Min, BrickSize );
     }
-    Color = InfernoQuintic(Hits);
-#else
-    for (int Step = 0; Step < 512; Step++)
-    {
-        RayPos += Dir * StepSize;
-        uint3 GridCell = WorldPosToGridCell(RayPos);
-    
-        if (all(GridCell == LastGridCell))
-        {
-            continue;
-        }
-        LastGridCell = GridCell;
-    
-        if (!IsInsideGrid(RayPos))
-        {
-            continue;
-        }
-    
-        if (PtrGrid[GridCellToGridIdx(GridCell)] != 0xFFFFFFFF)
-        {
-            Hits += 1.0;
-        }
-    }
-	
-	Color = Hits * float3(1, 0, 0);
-	Color = Color / (Color + float3(2, 2, 2));
-#endif
 
-    const float3 NewColor = (Hits > 0) ? lerp( OriginalColor, Color, 0.6 ) : OriginalColor;
-	Output[SceneColorViewport_ViewportMin + DispatchThreadId] = float4(NewColor, OriginalColor.w);
+	// Compute output color
+    const float4 OriginalColor = OriginalSceneColor.SampleLevel(GlobalPointClampedSampler, SampleUV, 0);
+    const float3 NewColor = (NumHits > 0) ? lerp( OriginalColor, InfernoQuintic(NumHits), 0.6 ) : OriginalColor;
+    Output[SampleCoord] = float4(NewColor, OriginalColor.w);
 }
