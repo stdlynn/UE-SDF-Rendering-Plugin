@@ -16,7 +16,8 @@ public:
 	UPROPERTY( EditAnywhere, Config, Category = "Grid" )
 	FVector3f PtrGridPos{ FVector3f::ZeroVector };
 
-	UPROPERTY( EditAnywhere, Config, Category = "Grid" )
+	UPROPERTY( EditAnywhere, Config, Category = "Grid",
+			   meta = (ClampMin = "0.01"))
 	float VoxSize{ 100.0f / 7.0f };
 
 	UPROPERTY( EditAnywhere, Config, Category = "Debug Visualizations", 
