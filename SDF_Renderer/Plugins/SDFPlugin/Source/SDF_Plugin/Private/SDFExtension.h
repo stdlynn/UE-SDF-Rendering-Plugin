@@ -78,7 +78,7 @@ private:
 		TArray<FGPUSDF> SDFs;
 		FSDFResources SDFResources;
 		FBrickmapBuilder BrickmapBuilder;
-	} RT;
+	} RT{};
 
 }; // FSDFExtension
 

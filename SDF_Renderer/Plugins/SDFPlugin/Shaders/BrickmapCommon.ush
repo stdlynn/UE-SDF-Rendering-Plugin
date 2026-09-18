@@ -21,7 +21,7 @@
 static const uint BrickResolution = 8;
 static const uint VoxelResolution = BrickResolution - 1;
 
-static const uint3 NumAtlasBricks = uint3( 128, 128, 1 ) ;
+static const uint3 NumAtlasBricks = uint3( 256, 256, 1 ) ;
 static const uint3 AtlasSize = NumAtlasBricks * BrickResolution;
 
 static const uint3 PtrGridSize = uint3( 256, 256, 256 );
@@ -34,7 +34,7 @@ float GetBrickSize( float VoxSize )
 
 float GetDiagonal( float VoxSize )
 {
-	return sqrt(3) * VoxSize;
+	return (sqrt(3.0) / 2.0) * VoxSize;
 }
 
 float EncodeDistance(float Distance, float InvDiagonal)
