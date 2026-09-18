@@ -58,8 +58,8 @@ float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
         if (IsBrickAllocated( GridCellToGridIdx( GridCellCoord ) ))
         {
             // Intersection found
-            NumHits++;
             TotalT += TMax[Axis] - CurrT;
+            if (++NumHits >= DbgVisMaxBricks) { break; }
         }
 
         // Find the axis on which we are the closest to the next cell
