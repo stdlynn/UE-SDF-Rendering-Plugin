@@ -29,7 +29,15 @@ struct FRenderSDF
 // GPU SDF edits
 struct alignas(16) FGPUSDF
 {
-	FRenderSDF SDF;
+	// Convert to GPU unit scale
+	FGPUSDF( const FRenderSDF& RenderSDF, uint32 Idx, float GPUUnitScale )
+		: Pos{ RenderSDF.Pos * GPUUnitScale }
+		, Radius{ RenderSDF.Radius * GPUUnitScale }
+		, Idx{ Idx }
+	{}
+
+	FVector3f Pos;
+	float Radius;
 	uint32 Idx;
 };
 
@@ -71,9 +79,9 @@ private:
 	UPROPERTY( EditAnywhere,
 			   BlueprintReadOnly, // Edit through setters
 			   Category = "SDF",
-			   meta = (DisplayName = "Shape"),
-			   meta = (ShowOnlyInnerProperties),
-			   meta = (AllowPrivateAccess = "true") )
+			   meta = (DisplayName = "Shape",
+						ShowOnlyInnerProperties,
+						AllowPrivateAccess = "true") )
 	FGameSDF GameSDF{};
 	uint64 ID;
 

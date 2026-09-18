@@ -13,8 +13,8 @@ RWTexture2D<float4> Output;
 
 float3 PtrGridPos;
 float VoxSize;
-
-#define USE_DIST_INSTEAD_OF_HITS 0
+float UnitScale;
+uint DbgVisMaxBricks;
 
 float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
 {
@@ -58,8 +58,8 @@ float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
         if (IsBrickAllocated( GridCellToGridIdx( GridCellCoord ) ))
         {
             // Intersection found
-            NumHits++;
             TotalT += TMax[Axis] - CurrT;
+            if (++NumHits >= DbgVisMaxBricks) { break; }
         }
 
         // Find the axis on which we are the closest to the next cell
@@ -84,12 +84,8 @@ float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
             break;
         }
     }
-
-#if USE_DIST_INSTEAD_OF_HITS
-	return TotalT / 70.0;
-#else
-    return NumHits / 14.0;
-#endif
+    
+    return NumHits / (float)DbgVisMaxBricks;
 }
 
 // [CREDITS] https://www.shadertoy.com/view/XtGGzG
@@ -137,7 +133,7 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
     const float3 Dir = normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w );
     const float DepthSample = ConvertFromDeviceZ( DepthTex[SampleCoord].r );
 	const float Depth = DepthSample / dot( Dir, ResolvedView.ViewForward.xyz );
-	FRay Ray = FRay::Create( View.ViewOriginHigh, Dir, Depth );
+	FRay Ray = FRay::Create( View.ViewOriginHigh * UnitScale, Dir, Depth * UnitScale ); // Convert unit size
 
 	// Grid AABB check
     float AABBHitT, AABBOutT;
@@ -147,7 +143,8 @@ void DebugCS(uint2 DispatchThreadId : SV_DispatchThreadID)
 	if (IntersectAABB( GridAABB, Ray, AABBHitT, AABBOutT ))
     {
 		// Grid DDA
-        AABBHitT = max( AABBHitT - AABBEpsilon, 0 );
+        const float Epsilon = AABBEpsilon * UnitScale;
+        AABBHitT = max( AABBHitT - Epsilon, 0 );
         Ray.T = AABBOutT;
         Ray.Advance( AABBHitT );
         NumHits = NumBrickHits( Ray, GridAABB.Min, BrickSize );

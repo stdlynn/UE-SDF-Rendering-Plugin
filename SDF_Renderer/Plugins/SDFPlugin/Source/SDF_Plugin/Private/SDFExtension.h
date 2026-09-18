@@ -24,6 +24,9 @@ public:
 	{
 		FVector3f PtrGridPos;
 		float VoxSize;
+		float GPUUnitScale;
+		uint32 DbgVisMaxBricks;
+		bool bUnitScaleDirty{ true };
 	};
 
 	struct FSDFResources
@@ -57,8 +60,8 @@ protected:
 
 private:
 
+	void TransferSettingsToRenderThread();
 	void TransferSDFsToRenderThread();
-	void TransferGridParamsToRenderThread();
 	void UpdateSDFBuffer();
 	FRDGBufferRef RegisterSDFBuffer(FRDGBuilder& GraphBuilder);
 		
@@ -106,6 +109,7 @@ public:
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, PtrGrid)		// Pointer Buffer
 		SHADER_PARAMETER(FVector3f, PtrGridPos)
 		SHADER_PARAMETER(float, VoxSize)
+		SHADER_PARAMETER(float, UnitScale)
 		RENDER_TARGET_BINDING_SLOTS() // GBuffer Textures
 	END_SHADER_PARAMETER_STRUCT()
 
@@ -138,6 +142,7 @@ public:
 		SHADER_PARAMETER(uint32, NumEdits)
 		SHADER_PARAMETER(FVector3f, PtrGridPos)
 		SHADER_PARAMETER(float, VoxSize)
+		SHADER_PARAMETER(float, UnitScale)
 		SHADER_PARAMETER(FIntVector, GridSize)
 		SHADER_PARAMETER(FIntVector, AtlasSize)
 	END_SHADER_PARAMETER_STRUCT()
@@ -171,6 +176,8 @@ public:
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint>, PtrGrid)
 		SHADER_PARAMETER(FVector3f, PtrGridPos)
 		SHADER_PARAMETER(float, VoxSize)
+		SHADER_PARAMETER(float, UnitScale)
+		SHADER_PARAMETER(uint32, DbgVisMaxBricks)
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)

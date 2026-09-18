@@ -23,10 +23,21 @@ static const FIntVector PtrGridSize = FIntVector(64, 64, 64);
 
 namespace
 {
-	TAutoConsoleVariable<int32> CVarShaderOn(
+	// TODO: if this is turned on, we need to do a full rebuilt of the brickmap
+	// TODO: since X frames of update lists have been skipped
+	// TODO: Also note that this should be checked before running ANY shader
+	TAutoConsoleVariable<int32> CVarShadersOn(
 		TEXT("r.SDF.Plugin"),
 		1,
 		TEXT("Enable SDF Plugin \n")
+		TEXT(" 0: OFF;")
+		TEXT(" 1: ON."),
+		ECVF_RenderThreadSafe);
+
+	TAutoConsoleVariable<int32> CVarRenderEdits(
+		TEXT("r.SDF.Edits"),
+		1,
+		TEXT("Enable SDF rendering \n")
 		TEXT(" 0: OFF;")
 		TEXT(" 1: ON."),
 		ECVF_RenderThreadSafe);
@@ -79,15 +90,51 @@ void FSDFExtension::BeginRenderViewFamily( FSceneViewFamily& InViewFamily )
 	// A view family is a group of views that gets rendered together for the same frame/setup
 
 	// We call this from here so it runs on the Game Thread
+	TransferSettingsToRenderThread(); // This first! We use 'RT.Settings.UnitScale' for the rest
 	TransferSDFsToRenderThread();
-	TransferGridParamsToRenderThread();
-};
+	GT.Settings.bUnitScaleDirty = false;
+}
+
+void FSDFExtension::TransferSettingsToRenderThread()
+{
+	// Check if any of the settings are dirty
+	const USDFSettings* SDFSettings{ GetDefault<USDFSettings>() };
+	if (GT.Settings.PtrGridPos == SDFSettings->PtrGridPos 
+		 && GT.Settings.VoxSize == SDFSettings->VoxSize
+		 && GT.Settings.GPUUnitScale == SDFSettings->GPUUnitScale
+		 && GT.Settings.DbgVisMaxBricks == SDFSettings->DbgVisMaxBricks)
+	{
+		return;
+	}
+
+	// Store settings to compare next frame
+	GT.Settings.PtrGridPos = SDFSettings->PtrGridPos;
+	GT.Settings.VoxSize = SDFSettings->VoxSize;
+	GT.Settings.GPUUnitScale = SDFSettings->GPUUnitScale;
+	GT.Settings.DbgVisMaxBricks = SDFSettings->DbgVisMaxBricks;
+	GT.Settings.bUnitScaleDirty = true;
+
+	// Transfer lambda
+	// Capture the parameters by copy, their state on the game thread might change before the lambda runs
+	auto TransferSettings{ [this, Settings = GT.Settings]( FRHICommandList& ) mutable
+	{
+		// Copy the settings over to the render thread
+		RT.Settings = Settings;
+
+		// Convert to GPU unit scale
+		RT.Settings.PtrGridPos *= Settings.GPUUnitScale;
+		RT.Settings.VoxSize *= Settings.GPUUnitScale;
+	} };
+
+	// Perform the transfer safely on the render thread
+	ENQUEUE_RENDER_COMMAND( SDFSettingsThreadTransfer )( TransferSettings );
+}
 
 void FSDFExtension::TransferSDFsToRenderThread()
 {
 	// Only update if dirty
 	USDFSubsystem* SDFSubsystem{ GT.World->GetSubsystem<USDFSubsystem>() };
-	if (not SDFSubsystem->GetAndResetDirty()) { return; }
+	if (not SDFSubsystem->GetAndResetDirty() && not GT.Settings.bUnitScaleDirty) { return; }
 
 	// TODO: remove before PR (also other debug messages)
 	// Debug
@@ -106,9 +153,9 @@ void FSDFExtension::TransferSDFsToRenderThread()
 		// Copy the SDF data over to the render thread
 		RT.SDFs.Empty();
 		RT.SDFs.Reserve( SDFs.Num() );
-		for (auto& Pair : SDFs)
+		for (const auto& Pair : SDFs)
 		{
-			RT.SDFs.Emplace( MoveTemp( Pair.Value ), Pair.Key );
+			RT.SDFs.Emplace( Pair.Value, Pair.Key, RT.Settings.GPUUnitScale );
 		}
 		RT.SDFResources.bDirty = true;
 	} };
@@ -117,30 +164,9 @@ void FSDFExtension::TransferSDFsToRenderThread()
 	ENQUEUE_RENDER_COMMAND( SDFParamsThreadTransfer )( TransferParams );
 }
 
-void FSDFExtension::TransferGridParamsToRenderThread()
-{
-	// Check if any of the settings are dirty
-	const USDFSettings* SDFSettings{ GetDefault<USDFSettings>() };
-	if (GT.Settings.PtrGridPos == SDFSettings->PtrGridPos && GT.Settings.VoxSize == SDFSettings->VoxSize) { return; }
-	
-	GT.Settings.PtrGridPos = SDFSettings->PtrGridPos;
-	GT.Settings.VoxSize = SDFSettings->VoxSize;
-
-	// Transfer lambda
-	// Capture the parameters by copy, their state on the game thread might change before the lambda runs
-	auto TransferSettings{ [this, PtrGridPos = GT.Settings.PtrGridPos, VoxSize = GT.Settings.VoxSize]( FRHICommandList& ) mutable
-	{
-		// Copy the settings over to the render thread
-		RT.Settings.PtrGridPos = PtrGridPos;
-		RT.Settings.VoxSize = VoxSize;
-	} };
-
-	// Perform the transfer safely on the render thread
-	ENQUEUE_RENDER_COMMAND( SDFSettingsThreadTransfer )( TransferSettings );
-}
 void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily)
 {
-	if (CVarShaderOn.GetValueOnRenderThread() == 0)
+	if (CVarShadersOn.GetValueOnRenderThread() == 0)
 	{
 		return;
 	}
@@ -186,6 +212,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, 
 		PassParameters->BrickAllocCounter = GraphBuilder.CreateUAV(AtomicCounterRDG, PF_R32_UINT);
 		PassParameters->PtrGridPos = RT.Settings.PtrGridPos;
 		PassParameters->VoxSize = RT.Settings.VoxSize;
+		PassParameters->UnitScale = RT.Settings.GPUUnitScale;
 		PassParameters->GridSize = PtrGridSize;
 		PassParameters->AtlasSize = AtlasSize;
 
@@ -276,7 +303,8 @@ void FSDFExtension::AllocateBrickmap()
 
 void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView, const FRenderTargetBindingSlots& RenderTargets, TRDGUniformBufferRef<FSceneTextureUniformParameters> SceneTextures)
 {
-	if (CVarShaderOn.GetValueOnRenderThread() == 0)
+	if (CVarShadersOn.GetValueOnRenderThread() == 0
+		 || CVarRenderEdits.GetValueOnRenderThread() == 0)
 	{
 		return;
 	}
@@ -321,6 +349,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread(FRDGBuilder& GraphBu
 		PassParameters->PtrGrid = GraphBuilder.CreateSRV(PtrBufferRDG, PF_R32_UINT);
 		PassParameters->PtrGridPos = RT.Settings.PtrGridPos;
 		PassParameters->VoxSize = RT.Settings.VoxSize;
+		PassParameters->UnitScale = RT.Settings.GPUUnitScale;
 		PassParameters->RenderTargets = RenderTargets;
 		PassParameters->RenderTargets.DepthStencil = FDepthStencilBinding(
 			DepthTexture,
@@ -371,10 +400,11 @@ void FSDFExtension::SubscribeToPostProcessingPass(
 FScreenPassTexture FSDFExtension::RenderDebug(FRDGBuilder& GraphBuilder, const FSceneView& SceneView, const FPostProcessMaterialInputs& Inputs)
 {
 	const FSceneViewFamily& ViewFamily = *SceneView.Family;
-
 	const FScreenPassTexture& SceneColor = FScreenPassTexture::CopyFromSlice(GraphBuilder, Inputs.GetInput(EPostProcessMaterialInput::SceneColor));
 
-	if (!SceneColor.IsValid() || CVarDebugGrid.GetValueOnRenderThread() == 0)
+	if (!SceneColor.IsValid() 
+		 || CVarShadersOn.GetValueOnRenderThread() == 0
+		 || CVarDebugGrid.GetValueOnRenderThread() == 0)
 	{
 		return SceneColor;
 	}
@@ -410,6 +440,8 @@ FScreenPassTexture FSDFExtension::RenderDebug(FRDGBuilder& GraphBuilder, const F
 		PassParameters->SceneColorViewport = GetScreenPassTextureViewportParameters(SceneColorViewport);
 		PassParameters->PtrGridPos = RT.Settings.PtrGridPos;
 		PassParameters->VoxSize = RT.Settings.VoxSize;
+		PassParameters->UnitScale = RT.Settings.GPUUnitScale;
+		PassParameters->DbgVisMaxBricks = RT.Settings.DbgVisMaxBricks;
 		PassParameters->Output = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(OutputTexture));
 
 		FIntPoint PassViewSize = SceneColor.ViewRect.Size();
