@@ -21,16 +21,16 @@ public:
 	[[nodiscard]] FRDGPooledBuffer* GetDeallocatedList() const { return RT.DeallocatedListResource; }
 	[[nodiscard]] uint32 GetLastBuildFrame() const { return RT.LastBuildFrame; }
 	[[nodiscard]] uint32 GetNumUpdatedBricks() const { return RT.UpdateListCPU.Num(); }
-	void SetLastBuildFrame(const uint32 Frame) { RT.LastBuildFrame = Frame; }
+	void SetLastBuildFrame( const uint32 Frame ) { RT.LastBuildFrame = Frame; }
 
 	void AllocateResources();
 	void ReleaseResources();
 	bool AreResourcesValid() const;
 
 	// All variables passed should have the GPU unit size conversions applied
-	void SetBrickUpdateList(const TArray<FGPUSDF>& SDFs, const FVector3f& PtrGridPos, float VoxSize);
+	void SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FVector3f& PtrGridPos, float VoxSize );
 	void AllocateBrickList();
-	FRDGBufferRef RegisterBrickListBuffer(FRDGBuilder& GraphBuilder) const;
+	FRDGBufferRef RegisterBrickListBuffer( FRDGBuilder& GraphBuilder ) const;
 
 	bool bReset = true;
 

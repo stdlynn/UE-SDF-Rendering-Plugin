@@ -19,8 +19,7 @@ struct FRenderSDF
 {
 	FRenderSDF( const FGameSDF& GameSDF, FVector3f Pos )
 		: Pos{ Pos }
-		, Radius{ GameSDF.Radius }
-	{}
+		, Radius{ GameSDF.Radius } {}
 
 	FVector3f Pos;
 	float Radius;
@@ -33,8 +32,7 @@ struct alignas(16) FGPUSDF
 	FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
 		: Pos{ RenderSDF.Pos * GPUUnitScale }
 		, Radius{ RenderSDF.Radius * GPUUnitScale }
-		, ID{ ID }
-	{}
+		, ID{ ID } {}
 
 	FVector3f Pos;
 	float Radius;
@@ -53,7 +51,7 @@ public:
 	virtual void OnRegister() override;
 	virtual void OnUnregister() override;
 #if WITH_EDITOR
-	virtual void PostEditComponentMove(bool bFinished) override;
+	virtual void PostEditComponentMove( bool bFinished ) override;
 #endif
 
 	const FGameSDF& GetSDF() const { return GameSDF; }
@@ -79,11 +77,11 @@ private:
 
 	// Game params, game thread
 	UPROPERTY( EditAnywhere,
-			   BlueprintReadOnly, // Edit through setters
-			   Category = "SDF",
-			   meta = (DisplayName = "Shape",
-						ShowOnlyInnerProperties,
-						AllowPrivateAccess = "true") )
+		BlueprintReadOnly, // Edit through setters
+		Category = "SDF",
+		meta = (DisplayName = "Shape",
+			ShowOnlyInnerProperties,
+			AllowPrivateAccess = "true") )
 	FGameSDF GameSDF{};
 	uint64 ID;
 
@@ -100,10 +98,10 @@ public:
 
 private:
 
-	UPROPERTY( EditAnywhere, 
-			   BlueprintReadOnly, 
-			   Category = "Components", 
-			   meta = (AllowPrivateAccess = "true") )
+	UPROPERTY( EditAnywhere,
+		BlueprintReadOnly,
+		Category = "Components",
+		meta = (AllowPrivateAccess = "true") )
 	USDFComponent* SDFComp;
 
 }; // ASDFActor

@@ -21,7 +21,7 @@
 static const uint BrickResolution = 8;
 static const uint VoxelResolution = BrickResolution - 1;
 
-static const uint3 NumAtlasBricks = uint3( 256, 256, 1 ) ;
+static const uint3 NumAtlasBricks = uint3( 256, 256, 1 );
 static const uint3 AtlasSize = NumAtlasBricks * BrickResolution;
 
 static const uint3 PtrGridSize = uint3( 256, 256, 256 );
@@ -34,15 +34,15 @@ float GetBrickSize( float VoxSize )
 
 float GetDiagonal( float VoxSize )
 {
-	return (sqrt(3.0) / 2.0) * VoxSize;
+	return (sqrt( 3.0 ) / 2.0) * VoxSize;
 }
 
-float EncodeDistance(float Distance, float InvDiagonal)
+float EncodeDistance( float Distance, float InvDiagonal )
 {
-	return clamp(Distance * InvDiagonal, -1.0, 1.0) * 0.5 + 0.5;
+	return clamp( Distance * InvDiagonal, -1.0, 1.0 ) * 0.5 + 0.5;
 }
 
-float DecodeDistance(float Distance, float Diagonal)
+float DecodeDistance( float Distance, float Diagonal )
 {
 	return (Distance - 0.5) * 2.0 * Diagonal;
 }
@@ -55,7 +55,7 @@ namespace AABB
 		FAABB Bounds;
 		Bounds.Min = Pos - HalfExtent;
 		Bounds.Max = Pos + HalfExtent;
-        return Bounds;
+		return Bounds;
 	}
 } // AABB
 
@@ -71,18 +71,18 @@ int3 WorldPosToGridCell( float3 WorldPos, float3 GridMin, float BrickSize )
 
 uint GridCellToGridIdx( uint3 GridCell )
 {
-	return GridCell.x 
-		   + (GridCell.y * PtrGridSize.x) 
+	return GridCell.x
+		   + (GridCell.y * PtrGridSize.x)
 		   + (GridCell.z * PtrGridSize.x * PtrGridSize.y);
 }
 
-uint3 GridIdxToGridCell(uint GridIdx)
+uint3 GridIdxToGridCell( uint GridIdx )
 {
 	const uint Z = GridIdx / (PtrGridSize.x * PtrGridSize.y);
 	const uint Intermediate = GridIdx - (Z * PtrGridSize.x * PtrGridSize.y);
 	const uint Y = Intermediate / PtrGridSize.x;
 	const uint X = Intermediate - (Y * PtrGridSize.x);
-	return uint3(X, Y, Z);
+	return uint3( X, Y, Z );
 }
 
 uint2 BrickIdxToAtlasCell( uint BrickIdx )
@@ -117,24 +117,24 @@ bool IsBrickAllocated( uint Idx )
 
 bool IsBrickAllocated( uint3 GridCell )
 {
-    return IsBrickAllocated( GridCellToGridIdx( GridCell ) );
+	return IsBrickAllocated( GridCellToGridIdx( GridCell ) );
 }
 
 // Allocate a brick by storing its index in the pointer grid
-void Allocate(uint3 GridCell)
+void Allocate( uint3 GridCell )
 {
 	uint NextIndex;
-	InterlockedAdd(BrickAllocCounter[0], 1, NextIndex);
+	InterlockedAdd( BrickAllocCounter[0], 1, NextIndex );
 
-	PtrGrid[GridCellToGridIdx(GridCell)] = NextIndex;
+	PtrGrid[GridCellToGridIdx( GridCell )] = NextIndex;
 }
 
 // Allocate a brick, only if this location isn't already allocated
-void AllocateSafe(uint3 GridCell)
+void AllocateSafe( uint3 GridCell )
 {
 	// TODO: This isn't safe right now (the same ptr grid cell could increment the counter more than once)
 	// Won't be an issue when we upload a list of bricks to update
-	if (IsBrickAllocated(GridCell)) { return; }
+	if (IsBrickAllocated( GridCell )) { return; }
 
-	Allocate(GridCell);
+	Allocate( GridCell );
 }

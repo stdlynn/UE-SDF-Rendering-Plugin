@@ -55,20 +55,20 @@ bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 }
 
 void TraversePS(
-	float4	   InPosition	 : SV_POSITION,
+	float4 InPosition : SV_POSITION,
 	out float4 OutSceneColor : SV_Target0, // SceneColor (emissive)
-	out float4 OutGBufferA   : SV_Target1, // World normal
-	out float4 OutGBufferB   : SV_Target2, // Metallic/spec/rough/shadingmodel
-	out float4 OutGBufferC   : SV_Target3, // Basecolor + AO
-	out float4 OutGBufferD   : SV_Target4, // Custom data
-	out float  OutDepth		 : SV_DEPTH)   // Depth
+	out float4 OutGBufferA : SV_Target1, // World normal
+	out float4 OutGBufferB : SV_Target2, // Metallic/spec/rough/shadingmodel
+	out float4 OutGBufferC : SV_Target3, // Basecolor + AO
+	out float4 OutGBufferD : SV_Target4, // Custom data
+	out float OutDepth : SV_DEPTH ) // Depth
 {
 	// Screen UV
 	const float2 ViewportUV = (InPosition.xy - View.ViewRectMin.xy) * View.ViewSizeAndInvSize.zw;
-	const float2 NDC = ViewportUV * float2(2, -2) + float2(-1, 1);
+	const float2 NDC = ViewportUV * float2( 2, -2 ) + float2( -1, 1 );
 
 	// Ray setup
-	const float4 TranslatedWorldPosH = mul(float4(NDC, 0.5, 1), View.ClipToTranslatedWorld);
+	const float4 TranslatedWorldPosH = mul( float4( NDC, 0.5, 1 ), View.ClipToTranslatedWorld );
 	const float3 Dir = normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w );
 	const float3 Origin = View.ViewOriginHigh * UnitScale; // Convert unit size
 	FRay Ray = FRay::Create( Origin, Dir );
@@ -76,16 +76,16 @@ void TraversePS(
 	// Sphere trace
 	// Discard this fragment if we don't hit anything, keep whatever was already in the GBuffer
 	uint EditHitIdx;
-	if (!SphereTraceScene( Ray, EditHitIdx )) { discard; }
-		
+	if (! SphereTraceScene( Ray, EditHitIdx )) { discard; }
+
 	// Calculate output data
 	const FSDFEdit Edit = SDFEdits[EditHitIdx];
 	const float3 Normal = GetSphereNormal( Edit, Ray.Pos );
 	// Convert unit size
-	float ViewZ = mul(float4((Ray.Pos - Origin) / UnitScale, 1.0), View.TranslatedWorldToView).z;
-	OutDepth = ConvertToDeviceZ(ViewZ);
+	float ViewZ = mul( float4( (Ray.Pos - Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
+	OutDepth = ConvertToDeviceZ( ViewZ );
 
-	FGBufferData GBuffer = (FGBufferData) 0;
+	FGBufferData GBuffer = (FGBufferData)0;
 	GBuffer.BaseColor = (0.6).xxx;
 	GBuffer.WorldNormal = Normal;
 	GBuffer.Metallic = 0.0;
@@ -96,10 +96,10 @@ void TraversePS(
 	GBuffer.GBufferAO = 1.0; // No occlusion
 	GBuffer.PrecomputedShadowFactors = 1.0; // no shadowing
 	GBuffer.ShadingModelID = SHADINGMODELID_DEFAULT_LIT; // Normal lighting
-	
+
 	// Write to the packed GBuffer channels
 	float4 GA, GB, GC, GD, GE, GV;
-	EncodeGBuffer(GBuffer, GA, GB, GC, GD, GE, GV);
+	EncodeGBuffer( GBuffer, GA, GB, GC, GD, GE, GV );
 	OutSceneColor = (0).xxxx;
 	OutGBufferA = GA;
 	OutGBufferB = GB;
