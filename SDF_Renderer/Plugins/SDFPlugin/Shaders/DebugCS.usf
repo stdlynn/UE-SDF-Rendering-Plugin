@@ -131,8 +131,9 @@ void DebugCS( uint2 DispatchThreadId : SV_DispatchThreadID )
 	// Ray setup
 	const float4 TranslatedWorldPosH = mul( float4( NDC, 0.5, 1 ), View.ClipToTranslatedWorld );
 	const float3 Dir = normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w );
-	const float DepthSample = ConvertFromDeviceZ( DepthTex[SampleCoord].r );
-	const float Depth = DepthSample / dot( Dir, ResolvedView.ViewForward.xyz );
+    const float2 DepthBufferUV = (View.ViewRectMin.xy + ViewportUV * View.ViewSizeAndInvSize.xy) * View.BufferSizeAndInvSize.zw;
+    const float DeviceZ = DepthTex.SampleLevel(GlobalPointClampedSampler, DepthBufferUV, 0).r;
+    const float Depth = ConvertFromDeviceZ(DeviceZ) / dot(Dir, ResolvedView.ViewForward.xyz);
 	FRay Ray = FRay::Create( View.ViewOriginHigh * UnitScale, Dir, Depth * UnitScale ); // Convert unit size
 
 	// Grid AABB check
