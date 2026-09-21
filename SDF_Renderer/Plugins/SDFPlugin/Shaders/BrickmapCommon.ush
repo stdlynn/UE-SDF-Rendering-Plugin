@@ -7,11 +7,11 @@
 // The numbers below are measured in voxels								|	
 //																		|
 // WorldPos   |	float3 | inf    | World-space position					|
-// GridCell   | int3   | 0-63   | PtrGrid cell index					|
-// AtlasCell  |	int2   | 0-127  | 2D Brick cell index in Atlas			|
+// GridCell   | uint3  | 0-63   | PtrGrid cell index					|
+// AtlasCell  |	uint3  | 0-127  | 3D Brick cell index in Atlas			|
 // AtlasUVW   |	float3 | 0-1    | Atlas sample coord (trilinear)		|
-// AtlasPoint |	int3   | *		| Atlas texel coord						|
-// BrickPoint |	int3   | 0-7	| Atlas texel coord, local to brick		|
+// AtlasPoint |	uint3  | *		| Atlas texel coord						|
+// BrickPoint |	uint3  | 0-7	| Atlas texel coord, local to brick		|
 // BrickIdx   |	uint   | 0-16k  | Index to a Brick (stored in PtrGrid)	|
 // GridIdx    | uint   | 0-262k | index to a GridCell					|
 //																		|
@@ -21,7 +21,7 @@
 static const uint BrickResolution = 8;
 static const uint VoxelResolution = BrickResolution - 1;
 
-static const uint3 NumAtlasBricks = uint3( 256, 256, 1 );
+static const uint3 NumAtlasBricks = uint3( 256, 256, 2 );
 static const uint3 AtlasSize = NumAtlasBricks * BrickResolution;
 
 static const uint3 PtrGridSize = uint3( 256, 256, 256 );
@@ -85,15 +85,22 @@ uint3 GridIdxToGridCell( uint GridIdx )
 	return uint3( X, Y, Z );
 }
 
-uint2 BrickIdxToAtlasCell( uint BrickIdx )
+uint3 BrickIdxToAtlasCell( uint BrickIdx )
 {
-	const uint Y = BrickIdx / NumAtlasBricks.x;
-	return uint2( BrickIdx - (Y * NumAtlasBricks.x), Y );
+	const uint Z = BrickIdx / (NumAtlasBricks.x * NumAtlasBricks.y);
+	const uint Intermediate = BrickIdx - (Z * NumAtlasBricks.x * NumAtlasBricks.y);
+	const uint Y = Intermediate / NumAtlasBricks.x;
+	const uint X = Intermediate - (Y * NumAtlasBricks.x);
+	return uint3( X, Y, Z );
 }
 
-uint2 AtlasIdxToAtlasCell( uint AtlasIdx )
+uint3 AtlasIdxToAtlasCell( uint AtlasIdx )
 {
-	return uint2( AtlasIdx % NumAtlasBricks.x, AtlasIdx / NumAtlasBricks.x );
+	const uint Z = AtlasIdx / (NumAtlasBricks.x * NumAtlasBricks.y);
+	const uint Intermediate = AtlasIdx - (Z * NumAtlasBricks.x * NumAtlasBricks.y);
+	const uint Y = Intermediate / NumAtlasBricks.x;
+	const uint X = Intermediate - (Y * NumAtlasBricks.x);
+	return uint3( X, Y, Z );
 }
 
 float3 WorldPosToAtlasUVW( float3 WorldPos, float3 GridMin, float VoxSize )
@@ -102,10 +109,10 @@ float3 WorldPosToAtlasUVW( float3 WorldPos, float3 GridMin, float VoxSize )
 	const uint3 GridCell = WorldPosToGridCell( WorldPos, GridMin, BrickSize );
 	const uint GridIdx = GridCellToGridIdx( GridCell );
 	const uint BrickIdx = PtrGrid[GridIdx];
-	const uint2 AtlasCell = BrickIdxToAtlasCell( BrickIdx );
-	const float3 BrickPos = float3( AtlasCell * BrickResolution, 0 );
+	const uint3 AtlasCell = BrickIdxToAtlasCell( BrickIdx );
+	const float3 BrickPos = AtlasCell * BrickResolution;
 	// TODO: wrong?
-	const float3 LocalBrickOffset = ((WorldPos - GridMin) % BrickSize) / VoxSize;
+	const float3 LocalBrickOffset = fmod( WorldPos - GridMin, BrickSize ) / VoxSize;
 	const float3 LocalBrickPos = BrickPos + LocalBrickOffset;
 	return LocalBrickPos / AtlasSize;
 }
