@@ -116,7 +116,7 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 	if (AtlasIdx == Empty) { return; }
 
 	// Write the closest distance into this thread's brick point
-	uint3 AtlasPoint = uint3( AtlasIdxToAtlasCell( AtlasIdxShared ) * BrickResolution, 0 ) + GroupThreadID;
+	uint3 AtlasPoint = BrickIdxToAtlasCell( AtlasIdxShared ) * BrickResolution + GroupThreadID;
 	BrickAtlas[AtlasPoint] = EncodeDistance( Closest, 1.0 / Diagonal );
 }
 
