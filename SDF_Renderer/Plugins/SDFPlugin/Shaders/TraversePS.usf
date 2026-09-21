@@ -7,53 +7,11 @@ Buffer<uint> PtrGrid;
 #include "Common.ush"
 
 // Shader bindings
-StructuredBuffer<FSDFEdit> SDFEdits;
-uint NumEdits;
-
 Texture3D<float> BrickAtlas;
 SamplerState BrickSampler;
 float3 PtrGridPos;
 float VoxSize;
 float UnitScale;
-
-float MapScene( float3 Pos )
-{
-	float ClosestDist = Infinity;
-
-	for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
-	{
-		const FSDFEdit Edit = SDFEdits[EditIdx];
-		EOperation Op = (EOperation)(Edit.Flags & 0x3);
-		bool bSmooth = (Edit.Flags & 1 << 2) != 0;
-		// Evaluate the distance to the SDF
-		const float Dist = DistFn::SphereOrigin( Edit, Pos - Edit.Pos );
-
-		if (bSmooth)
-		{
-			if (Op == EOperation::Union)
-			{
-				ClosestDist = OpSmoothUnion(Dist, ClosestDist, Edit.Smoothing);
-			}
-			else if (Op == EOperation::Subtract)
-			{
-				ClosestDist = OpSmoothSubtract(Dist, ClosestDist, Edit.Smoothing);
-			}
-		}
-		else
-		{
-			if (Op == EOperation::Union)
-			{
-				ClosestDist = OpUnion(Dist, ClosestDist);
-			}
-			else if (Op == EOperation::Subtract)
-			{
-				ClosestDist = OpSubtract(Dist, ClosestDist);
-			}
-		}
-	}
-
-	return ClosestDist;
-}
 
 bool SphereTraceScene( inout FRay Ray )
 {
@@ -61,7 +19,7 @@ bool SphereTraceScene( inout FRay Ray )
 
 	// Step through the scene
 	float DistTravelled = 0.0;
-	for (uint Step = 0; Step < 128; ++Step)
+	for (uint Step = 0; Step < 256; ++Step)
 	{
 		float ClosestDist = MapScene( Ray.Pos + Ray.Dir * DistTravelled );
 
