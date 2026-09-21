@@ -88,6 +88,23 @@ bool TraceGrid( inout FRay Ray )
 	}
 }
 
+bool TraceScene( inout FRay Ray )
+{
+    float AABBHitT, AABBOutT;
+    const float BrickSize = GetBrickSize(VoxSize);
+    const FAABB GridAABB = AABB::PtrGrid(PtrGridPos, BrickSize);
+    if (IntersectAABB(GridAABB, Ray, AABBHitT, AABBOutT))
+    {
+		// Assuming 'Ray.T' is zero
+		const float Epsilon = AABBEpsilon * UnitScale;
+		if (AABBHitT > 0.0) { AABBHitT += Epsilon; }
+		Ray.MaxT = AABBOutT;
+		Ray.Advance( AABBHitT );
+		return TraceGrid( Ray );
+    }
+	return false;
+}
+
 bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 {
 	const float Epsilon = SurfaceEpsilon * UnitScale;
@@ -149,7 +166,7 @@ void TraversePS(
 	const FSDFEdit Edit = SDFEdits[EditHitIdx];
 	const float3 Normal = GetSphereNormal( Edit, RayPos );
 #else
-	if (! TraceGrid( Ray )) { discard; }
+	if (! TraceScene( Ray )) { discard; }
 	const float3 Normal = float3(1,0,0);
 #endif
 
