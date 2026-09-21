@@ -16,6 +16,23 @@ float3 PtrGridPos;
 float VoxSize;
 float UnitScale;
 
+// Brick Sphere Tracing
+bool TraceBrick( inout FRay Ray )
+{
+	
+}
+
+// Pointer Grid DDA
+bool TraceGrid( inout FRay Ray )
+{
+	
+}
+
+bool TraceScene( inout FRay Ray )
+{
+	
+}
+
 bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 {
 	const float Epsilon = SurfaceEpsilon * UnitScale;
@@ -76,7 +93,7 @@ void TraversePS(
 	// Calculate output data
 	const float3 RayPos = Ray.GetPos();
 	const FSDFEdit Edit = SDFEdits[EditHitIdx];
-	const float3 Normal = GetSphereNormal( Edit,RayPos );
+	const float3 Normal = GetSphereNormal( Edit, RayPos );
 	// Convert unit size
 	float ViewZ = mul( float4( (RayPos - Ray.Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
 	OutDepth = ConvertToDeviceZ( ViewZ );

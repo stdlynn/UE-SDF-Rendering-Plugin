@@ -51,6 +51,66 @@ struct FRay
 	float MaxT;
 };
 
+// [CREDITS] DDA algorithm from http://www.cs.yorku.ca/~amana/research/grid.pdf
+struct FDDA
+{
+	static FDDA Init( FRay Ray, float3 BoundsMin, float CellSize )
+	{
+		FDDA DDA;
+		DDA.CellCoord = int3( floor( (Ray.Origin - BoundsMin) / CellSize ) );
+		DDA.CellStep = int3( sign( Ray.Dir ) );
+		DDA.TDelta = abs( CellSize * Ray.InvDir );
+		// The next cell to be hit (on a certain axis) for each axis, in grid space
+		const int3 NextCellCoord = DDA.CellCoord + (DDA.CellStep + 1) / 2;
+		const float3 NextCellCoordWorldSpace = float3( NextCellCoord ) * CellSize + BoundsMin;
+		DDA.TMax = (NextCellCoordWorldSpace - Ray.Origin) * Ray.InvDir;
+		for (uint Axis = 0; Axis < 3; ++Axis)
+		{
+			// Handle ray direction being zero
+			if (Ray.Dir[Axis] == 0) { DDA.TMax[Axis] = Infinity; }
+		}
+		return DDA;
+	}
+
+	// Step the ray
+	bool TryStep( uint3 GridSize, float RayMaxT )
+	{
+		FindNextAxis();
+
+		// Step to the next cell
+		T = TMax[Axis];
+		CellCoord[Axis] += CellStep[Axis];
+		TMax[Axis] += TDelta[Axis];
+
+		return IsValidCell( GridSize, RayMaxT );
+	}
+
+	void FindNextAxis()
+	{
+		Axis = TMax.x < TMax.y
+				   ? TMax.x < TMax.z
+						 ? 0
+						 : 2
+				   : TMax.y < TMax.z
+						 ? 1
+						 : 2;
+	}
+
+	// Grid and ray bounds check
+	bool IsValidCell( uint3 GridSize, float RayMaxT )
+	{
+		return !(CellCoord[Axis] < 0 || CellCoord[Axis] >= GridSize[Axis] || T > RayMaxT);
+	}
+
+	int3 CellCoord; // The ray origin in grid space
+	int3 CellStep; // The step direction for each axis (-1, 0, or 1), in grid space
+	float3 TDelta; // The step size (to move the length of a cell along a certain axis) for each axis, in world space
+	float3 TMax; // The distance to the next cell for each axis, in world space
+
+	uint Axis;
+	float T;
+};
+
 struct FAABB
 {
 	float3 Min;

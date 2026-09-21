@@ -18,72 +18,29 @@ uint DbgVisMaxBricks;
 
 float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
 {
+	// DDA setup
 	Ray.AdvanceOrigin();
+	FDDA DDA = FDDA::Init( Ray, BoundsMin, BrickSize );
 
-	// [CREDITS] DDA algorithm from http://www.cs.yorku.ca/~amana/research/grid.pdf
-	int3 GridCellCoord = int3( floor( (Ray.Origin - BoundsMin) / BrickSize ) ); // The ray origin in pointer-grid space
-	const int3 CellStep = int3( sign( Ray.Dir ) ); // The step direction for each axis (-1, 0, or 1), in pointer-grid space
-	const float3 TDelta = abs( BrickSize * Ray.InvDir ); // The step size (to move the length of a voxel along a certain axis) for each axis, in world space
-	const int3 NextCellCoord = GridCellCoord + (CellStep + 1) / 2; // The next cell to be hit (on a certain axis) for each axis, in pointer-grid space
-	const float3 NextCellCoordWorldSpace = float3( NextCellCoord ) * BrickSize + BoundsMin; // The next cells to be hit (on a certain axis) for each axis, in world space
-	float3 TMax = (NextCellCoordWorldSpace - Ray.Origin) * Ray.InvDir; // The distance to the next cell for each axis, in world space
-
-	// Handle ray direction being zero
-	for (uint AxisIdx = 0; AxisIdx < 3; ++AxisIdx)
+	// Initial sample
+	uint NumHits = 0;
+	if (DDA.IsValidCell( PtrGridSize, Ray.MaxT ))
 	{
-		if (Ray.Dir[AxisIdx] == 0)
+		if (IsBrickAllocated( GridCellToGridIdx( DDA.CellCoord ) ))
 		{
-			TMax[AxisIdx] = 1e38;
+			// Intersection found
+			if (++NumHits >= DbgVisMaxBricks) { NumHits / (float)DbgVisMaxBricks; }
 		}
 	}
 
-	// Take the first step (into the grid)
-	// Necessary for finding the initial axis to move on
-	uint Axis = TMax.x < TMax.y
-					? TMax.x < TMax.z
-						  ? 0
-						  : 2
-					: TMax.y < TMax.z
-						  ? 1
-						  : 2;
-	GridCellCoord[Axis] += CellStep[Axis];
-	TMax[Axis] += TDelta[Axis];
-	if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis]) { return 0.0; }
-	float CurrT = TMax[Axis];
-
 	// Should be safe
-	float TotalT = 0; // Total distance travelled within allocated bricks
-	uint NumHits = 0;
 	while (true)
 	{
-		// Check if a brick is present in the current cell
-		if (IsBrickAllocated( GridCellToGridIdx( GridCellCoord ) ))
+		if (! DDA.TryStep( PtrGridSize, Ray.MaxT )) { break; }
+		if (IsBrickAllocated( GridCellToGridIdx( DDA.CellCoord ) ))
 		{
 			// Intersection found
-			TotalT += TMax[Axis] - CurrT;
 			if (++NumHits >= DbgVisMaxBricks) { break; }
-		}
-
-		// Find the axis on which we are the closest to the next cell
-		Axis = TMax.x < TMax.y
-				   ? TMax.x < TMax.z
-						 ? 0
-						 : 2
-				   : TMax.y < TMax.z
-						 ? 1
-						 : 2;
-
-		// Store the distance travelled AFTER we step to the next cell
-		CurrT = TMax[Axis];
-
-		// Step to the next cell
-		GridCellCoord[Axis] += CellStep[Axis];
-		TMax[Axis] += TDelta[Axis];
-
-		// Voxel object and ray bounds check
-		if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis] || CurrT > Ray.MaxT)
-		{
-			break;
 		}
 	}
 
@@ -128,8 +85,7 @@ void DebugCS( uint2 DispatchThreadId : SV_DispatchThreadID )
 	const float2 SampleUV = ((float2)SampleCoord + 0.5) * SceneColorViewport_ExtentInverse;
 	const float2 ViewportUV = (DispatchThreadId + 0.5) * SceneColorViewport_ViewportSizeInverse;
 	const float2 NDC = ViewportUV * float2( 2, -2 ) + float2( -1, 1 );
-
-	// TODO: DEPTH IS DIFFERENT DEPENDING ON VIEWPORT SIZE
+	
 	// Ray setup
 	const float4 TranslatedWorldPosH = mul( float4( NDC, 0.5, 1 ), View.ClipToTranslatedWorld );
 	const float3 Dir = normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w );
@@ -146,8 +102,9 @@ void DebugCS( uint2 DispatchThreadId : SV_DispatchThreadID )
 	if (IntersectAABB( GridAABB, Ray, AABBHitT, AABBOutT ))
 	{
 		// Grid DDA
+		// Assuming 'Ray.T' is zero
 		const float Epsilon = AABBEpsilon * UnitScale;
-		AABBHitT = max( AABBHitT - Epsilon, 0 );
+		if (AABBHitT > 0.0) { AABBHitT += Epsilon; }
 		Ray.MaxT = AABBOutT;
 		Ray.Advance( AABBHitT );
 		NumHits = NumBrickHits( Ray, GridAABB.Min, BrickSize );
