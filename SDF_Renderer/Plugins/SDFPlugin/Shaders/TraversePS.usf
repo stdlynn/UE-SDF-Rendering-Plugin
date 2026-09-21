@@ -18,6 +18,25 @@ float3 PtrGridPos;
 float VoxSize;
 float UnitScale;
 
+float SampleDistClamped( float3 Pos, float3 BoundsMin )
+{
+	const float Diagonal = GetDiagonal( VoxSize );
+	const float3 UVW = WorldPosToAtlasUVW( Pos, BoundsMin, VoxSize );
+	const float EncodedDist = BrickAtlas.Sample( GlobalTrilinearClampedSampler, UVW );
+	const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
+	return SampleDist;
+}
+
+float3 GetNormal( float3 Pos, float3 BoundsMin )
+{
+	const float H = 4e-4 * UnitScale; // TODO:
+	const float2 K = float2( 1, -1 );
+	return normalize( K.xyy * SampleDistClamped( Pos + (K.xyy * H), BoundsMin ) +
+					  K.yyx * SampleDistClamped( Pos + (K.yyx * H), BoundsMin ) +
+					  K.yxy * SampleDistClamped( Pos + (K.yxy * H), BoundsMin ) +
+					  K.xxx * SampleDistClamped( Pos + (K.xxx * H), BoundsMin ) );
+}
+
 // Brick Sphere Tracing
 bool TraceBrick( inout FRay Ray )
 {
@@ -27,7 +46,7 @@ bool TraceBrick( inout FRay Ray )
 }
 
 // Pointer Grid DDA
-bool TraceGrid( inout FRay Ray )
+bool TraceGrid( inout FRay Ray, out float3 Normal )
 {
 	// TODO:
 	const float Epsilon = SurfaceEpsilon * UnitScale;
@@ -73,6 +92,7 @@ bool TraceGrid( inout FRay Ray )
 				if (SampleDist < 0.0) // TODO: use epsilon
 				{
 					Ray.Advance( TempT );
+					Normal = GetNormal( Ray.GetPos(), GridAABB.Min );
 					return true;
 				}
 				TempT += SampleDist;
@@ -88,7 +108,7 @@ bool TraceGrid( inout FRay Ray )
 	}
 }
 
-bool TraceScene( inout FRay Ray )
+bool TraceScene( inout FRay Ray, out float3 Normal )
 {
     float AABBHitT, AABBOutT;
     const float BrickSize = GetBrickSize(VoxSize);
@@ -100,7 +120,7 @@ bool TraceScene( inout FRay Ray )
 		if (AABBHitT > 0.0) { AABBHitT += Epsilon; }
 		Ray.MaxT = AABBOutT;
 		Ray.Advance( AABBHitT );
-		return TraceGrid( Ray );
+		return TraceGrid( Ray, Normal );
     }
 	return false;
 }
@@ -166,8 +186,8 @@ void TraversePS(
 	const FSDFEdit Edit = SDFEdits[EditHitIdx];
 	const float3 Normal = GetSphereNormal( Edit, RayPos );
 #else
-	if (! TraceScene( Ray )) { discard; }
-	const float3 Normal = float3(1,0,0);
+	float3 Normal;
+	if (! TraceScene( Ray, Normal )) { discard; }
 #endif
 
 	// Convert unit size
