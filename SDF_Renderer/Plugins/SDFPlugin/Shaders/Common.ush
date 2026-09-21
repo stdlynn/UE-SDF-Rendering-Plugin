@@ -39,9 +39,14 @@ struct FRay
 		T = 0.0;
 	}
 
+	float3 GetPosAt( float Dist )
+	{
+		return Origin + (Dir * Dist);
+	}
+
 	float3 GetPos()
 	{
-		return Origin + (Dir * T);
+		return GetPosAt( T );
 	}
 
 	float3 Origin;
@@ -72,6 +77,13 @@ struct FDDA
 		return DDA;
 	}
 
+	void ScaleUnitSize( float Scale )
+	{
+		TDelta *= Scale;
+		TMax *= Scale;
+		T *= Scale;
+	}
+
 	// Step the ray
 	bool TryStep( uint3 GridSize, float RayMaxT )
 	{
@@ -85,6 +97,7 @@ struct FDDA
 		return IsValidCell( GridSize, RayMaxT );
 	}
 
+	// Find the axis on which we are the closest to the next cell
 	void FindNextAxis()
 	{
 		Axis = TMax.x < TMax.y
@@ -102,7 +115,7 @@ struct FDDA
 		return !(CellCoord[Axis] < 0 || CellCoord[Axis] >= GridSize[Axis] || T > RayMaxT);
 	}
 
-	int3 CellCoord; // The ray origin in grid space
+	int3 CellCoord; // The ray position in grid space
 	int3 CellStep; // The step direction for each axis (-1, 0, or 1), in grid space
 	float3 TDelta; // The step size (to move the length of a cell along a certain axis) for each axis, in world space
 	float3 TMax; // The distance to the next cell for each axis, in world space

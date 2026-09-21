@@ -6,6 +6,8 @@ Buffer<uint> PtrGrid;
 #include "BrickmapCommon.ush"
 #include "Common.ush"
 
+#define ENABLE_BRUTE_FORCE_SPHERE_TRACING 0
+
 // Shader bindings
 StructuredBuffer<FSDFEdit> SDFEdits;
 uint NumEdits;
@@ -19,18 +21,73 @@ float UnitScale;
 // Brick Sphere Tracing
 bool TraceBrick( inout FRay Ray )
 {
-	
+	// Compute position local to brick (probably as VoxSize=1.0, yes definitely)
+	// Compute MaxT
+	// Sphere trace
 }
 
 // Pointer Grid DDA
 bool TraceGrid( inout FRay Ray )
 {
-	
-}
+	// TODO:
+	const float Epsilon = SurfaceEpsilon * UnitScale;
+	const float BrickSize = GetBrickSize( VoxSize );
+	const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
+	const float Diagonal = GetDiagonal( VoxSize );
 
-bool TraceScene( inout FRay Ray )
-{
-	
+	// Setup
+	Ray.AdvanceOrigin();
+	FDDA DDA = FDDA::Init( Ray, GridAABB.Min, BrickSize );
+
+	// TODO: idkkk
+	// Step in brick space
+	//DDA.ScaleUnitSize( 1.0 / BrickSize );
+
+	// Initial sample
+	if (DDA.IsValidCell( PtrGridSize, Ray.MaxT ))
+	{
+		if (IsBrickAllocated( GridCellToGridIdx( DDA.CellCoord ) ))
+		{
+			// Edge case, might start inside any point within a brick
+			//return true;
+		}
+	}
+
+	// Should be safe
+	while (true)
+	{
+		if (! DDA.TryStep( PtrGridSize, Ray.MaxT )) { return false; }
+		uint GridIdx = GridCellToGridIdx( DDA.CellCoord );
+		if (IsBrickAllocated( GridIdx ))
+		{
+			DDA.FindNextAxis(); // TODO: make more efficient
+			const float DistInsideBrick = DDA.TMax[DDA.Axis];
+
+			float TempT = DDA.T;
+			uint i = 0;
+			while (TempT < DistInsideBrick && i < 32)
+			{
+				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAt( TempT ), GridAABB.Min, VoxSize );
+				const float EncodedDist = BrickAtlas.Sample( GlobalTrilinearClampedSampler, UVW );
+				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
+				if (SampleDist < Epsilon)
+				{
+					Ray.Advance( TempT );
+					return true;
+				}
+				TempT += SampleDist;
+				i++;
+			}
+
+			//const float3 WorldPos = Ray.GetPosAt( DDA.T );
+			//const float3 LocalGridPos = (WorldPos - PtrGridPos) / BrickSize;
+			//const float3 LocalBrickPos = (LocalGridPos - DDA.CellCoord) * VoxelResolution;
+			//
+			//BrickIdxToAtlasCell( PtrGrid[GridIdx] )
+
+			return true;
+		}
+	}
 }
 
 bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
@@ -85,16 +142,21 @@ void TraversePS(
 	const float3 Origin = View.ViewOriginHigh * UnitScale; // Convert unit size
 	FRay Ray = FRay::Create( Origin, Dir );
 
+#if ENABLE_BRUTE_FORCE_SPHERE_TRACING
 	// Sphere trace
 	// Discard this fragment if we don't hit anything, keep whatever was already in the GBuffer
 	uint EditHitIdx;
 	if (! SphereTraceScene( Ray, EditHitIdx )) { discard; }
-
 	// Calculate output data
-	const float3 RayPos = Ray.GetPos();
 	const FSDFEdit Edit = SDFEdits[EditHitIdx];
 	const float3 Normal = GetSphereNormal( Edit, RayPos );
+#else
+	if (! TraceGrid( Ray )) { discard; }
+	const float3 Normal = float3(1,0,0);
+#endif
+
 	// Convert unit size
+	const float3 RayPos = Ray.GetPos();
 	float ViewZ = mul( float4( (RayPos - Ray.Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
 	OutDepth = ConvertToDeviceZ( ViewZ );
 

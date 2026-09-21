@@ -94,6 +94,7 @@ uint3 BrickIdxToAtlasCell( uint BrickIdx )
 	return uint3( X, Y, Z );
 }
 
+// TODO: unused lol
 float3 WorldPosToAtlasUVW( float3 WorldPos, float3 GridMin, float VoxSize )
 {
 	const float BrickSize = GetBrickSize( VoxSize );
@@ -102,7 +103,6 @@ float3 WorldPosToAtlasUVW( float3 WorldPos, float3 GridMin, float VoxSize )
 	const uint BrickIdx = PtrGrid[GridIdx];
 	const uint3 AtlasCell = BrickIdxToAtlasCell( BrickIdx );
 	const float3 BrickPos = AtlasCell * BrickResolution;
-	// TODO: wrong?
 	const float3 LocalBrickOffset = fmod( WorldPos - GridMin, BrickSize ) / VoxSize;
 	const float3 LocalBrickPos = BrickPos + LocalBrickOffset;
 	return LocalBrickPos / AtlasSize;
