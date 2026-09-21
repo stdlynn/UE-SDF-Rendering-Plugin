@@ -21,7 +21,6 @@ bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 	const float Epsilon = SurfaceEpsilon * UnitScale;
 
 	// Step through the scene
-	float DistTravelled = 0.0;
 	for (uint Step = 0; Step < 64; ++Step)
 	{
 		// For each step, go over each SDF
@@ -30,8 +29,8 @@ bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 		{
 			// Evaluate the distance to the SDF
 			const FSDFEdit Edit = SDFEdits[EditIdx];
-			const float3 RayPos = (Ray.Pos - Edit.Pos) + (Ray.Dir * DistTravelled);
-			const float Dist = abs( DistFn::SphereOrigin( Edit, RayPos ) );
+			const float3 LocalRayPos = Ray.GetPos() - Edit.Pos;
+			const float Dist = abs( DistFn::SphereOrigin( Edit, LocalRayPos ) );
 			if (Dist < ClosestDist)
 			{
 				ClosestDist = Dist;
@@ -40,14 +39,10 @@ bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 		}
 
 		// Stop stepping if we hit a surface (or are close enough to one)
-		if (ClosestDist < Epsilon)
-		{
-			Ray.Advance( DistTravelled );
-			return true;
-		}
+		if (ClosestDist < Epsilon) { return true; }
 
 		// Step
-		DistTravelled += ClosestDist;
+		Ray.Advance( ClosestDist );
 	}
 
 	// No intersections found
@@ -79,10 +74,11 @@ void TraversePS(
 	if (! SphereTraceScene( Ray, EditHitIdx )) { discard; }
 
 	// Calculate output data
+	const float3 RayPos = Ray.GetPos();
 	const FSDFEdit Edit = SDFEdits[EditHitIdx];
-	const float3 Normal = GetSphereNormal( Edit, Ray.Pos );
+	const float3 Normal = GetSphereNormal( Edit,RayPos );
 	// Convert unit size
-	float ViewZ = mul( float4( (Ray.Pos - Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
+	float ViewZ = mul( float4( (RayPos - Ray.Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
 	OutDepth = ConvertToDeviceZ( ViewZ );
 
 	FGBufferData GBuffer = (FGBufferData)0;

@@ -16,28 +16,39 @@ struct FSDFEdit
 
 struct FRay
 {
-	static FRay Create( float3 Pos, float3 Dir, float T = Infinity )
+	static FRay Create( float3 Pos, float3 Dir, float MaxT = Infinity )
 	{
 		FRay Ray;
-		Ray.Pos = Pos;
+		Ray.Origin = Pos;
 		Ray.Dir = Dir;
 		Ray.InvDir = 1.0 / Dir;
-		Ray.T = T;
+		Ray.T = 0.0;
+		Ray.MaxT = MaxT;
 		return Ray;
 	}
 
 	void Advance( float Dist )
 	{
-		Pos += Dir * Dist;
-		// TODO: when this is MaxT, don't subtract, it isn't ""RemainingT""
-		T -= Dist;
+		T += Dist;
 	}
 
-	float3 Pos;
+	void AdvanceOrigin()
+	{
+		Origin += Dir * T;
+		MaxT -= T;
+		T = 0.0;
+	}
+
+	float3 GetPos()
+	{
+		return Origin + (Dir * T);
+	}
+
+	float3 Origin;
 	float3 Dir;
 	float3 InvDir;
-	// TODO: change to MaxT, also add a T (so we don't need to advance the ray pos itself)
 	float T;
+	float MaxT;
 };
 
 struct FAABB
@@ -50,12 +61,12 @@ struct FAABB
 // If true, hit_t is the intersection time
 bool IntersectAABB( FAABB Bounds, FRay Ray, out float TNear, out float TFar )
 {
-	const float3 TToMin = (Bounds.Min - Ray.Pos) * Ray.InvDir;
-	const float3 TToMax = (Bounds.Max - Ray.Pos) * Ray.InvDir;
+	const float3 TToMin = (Bounds.Min - Ray.Origin) * Ray.InvDir;
+	const float3 TToMax = (Bounds.Max - Ray.Origin) * Ray.InvDir;
 	const float3 TMin = min( TToMin, TToMax );
 	const float3 TMax = max( TToMin, TToMax );
-	TNear = max( max3( TMin.x, TMin.y, TMin.z ), 0 );
-	TFar = min( min3( TMax.x, TMax.y, TMax.z ), Ray.T );
+	TNear = max( max3( TMin.x, TMin.y, TMin.z ), Ray.T );
+	TFar = min( min3( TMax.x, TMax.y, TMax.z ), Ray.MaxT );
 
 	return TNear <= TFar;
 }

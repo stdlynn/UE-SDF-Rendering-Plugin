@@ -18,13 +18,15 @@ uint DbgVisMaxBricks;
 
 float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
 {
+	Ray.AdvanceOrigin();
+
 	// [CREDITS] DDA algorithm from http://www.cs.yorku.ca/~amana/research/grid.pdf
-	int3 GridCellCoord = int3( floor( (Ray.Pos - BoundsMin) / BrickSize ) ); // The ray origin in pointer-grid space
+	int3 GridCellCoord = int3( floor( (Ray.Origin - BoundsMin) / BrickSize ) ); // The ray origin in pointer-grid space
 	const int3 CellStep = int3( sign( Ray.Dir ) ); // The step direction for each axis (-1, 0, or 1), in pointer-grid space
 	const float3 TDelta = abs( BrickSize * Ray.InvDir ); // The step size (to move the length of a voxel along a certain axis) for each axis, in world space
 	const int3 NextCellCoord = GridCellCoord + (CellStep + 1) / 2; // The next cell to be hit (on a certain axis) for each axis, in pointer-grid space
 	const float3 NextCellCoordWorldSpace = float3( NextCellCoord ) * BrickSize + BoundsMin; // The next cells to be hit (on a certain axis) for each axis, in world space
-	float3 TMax = (NextCellCoordWorldSpace - Ray.Pos) * Ray.InvDir; // The distance to the next cell for each axis, in world space
+	float3 TMax = (NextCellCoordWorldSpace - Ray.Origin) * Ray.InvDir; // The distance to the next cell for each axis, in world space
 
 	// Handle ray direction being zero
 	for (uint AxisIdx = 0; AxisIdx < 3; ++AxisIdx)
@@ -79,7 +81,7 @@ float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
 		TMax[Axis] += TDelta[Axis];
 
 		// Voxel object and ray bounds check
-		if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis] || CurrT > Ray.T)
+		if (GridCellCoord[Axis] < 0 || GridCellCoord[Axis] >= PtrGridSize[Axis] || CurrT > Ray.MaxT)
 		{
 			break;
 		}
@@ -146,7 +148,7 @@ void DebugCS( uint2 DispatchThreadId : SV_DispatchThreadID )
 		// Grid DDA
 		const float Epsilon = AABBEpsilon * UnitScale;
 		AABBHitT = max( AABBHitT - Epsilon, 0 );
-		Ray.T = AABBOutT;
+		Ray.MaxT = AABBOutT;
 		Ray.Advance( AABBHitT );
 		NumHits = NumBrickHits( Ray, GridAABB.Min, BrickSize );
 	}
