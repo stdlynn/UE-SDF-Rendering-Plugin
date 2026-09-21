@@ -70,7 +70,7 @@ bool TraceGrid( inout FRay Ray )
 				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAt( TempT ), GridAABB.Min, VoxSize );
 				const float EncodedDist = BrickAtlas.Sample( GlobalTrilinearClampedSampler, UVW );
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
-				if (SampleDist < Epsilon)
+				if (SampleDist < 0.0) // TODO: use epsilon
 				{
 					Ray.Advance( TempT );
 					return true;
@@ -84,8 +84,6 @@ bool TraceGrid( inout FRay Ray )
 			//const float3 LocalBrickPos = (LocalGridPos - DDA.CellCoord) * VoxelResolution;
 			//
 			//BrickIdxToAtlasCell( PtrGrid[GridIdx] )
-
-			return true;
 		}
 	}
 }
