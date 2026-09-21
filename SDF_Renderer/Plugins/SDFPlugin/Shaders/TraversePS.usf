@@ -16,28 +16,54 @@ float3 PtrGridPos;
 float VoxSize;
 float UnitScale;
 
-bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
+float MapScene( float3 Pos )
+{
+	float ClosestDist = Infinity;
+
+	for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
+	{
+		const FSDFEdit Edit = SDFEdits[EditIdx];
+		EOperation Op = (EOperation)(Edit.Flags & 0x3);
+		bool bSmooth = (Edit.Flags & 1 << 2) != 0;
+		// Evaluate the distance to the SDF
+		const float Dist = DistFn::SphereOrigin( Edit, Pos - Edit.Pos );
+
+		if (bSmooth)
+		{
+			if (Op == EOperation::Union)
+			{
+				ClosestDist = OpSmoothUnion(Dist, ClosestDist, Edit.Smoothing);
+			}
+			else if (Op == EOperation::Subtract)
+			{
+				ClosestDist = OpSmoothSubtract(Dist, ClosestDist, Edit.Smoothing);
+			}
+		}
+		else
+		{
+			if (Op == EOperation::Union)
+			{
+				ClosestDist = OpUnion(Dist, ClosestDist);
+			}
+			else if (Op == EOperation::Subtract)
+			{
+				ClosestDist = OpSubtract(Dist, ClosestDist);
+			}
+		}
+	}
+
+	return ClosestDist;
+}
+
+bool SphereTraceScene( inout FRay Ray )
 {
 	const float Epsilon = SurfaceEpsilon * UnitScale;
 
 	// Step through the scene
 	float DistTravelled = 0.0;
-	for (uint Step = 0; Step < 64; ++Step)
+	for (uint Step = 0; Step < 128; ++Step)
 	{
-		// For each step, go over each SDF
-		float ClosestDist = Infinity;
-		for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
-		{
-			// Evaluate the distance to the SDF
-			const FSDFEdit Edit = SDFEdits[EditIdx];
-			const float3 RayPos = (Ray.Pos - Edit.Pos) + (Ray.Dir * DistTravelled);
-			const float Dist = abs( DistFn::SphereOrigin( Edit, RayPos ) );
-			if (Dist < ClosestDist)
-			{
-				ClosestDist = Dist;
-				EditHitIdx = EditIdx;
-			}
-		}
+		float ClosestDist = MapScene( Ray.Pos + Ray.Dir * DistTravelled );
 
 		// Stop stepping if we hit a surface (or are close enough to one)
 		if (ClosestDist < Epsilon)
@@ -52,6 +78,19 @@ bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 
 	// No intersections found
 	return false;
+}
+
+// https://iquilezles.org/articles/normalsSDF/
+float3 GetNormal( float3 Pos )
+{
+	// Note that the normals are reversed on the inside of geometry (so for negative distances)
+	// This should be fine, as those should never be visible anyway
+	const float H = 4e-4; // magic value for now, read linked article for details
+	const float2 K = float2( 1, -1 );
+	return normalize( K.xyy * MapScene( Pos + (K.xyy * H) ) +
+					  K.yyx * MapScene( Pos + (K.yyx * H) ) +
+					  K.yxy * MapScene( Pos + (K.yxy * H) ) +
+					  K.xxx * MapScene( Pos + (K.xxx * H) ) );
 }
 
 void TraversePS(
@@ -75,12 +114,10 @@ void TraversePS(
 
 	// Sphere trace
 	// Discard this fragment if we don't hit anything, keep whatever was already in the GBuffer
-	uint EditHitIdx;
-	if (! SphereTraceScene( Ray, EditHitIdx )) { discard; }
+	if (! SphereTraceScene( Ray )) { discard; }
 
 	// Calculate output data
-	const FSDFEdit Edit = SDFEdits[EditHitIdx];
-	const float3 Normal = GetSphereNormal( Edit, Ray.Pos );
+	const float3 Normal = GetNormal( Ray.Pos );
 	// Convert unit size
 	float ViewZ = mul( float4( (Ray.Pos - Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
 	OutDepth = ConvertToDeviceZ( ViewZ );

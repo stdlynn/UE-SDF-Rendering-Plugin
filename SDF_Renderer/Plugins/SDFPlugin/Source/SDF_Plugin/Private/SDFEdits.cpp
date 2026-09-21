@@ -11,6 +11,16 @@ ASDFActor::ASDFActor()
 	PrimaryActorTick.bCanEverTick = false;
 }
 
+FGPUSDF::FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
+	: Pos{ RenderSDF.Pos * GPUUnitScale }
+	, Radius{ RenderSDF.Radius * GPUUnitScale }
+	, Smoothing{ RenderSDF.Smoothing * GPUUnitScale }
+	, ID{ ID }
+{
+	Flags = static_cast<uint32>(RenderSDF.Operation) & 0x3u; // bits 0-1
+	Flags |= (RenderSDF.bSmoothed ? 1u : 0u) << 2; // bit 2
+}
+
 USDFComponent::USDFComponent()
 	: ID{ NextID++ }
 {
