@@ -14,11 +14,22 @@ ASDFActor::ASDFActor()
 FGPUSDF::FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
 	: Pos{ RenderSDF.Pos * GPUUnitScale }
 	, Radius{ RenderSDF.Radius * GPUUnitScale }
-	, Smoothing{ RenderSDF.Smoothing * GPUUnitScale }
+	, SmoothingStrength{ RenderSDF.SmoothingStrength * GPUUnitScale }
 	, ID{ ID }
 {
-	Flags = static_cast<uint32>(RenderSDF.Operation) & 0x3u; // bits 0-1
-	Flags |= (RenderSDF.bSmoothed ? 1u : 0u) << 2; // bit 2
+	SetOperation(RenderSDF.Operation);
+	EnableSmoothing(RenderSDF.bSmooths);
+}
+
+void FGPUSDF::SetOperation(const EOperation NewOperation)
+{
+	Flags = (Flags & ~1u) | static_cast<uint32>(NewOperation);
+}
+
+void FGPUSDF::EnableSmoothing(const bool Enabled)
+{
+	static constexpr uint32 Mask = 0b10;
+	Flags = (Flags & ~Mask) | (Enabled ? Mask : 0u);
 }
 
 USDFComponent::USDFComponent()

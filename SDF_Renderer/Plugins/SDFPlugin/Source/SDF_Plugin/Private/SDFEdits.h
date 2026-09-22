@@ -24,7 +24,7 @@ struct FGameSDF
 	EOperation Operation{ EOperation::Add };
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	bool bDoesSmoothing{ false };
+	bool bSmooths{ false };
 
 	UPROPERTY( EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "1.0") )
 	float Smoothing{ 0.0f };
@@ -37,14 +37,14 @@ struct FRenderSDF
 		: Pos{ Pos }
 		, Radius{ GameSDF.Radius }
 		, Operation{ GameSDF.Operation }
-		, bSmoothed{ GameSDF.bDoesSmoothing }
-		, Smoothing{ GameSDF.Smoothing } {}
+		, bSmooths{ GameSDF.bSmooths }
+		, SmoothingStrength{ GameSDF.Smoothing } {}
 
 	FVector3f Pos;
 	float Radius;
 	EOperation Operation;
-	bool bSmoothed;
-	float Smoothing;
+	bool bSmooths;
+	float SmoothingStrength;
 };
 
 // GPU SDF edits
@@ -53,10 +53,13 @@ struct alignas(16) FGPUSDF
 	// Convert to GPU unit scale
 	FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale );
 
+	void SetOperation( const EOperation NewOperation );
+	void EnableSmoothing( const bool Enabled );
+
 	FVector3f Pos;
 	float Radius;
-	uint32 Flags; // bits 0-1: operation, 2: bSmoothed
-	float Smoothing;
+	uint32 Flags; // bit 0: operation, 1: bSmooths
+	float SmoothingStrength;
 	uint32 ID;
 };
 
@@ -95,7 +98,7 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void SetDoesSmoothing(bool bNewDoesSmoothing)
 	{
-		GameSDF.bDoesSmoothing = bNewDoesSmoothing;
+		GameSDF.bSmooths = bNewDoesSmoothing;
 		SetDirty();
 	}
 
