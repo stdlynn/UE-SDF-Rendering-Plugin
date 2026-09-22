@@ -15,6 +15,8 @@ float3 PtrGridPos;
 float VoxSize;
 float UnitScale;
 
+// TODO: make this clamped
+// TODO: if outside of bounds, return Diagonal? Unsure
 float SampleDistClamped( float3 Pos, float3 BoundsMin )
 {
 	const float Diagonal = GetDiagonal( VoxSize );
@@ -26,7 +28,7 @@ float SampleDistClamped( float3 Pos, float3 BoundsMin )
 
 float3 GetNormal( float3 Pos, float3 BoundsMin )
 {
-	const float H = 4e-4 * UnitScale; // TODO: also check elsewhere
+	const float H = 4e-2 * UnitScale; // TODO: also check elsewhere
 	const float2 K = float2( 1, -1 );
 	return normalize( K.xyy * SampleDistClamped( Pos + (K.xyy * H), BoundsMin ) +
 					  K.yyx * SampleDistClamped( Pos + (K.yyx * H), BoundsMin ) +
@@ -43,7 +45,7 @@ bool TraceBrick( inout FRay Ray )
 }
 
 // Pointer Grid DDA
-bool TraceGrid( inout FRay Ray, out float3 Normal, inout bool bDebug )
+bool TraceGrid( inout FRay Ray, out float3 Normal )
 {
 	// TODO:
 	const float Epsilon = SurfaceEpsilon * UnitScale;
@@ -62,10 +64,31 @@ bool TraceGrid( inout FRay Ray, out float3 Normal, inout bool bDebug )
 	// Initial sample
 	if (DDA.IsValidCell( PtrGridSize, Ray.MaxT ))
 	{
+		// TODO:
+		// TODO: DEPTH IS WRONG WHEN OUTSIDE OF THE GRID
+		// TODO:
 		if (IsBrickAllocated( GridCellToGridIdx( DDA.CellCoord ) ))
 		{
 			// Edge case, might start inside any point within a brick
 			//return true;
+			DDA.FindNextAxis(); // TODO: make more efficient
+			const float DistInsideBrick = DDA.TMax[DDA.Axis];
+
+			float TempT = DDA.T;
+			uint i = 0;
+			while (TempT < DistInsideBrick && i < 32)
+			{
+				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAt( TempT ), GridAABB.Min, VoxSize );const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
+				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
+				if (SampleDist < 0.0) // TODO: use epsilon
+				{
+					Ray.Advance( TempT );
+					Normal = GetNormal( Ray.GetPos(), GridAABB.Min );
+					return true;
+				}
+				TempT += SampleDist;
+				i++;
+			}
 		}
 	}
 	else
@@ -91,13 +114,6 @@ bool TraceGrid( inout FRay Ray, out float3 Normal, inout bool bDebug )
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
 				if (SampleDist < 0.0) // TODO: use epsilon
 				{
-					//float3 MinWorld = GridCellToWorldPos( DDA.CellCoord, GridAABB.Min, BrickSize );
-					//float3 MinUVW = WorldPosToAtlasUVW( MinWorld, GridAABB.Min, VoxSize );
-					//float3 MaxUVW = MinUVW + 1.0 / NumAtlasBricks;
-					//if (any(UVW < MinUVW) || any(UVW > MaxUVW))
-					//{
-					//	bDebug = true;
-					//}
 					Ray.Advance( TempT );
 					Normal = GetNormal( Ray.GetPos(), GridAABB.Min );
 					return true;
@@ -115,7 +131,7 @@ bool TraceGrid( inout FRay Ray, out float3 Normal, inout bool bDebug )
 	}
 }
 
-bool TraceScene( inout FRay Ray, out float3 Normal, inout bool bDebug )
+bool TraceScene( inout FRay Ray, out float3 Normal )
 {
 	// Assume Ray.T is zero
     float AABBHitT, AABBOutT;
@@ -125,11 +141,10 @@ bool TraceScene( inout FRay Ray, out float3 Normal, inout bool bDebug )
     {
 		// Assuming 'Ray.T' is zero
 		const float Epsilon = AABBEpsilon * UnitScale;
-    	//AABBHitT += Epsilon;
 		if (AABBHitT > 0.0) { AABBHitT += Epsilon; }
 		Ray.MaxT = AABBOutT;
 		Ray.Advance( AABBHitT );
-		return TraceGrid( Ray, Normal, bDebug );
+		return TraceGrid( Ray, Normal );
     }
 	return false;
 }
@@ -192,11 +207,16 @@ void TraversePS(
 	// Discard this fragment if we don't hit anything, keep whatever was already in the GBuffer
 	if (! SphereTraceScene( Ray )) { discard; }
 	// Calculate output data
-	const float3 Normal = GetNormal( Ray.Pos );
+	Ray.AdvanceOrigin();
+	const float H = 4e-4; // magic value for now, read linked article for details
+	const float2 K = float2( 1, -1 );
+	const float3 Normal = normalize( K.xyy * MapScene( Ray.Origin + (K.xyy * H) ) +
+									 K.yyx * MapScene( Ray.Origin + (K.yyx * H) ) +
+									 K.yxy * MapScene( Ray.Origin + (K.yxy * H) ) +
+									 K.xxx * MapScene( Ray.Origin + (K.xxx * H) ) );
 #else
 	float3 Normal;
-	bool bDebug = false;
-	if (! TraceScene( Ray, Normal, bDebug )) { discard; }
+	if (! TraceScene( Ray, Normal )) { discard; }
 #endif
 
 	// Convert unit size
@@ -219,7 +239,7 @@ void TraversePS(
 	// Write to the packed GBuffer channels
 	float4 GA, GB, GC, GD, GE, GV;
 	EncodeGBuffer( GBuffer, GA, GB, GC, GD, GE, GV );
-	OutSceneColor = (bDebug * 1.0).xxxx;
+	OutSceneColor = (0).xxxx;
 	OutGBufferA = GA;
 	OutGBufferB = GB;
 	OutGBufferC = GC;
