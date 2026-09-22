@@ -66,6 +66,10 @@ bool TraceGrid( inout FRay Ray, out float3 Normal )
 	{
 		// TODO:
 		// TODO: DEPTH IS WRONG WHEN OUTSIDE OF THE GRID
+		// TODO: you can tell when moving the sphere partially outside the grid
+		// TODO: while the below code is enabled
+		// TODO:
+		// TODO: Depth in general is wrong, enable the debug visualization and see
 		// TODO:
 		if (IsBrickAllocated( GridCellToGridIdx( DDA.CellCoord ) ))
 		{

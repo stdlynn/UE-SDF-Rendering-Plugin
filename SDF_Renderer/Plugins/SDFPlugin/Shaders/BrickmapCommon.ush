@@ -10,8 +10,8 @@
 // GridCell   | uint3  | 0-63   | PtrGrid cell index					|
 // AtlasCell  |	uint3  | 0-127  | 3D Brick cell index in Atlas			|
 // AtlasUVW   |	float3 | 0-1    | Atlas sample coord (trilinear)		|
-// AtlasPoint |	uint3  | *		| Atlas texel coord						| //TODO: AtlasVox preferable?
-// BrickPoint |	uint3  | 0-7	| Atlas texel coord, local to brick		|
+// AtlasPoint |	uint3  | *		| Atlas texel coord						| // TODO: AtlasVox preferable?
+// BrickPoint |	uint3  | 0-7	| Atlas texel coord, local to brick		| // TODO: BrickVox
 // BrickIdx   |	uint   | 0-16k  | Index to a Brick (stored in PtrGrid)	|
 // GridIdx    | uint   | 0-262k | index to a GridCell					|
 //																		|
