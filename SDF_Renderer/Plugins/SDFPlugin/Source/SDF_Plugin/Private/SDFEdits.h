@@ -8,8 +8,7 @@ UENUM(BlueprintType)
 enum class EOperation : uint8
 {
 	Add       UMETA( DisplayName = "Add" ),
-	Subtract  UMETA( DisplayName = "Subtract" ),
-	Intserect UMETA( DisplayName = "Intersect" )
+	Subtract  UMETA( DisplayName = "Subtract" )
 };
 
 // SDF edit representation used for the SDF component
