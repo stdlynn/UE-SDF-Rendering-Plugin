@@ -10,7 +10,7 @@
 // GridCell   | uint3  | 0-63   | PtrGrid cell index					|
 // AtlasCell  |	uint3  | 0-127  | 3D Brick cell index in Atlas			|
 // AtlasUVW   |	float3 | 0-1    | Atlas sample coord (trilinear)		|
-// AtlasPoint |	uint3  | *		| Atlas texel coord						|
+// AtlasPoint |	uint3  | *		| Atlas texel coord						| //TODO: AtlasVox preferable?
 // BrickPoint |	uint3  | 0-7	| Atlas texel coord, local to brick		|
 // BrickIdx   |	uint   | 0-16k  | Index to a Brick (stored in PtrGrid)	|
 // GridIdx    | uint   | 0-262k | index to a GridCell					|
@@ -18,18 +18,18 @@
 // * (0-127, 0-127, 0-7)												|
 //______________________________________________________________________|
 
-static const uint BrickResolution = 8;
-static const uint VoxelResolution = BrickResolution - 1;
+static const uint BrickRes = 8;
+static const uint VoxRes = BrickRes - 1;
 
 static const uint3 NumAtlasBricks = uint3( 256, 256, 2 );
-static const uint3 AtlasSize = NumAtlasBricks * BrickResolution;
+static const uint3 AtlasSize = NumAtlasBricks * BrickRes;
 
 static const uint3 PtrGridSize = uint3( 256, 256, 256 );
 static const uint3 MaxGridIdx = PtrGridSize - 1;
 
 float GetBrickSize( float VoxSize )
 {
-	return VoxSize * VoxelResolution;
+	return VoxSize * VoxRes;
 }
 
 float GetDiagonal( float VoxSize )
@@ -94,23 +94,30 @@ uint3 BrickIdxToAtlasCell( uint BrickIdx )
 	return uint3( X, Y, Z );
 }
 
-float3 BrickLocalToAtlasUVW( uint BrickIdx, float3 LocalVoxelPos )
-{
-	const uint3 AtlasCell = BrickIdxToAtlasCell( BrickIdx );
-	const float3 BrickOrigin = float3( AtlasCell * BrickResolution );
-	// Clamp into this brick's own texels, then offset to texel centres
-	const float3 AtlasPoint = BrickOrigin + clamp( LocalVoxelPos, 0.0, (float)VoxelResolution ) + 0.5;
-	return AtlasPoint / float3( AtlasSize );
-}
-
 float3 WorldPosToAtlasUVW( float3 WorldPos, float3 GridMin, float VoxSize )
 {
+	// Find the grid cell
 	const float BrickSize = GetBrickSize( VoxSize );
-	const int3 GridCell = WorldPosToGridCell( WorldPos, GridMin, BrickSize );
-	const uint GridIdx = GridCellToGridIdx( (uint3)GridCell );
+	const uint3 GridCell = WorldPosToGridCell( WorldPos, GridMin, BrickSize );
+	
+	// Retrieve the atlas cell
+	const uint GridIdx = GridCellToGridIdx( GridCell );
 	const uint BrickIdx = PtrGrid[GridIdx];
-	const float3 LocalVoxelPos = (WorldPos - GridMin - float3(GridCell) * BrickSize) / VoxSize;
-	return BrickLocalToAtlasUVW( BrickIdx, LocalVoxelPos );
+	const uint3 AtlasCell = BrickIdxToAtlasCell( BrickIdx );
+
+	// Find the voxel offset within the brick
+	const float3 GridLocalPos = WorldPos - GridMin; // World units [0, GridMax)
+	const float3 BrickLocalPos = GridLocalPos - (GridCell * BrickSize); // World units [0, BrickSize)
+	const float3 BrickLocalVoxOffset = BrickLocalPos / VoxSize; // Voxel units [0, VoxRes)
+	
+	// Find the (unnormalized) sample position
+	// All in voxel units [0, AtlasSize)
+	const uint3 AtlasCellOrigin = AtlasCell * BrickRes;
+	const float3 AtlasVoxOrigin = AtlasCellOrigin + BrickLocalVoxOffset;
+	const float3 AtlasVoxCenter = AtlasVoxOrigin + 0.5;
+
+	// [0, AtlasSize) to [0, 1)
+	return AtlasVoxCenter / AtlasSize;
 }
 
 bool IsBrickAllocated( uint Idx )
