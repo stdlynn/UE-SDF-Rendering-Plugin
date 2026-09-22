@@ -13,7 +13,7 @@ ASDFActor::ASDFActor()
 
 FGPUSDF::FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
 	: Pos{ RenderSDF.Pos * GPUUnitScale }
-	, Radius{ RenderSDF.Radius * GPUUnitScale }
+	, Data{ RenderSDF.Data * GPUUnitScale }
 	, SmoothingStrength{ RenderSDF.SmoothingStrength * GPUUnitScale }
 	, ID{ ID }
 {

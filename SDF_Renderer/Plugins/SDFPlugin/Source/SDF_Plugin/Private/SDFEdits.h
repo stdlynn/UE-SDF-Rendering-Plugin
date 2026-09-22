@@ -28,8 +28,18 @@ struct FGameSDF
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	EPrimitive Primitive{ EPrimitive::Sphere };
 
-	UPROPERTY( EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0") )
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0",
+		EditCondition = "Primitive == EPrimitive::Sphere || Primitive == EPrimitive::Line",
+		EditConditionHides))
 	float Radius{ 100.0f };
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (
+		EditCondition = "Primitive == EPrimitive::Line", EditConditionHides))
+	FVector3f LinePosB{ 0.0, 0.0, 100.0 };
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0",
+		EditCondition = "Primitive == EPrimitive::Box", EditConditionHides))
+	FVector3f BoxSize{ 100.0, 100.0, 100.0 };
 
 	UPROPERTY( EditAnywhere, BlueprintReadOnly )
 	EOperation Operation{ EOperation::Add };
@@ -46,14 +56,23 @@ struct FRenderSDF
 {
 	FRenderSDF( const FGameSDF& GameSDF, FVector3f Pos )
 		: Pos{ Pos }
-		, Radius{ GameSDF.Radius }
+		, Primitive{ GameSDF.Primitive }
 		, Operation{ GameSDF.Operation }
 		, bSmooths{ GameSDF.bSmooths }
-		, SmoothingStrength{ GameSDF.Smoothing } {}
+		, SmoothingStrength{ GameSDF.Smoothing }
+	{
+		switch (GameSDF.Primitive)
+		{
+			case EPrimitive::Sphere: Data = FVector4f(GameSDF.Radius, 0.f, 0.f, 0.f); break;
+			case EPrimitive::Line: Data = FVector4f(GameSDF.LinePosB, GameSDF.Radius); break;
+			case EPrimitive::Box: Data = FVector4f(GameSDF.BoxSize, 0.f); break;
+			default: Data = FVector4f(0.f, 0.f, 0.f, 0.f); break;
+		}
+	}
 
 	FVector3f Pos;
 	EPrimitive Primitive;
-	float Radius;
+	FVector4f Data;
 	EOperation Operation;
 	bool bSmooths;
 	float SmoothingStrength;
@@ -73,7 +92,7 @@ struct alignas(16) FGPUSDF
 	void EnableSmoothing( const bool Enabled );
 
 	FVector3f Pos;
-	FVector4f Data; // Per-primitive data
+	FVector4f Data; // Per-primitive data (e.g. radius)
 	uint32 Flags; // bits 0-1: primitive, 2: operation, 3: bSmooths
 	float SmoothingStrength;
 	uint32 ID;
