@@ -16,6 +16,17 @@ float3 PtrGridPos;
 float VoxSize;
 float UnitScale;
 
+void SphereTraceFBM( inout FRay Ray )
+{
+	// TODO: also have a parameter that is multiplied with the 'k' every octave
+
+	// for loop (stepping)
+		// set initial distance based on plane (aka y value in grid space)
+		// for loop (octaves)
+			// find distance to closest sphere (use SDF repetition)
+			// clip layer through intersection using max() or smax()
+}
+
 bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 {
 	const float Epsilon = SurfaceEpsilon * UnitScale;
