@@ -21,14 +21,21 @@ FGPUSDF::FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
 	EnableSmoothing(RenderSDF.bSmooths);
 }
 
+void FGPUSDF::SetPrimitive(const EPrimitive NewPrimitive)
+{
+	static constexpr uint32 Mask = 0b11;
+	Flags = (Flags & ~Mask) | ((static_cast<uint32>(NewPrimitive) << 2) & Mask);
+}
+
 void FGPUSDF::SetOperation(const EOperation NewOperation)
 {
-	Flags = (Flags & ~1u) | static_cast<uint32>(NewOperation);
+	static constexpr uint32 Mask = 0b100;
+	Flags = (Flags & ~Mask) | ((static_cast<uint32>(NewOperation) << 2) & Mask);
 }
 
 void FGPUSDF::EnableSmoothing(const bool Enabled)
 {
-	static constexpr uint32 Mask = 0b10;
+	static constexpr uint32 Mask = 0b1000;
 	Flags = (Flags & ~Mask) | (Enabled ? Mask : 0u);
 }
 

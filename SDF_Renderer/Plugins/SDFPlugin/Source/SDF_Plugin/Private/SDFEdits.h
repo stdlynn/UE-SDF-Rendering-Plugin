@@ -4,11 +4,19 @@
 #include "Components/SceneComponent.h"
 #include "SDFEdits.generated.h"
 
-UENUM(BlueprintType)
+UENUM( BlueprintType )
 enum class EOperation : uint8
 {
-	Add       UMETA( DisplayName = "Add" ),
-	Subtract  UMETA( DisplayName = "Subtract" )
+	Add      UMETA( DisplayName = "Add" ),
+	Subtract UMETA( DisplayName = "Subtract" )
+};
+
+UENUM( BlueprintType )
+enum class EPrimitive : uint8
+{
+	Sphere UMETA( DisplayName = "Sphere" ),
+	Line   UMETA( DisplayName = "Line"),
+	Box	   UMETA( DisplayName = "Box")
 };
 
 // SDF edit representation used for the SDF component
@@ -16,6 +24,9 @@ USTRUCT( BlueprintType )
 struct FGameSDF
 {
 	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	EPrimitive Primitive{ EPrimitive::Sphere };
 
 	UPROPERTY( EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0") )
 	float Radius{ 100.0f };
@@ -41,6 +52,7 @@ struct FRenderSDF
 		, SmoothingStrength{ GameSDF.Smoothing } {}
 
 	FVector3f Pos;
+	EPrimitive Primitive;
 	float Radius;
 	EOperation Operation;
 	bool bSmooths;
@@ -53,6 +65,7 @@ struct alignas(16) FGPUSDF
 	// Convert to GPU unit scale
 	FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale );
 
+	void SetPrimitive( const EPrimitive NewPrimitive );
 	void SetOperation( const EOperation NewOperation );
 	void EnableSmoothing( const bool Enabled );
 
@@ -80,6 +93,13 @@ public:
 
 	const FGameSDF& GetSDF() const { return GameSDF; }
 	uint64 GetID() const { return ID; }
+
+	UFUNCTION(BlueprintCallable)
+	void SetPrimitive( EPrimitive NewPrimitive )
+	{
+		GameSDF.Primitive = NewPrimitive;
+		SetDirty();
+	}
 
 	UFUNCTION( BlueprintCallable )
 	void SetRadius( float NewRadius )
