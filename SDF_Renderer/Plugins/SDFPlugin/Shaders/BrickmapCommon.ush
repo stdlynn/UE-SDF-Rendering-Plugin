@@ -94,18 +94,23 @@ uint3 BrickIdxToAtlasCell( uint BrickIdx )
 	return uint3( X, Y, Z );
 }
 
-// TODO: unused lol
+float3 BrickLocalToAtlasUVW( uint BrickIdx, float3 LocalVoxelPos )
+{
+	const uint3 AtlasCell = BrickIdxToAtlasCell( BrickIdx );
+	const float3 BrickOrigin = float3( AtlasCell * BrickResolution );
+	// Clamp into this brick's own texels, then offset to texel centres
+	const float3 AtlasPoint = BrickOrigin + clamp( LocalVoxelPos, 0.0, (float)VoxelResolution ) + 0.5;
+	return AtlasPoint / float3( AtlasSize );
+}
+
 float3 WorldPosToAtlasUVW( float3 WorldPos, float3 GridMin, float VoxSize )
 {
 	const float BrickSize = GetBrickSize( VoxSize );
-	const uint3 GridCell = WorldPosToGridCell( WorldPos, GridMin, BrickSize );
-	const uint GridIdx = GridCellToGridIdx( GridCell );
+	const int3 GridCell = WorldPosToGridCell( WorldPos, GridMin, BrickSize );
+	const uint GridIdx = GridCellToGridIdx( (uint3)GridCell );
 	const uint BrickIdx = PtrGrid[GridIdx];
-	const uint3 AtlasCell = BrickIdxToAtlasCell( BrickIdx );
-	const float3 BrickPos = AtlasCell * BrickResolution;
-	const float3 LocalBrickOffset = fmod( WorldPos - GridMin, BrickSize ) / VoxSize;
-	const float3 LocalBrickPos = BrickPos + LocalBrickOffset;
-	return LocalBrickPos / AtlasSize;
+	const float3 LocalVoxelPos = (WorldPos - GridMin - float3(GridCell) * BrickSize) / VoxSize;
+	return BrickLocalToAtlasUVW( BrickIdx, LocalVoxelPos );
 }
 
 bool IsBrickAllocated( uint Idx )

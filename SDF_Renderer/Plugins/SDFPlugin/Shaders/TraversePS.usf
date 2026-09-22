@@ -43,7 +43,7 @@ bool TraceBrick( inout FRay Ray )
 }
 
 // Pointer Grid DDA
-bool TraceGrid( inout FRay Ray, out float3 Normal )
+bool TraceGrid( inout FRay Ray, out float3 Normal, inout bool bDebug )
 {
 	// TODO:
 	const float Epsilon = SurfaceEpsilon * UnitScale;
@@ -57,7 +57,7 @@ bool TraceGrid( inout FRay Ray, out float3 Normal )
 
 	// TODO: idkkk
 	// Step in brick space
-	//DDA.ScaleUnitSize( 1.0 / BrickSize );
+	// DDA.ScaleUnitSize( 1.0 / BrickSize );
 
 	// Initial sample
 	if (DDA.IsValidCell( PtrGridSize, Ray.MaxT ))
@@ -67,6 +67,10 @@ bool TraceGrid( inout FRay Ray, out float3 Normal )
 			// Edge case, might start inside any point within a brick
 			//return true;
 		}
+	}
+	else
+	{
+		return false;
 	}
 
 	// Should be safe
@@ -83,11 +87,17 @@ bool TraceGrid( inout FRay Ray, out float3 Normal )
 			uint i = 0;
 			while (TempT < DistInsideBrick && i < 32)
 			{
-				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAt( TempT ), GridAABB.Min, VoxSize );
-				const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
+				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAt( TempT ), GridAABB.Min, VoxSize );const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
 				if (SampleDist < 0.0) // TODO: use epsilon
 				{
+					//float3 MinWorld = GridCellToWorldPos( DDA.CellCoord, GridAABB.Min, BrickSize );
+					//float3 MinUVW = WorldPosToAtlasUVW( MinWorld, GridAABB.Min, VoxSize );
+					//float3 MaxUVW = MinUVW + 1.0 / NumAtlasBricks;
+					//if (any(UVW < MinUVW) || any(UVW > MaxUVW))
+					//{
+					//	bDebug = true;
+					//}
 					Ray.Advance( TempT );
 					Normal = GetNormal( Ray.GetPos(), GridAABB.Min );
 					return true;
@@ -105,7 +115,7 @@ bool TraceGrid( inout FRay Ray, out float3 Normal )
 	}
 }
 
-bool TraceScene( inout FRay Ray, out float3 Normal )
+bool TraceScene( inout FRay Ray, out float3 Normal, inout bool bDebug )
 {
 	// Assume Ray.T is zero
     float AABBHitT, AABBOutT;
@@ -115,10 +125,11 @@ bool TraceScene( inout FRay Ray, out float3 Normal )
     {
 		// Assuming 'Ray.T' is zero
 		const float Epsilon = AABBEpsilon * UnitScale;
+    	//AABBHitT += Epsilon;
 		if (AABBHitT > 0.0) { AABBHitT += Epsilon; }
 		Ray.MaxT = AABBOutT;
 		Ray.Advance( AABBHitT );
-		return TraceGrid( Ray, Normal );
+		return TraceGrid( Ray, Normal, bDebug );
     }
 	return false;
 }
@@ -184,7 +195,8 @@ void TraversePS(
 	const float3 Normal = GetNormal( Ray.Pos );
 #else
 	float3 Normal;
-	if (! TraceScene( Ray, Normal )) { discard; }
+	bool bDebug = false;
+	if (! TraceScene( Ray, Normal, bDebug )) { discard; }
 #endif
 
 	// Convert unit size
@@ -207,7 +219,7 @@ void TraversePS(
 	// Write to the packed GBuffer channels
 	float4 GA, GB, GC, GD, GE, GV;
 	EncodeGBuffer( GBuffer, GA, GB, GC, GD, GE, GV );
-	OutSceneColor = (0).xxxx;
+	OutSceneColor = (bDebug * 1.0).xxxx;
 	OutGBufferA = GA;
 	OutGBufferB = GB;
 	OutGBufferC = GC;
