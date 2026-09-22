@@ -96,6 +96,8 @@ struct FDDA
 			// Handle ray direction being zero
 			if (Ray.Dir[Axis] == 0) { DDA.TMax[Axis] = Infinity; }
 		}
+		DDA.Axis = 0;
+		DDA.T = 0.0;
 		return DDA;
 	}
 

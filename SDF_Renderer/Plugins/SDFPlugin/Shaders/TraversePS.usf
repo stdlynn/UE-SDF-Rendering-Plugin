@@ -26,7 +26,7 @@ float SampleDistClamped( float3 Pos, float3 BoundsMin )
 
 float3 GetNormal( float3 Pos, float3 BoundsMin )
 {
-	const float H = 4e-4 * UnitScale; // TODO:
+	const float H = 4e-4 * UnitScale; // TODO: also check elsewhere
 	const float2 K = float2( 1, -1 );
 	return normalize( K.xyy * SampleDistClamped( Pos + (K.xyy * H), BoundsMin ) +
 					  K.yyx * SampleDistClamped( Pos + (K.yyx * H), BoundsMin ) +
@@ -84,7 +84,7 @@ bool TraceGrid( inout FRay Ray, out float3 Normal )
 			while (TempT < DistInsideBrick && i < 32)
 			{
 				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAt( TempT ), GridAABB.Min, VoxSize );
-				const float EncodedDist = BrickAtlas.Sample( GlobalTrilinearClampedSampler, UVW );
+				const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
 				if (SampleDist < 0.0) // TODO: use epsilon
 				{
@@ -107,6 +107,7 @@ bool TraceGrid( inout FRay Ray, out float3 Normal )
 
 bool TraceScene( inout FRay Ray, out float3 Normal )
 {
+	// Assume Ray.T is zero
     float AABBHitT, AABBOutT;
     const float BrickSize = GetBrickSize(VoxSize);
     const FAABB GridAABB = AABB::PtrGrid(PtrGridPos, BrickSize);
@@ -130,7 +131,7 @@ bool SphereTraceScene( inout FRay Ray )
 	float DistTravelled = 0.0;
 	for (uint Step = 0; Step < 256; ++Step)
 	{
-		float ClosestDist = MapScene( Ray.Pos + Ray.Dir * DistTravelled );
+		float ClosestDist = MapScene( Ray.Origin + Ray.Dir * DistTravelled );
 
 		// Stop stepping if we hit a surface (or are close enough to one)
 		if (ClosestDist < Epsilon) { return true; }
