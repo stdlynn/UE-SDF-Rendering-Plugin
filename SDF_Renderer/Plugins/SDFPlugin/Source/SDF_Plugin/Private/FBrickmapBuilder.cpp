@@ -59,14 +59,14 @@ void FBrickmapBuilder::SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FV
 	const FIntVector3 GridMax = FIntVector3( PtrGridSize.X, PtrGridSize.Y, PtrGridSize.Z );
 	const float Thickness = BrickSize * 4;
 
-	for (auto [Pos, Radius, ID] : SDFs)
+	for (const auto& SDF : SDFs)
 	{
-		// TODO temporary hack to test deallocation (put const ref back when removing this)
+		// TODO temporary hack to test deallocation
 		// Add some thickness so it also encapsulates its previous position
-		const float Extent = Radius + Thickness;
+		const float Extent = SDF.Radius + Thickness;
 
-		FIntVector3 MinCell = WorldPosToGridCell( Pos - Extent, GridMin, BrickSize );
-		FIntVector3 MaxCell = WorldPosToGridCell( Pos + Extent, GridMin, BrickSize );
+		FIntVector3 MinCell = WorldPosToGridCell( SDF.Pos - Extent, GridMin, BrickSize );
+		FIntVector3 MaxCell = WorldPosToGridCell( SDF.Pos + Extent, GridMin, BrickSize );
 
 		MinCell = FIntVector3( FMath::Clamp( MinCell.X, 0, GridMax.X ),
 							   FMath::Clamp( MinCell.Y, 0, GridMax.Y ),
@@ -85,17 +85,17 @@ void FBrickmapBuilder::SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FV
 			const FVector3f Min = GridCellToWorldPos( GridCell, GridMin, BrickSize );
 			const FVector3f Max = Min + BrickSize;
 
-			const FVector3f ClosestPoint( FMath::Clamp( Pos.X, Min.X, Max.X ),
-										  FMath::Clamp( Pos.Y, Min.Y, Max.Y ),
-										  FMath::Clamp( Pos.Z, Min.Z, Max.Z ) );
+			const FVector3f ClosestPoint( FMath::Clamp( SDF.Pos.X, Min.X, Max.X ),
+										  FMath::Clamp( SDF.Pos.Y, Min.Y, Max.Y ),
+										  FMath::Clamp( SDF.Pos.Z, Min.Z, Max.Z ) );
 
-			const FVector3f FarthestPoint( FMath::Abs( Pos.X - Min.X ) > FMath::Abs( Pos.X - Max.X ) ? Min.X : Max.X,
-										   FMath::Abs( Pos.Y - Min.Y ) > FMath::Abs( Pos.Y - Max.Y ) ? Min.Y : Max.Y,
-										   FMath::Abs( Pos.Z - Min.Z ) > FMath::Abs( Pos.Z - Max.Z ) ? Min.Z : Max.Z );
+			const FVector3f FarthestPoint( FMath::Abs( SDF.Pos.X - Min.X ) > FMath::Abs( SDF.Pos.X - Max.X ) ? Min.X : Max.X,
+										   FMath::Abs( SDF.Pos.Y - Min.Y ) > FMath::Abs( SDF.Pos.Y - Max.Y ) ? Min.Y : Max.Y,
+										   FMath::Abs( SDF.Pos.Z - Min.Z ) > FMath::Abs( SDF.Pos.Z - Max.Z ) ? Min.Z : Max.Z );
 
 			// TODO: maybe do local to SDF
-			if (SDFSphere( ClosestPoint, Pos, Radius ) <= Thickness
-				&& SDFSphere( FarthestPoint, Pos, Radius ) >= -Thickness)
+			if (SDFSphere( ClosestPoint, SDF.Pos, SDF.Radius ) <= Thickness
+				&& SDFSphere( FarthestPoint, SDF.Pos, SDF.Radius ) >= -Thickness)
 			{
 				RT.UpdateListCPU.Add( GridCellToGridIdx( FUintVector3{ GridCell } ) );
 			}

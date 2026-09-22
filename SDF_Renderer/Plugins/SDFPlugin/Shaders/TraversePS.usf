@@ -9,9 +9,6 @@ Buffer<uint> PtrGrid;
 #define ENABLE_BRUTE_FORCE_SPHERE_TRACING 0
 
 // Shader bindings
-StructuredBuffer<FSDFEdit> SDFEdits;
-uint NumEdits;
-
 Texture3D<float> BrickAtlas;
 SamplerState BrickSampler;
 float3 PtrGridPos;
@@ -125,27 +122,15 @@ bool TraceScene( inout FRay Ray, out float3 Normal )
 	return false;
 }
 
-bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
+bool SphereTraceScene( inout FRay Ray )
 {
 	const float Epsilon = SurfaceEpsilon * UnitScale;
 
 	// Step through the scene
-	for (uint Step = 0; Step < 64; ++Step)
+	float DistTravelled = 0.0;
+	for (uint Step = 0; Step < 256; ++Step)
 	{
-		// For each step, go over each SDF
-		float ClosestDist = Infinity;
-		for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
-		{
-			// Evaluate the distance to the SDF
-			const FSDFEdit Edit = SDFEdits[EditIdx];
-			const float3 LocalRayPos = Ray.GetPos() - Edit.Pos;
-			const float Dist = abs( DistFn::SphereOrigin( Edit, LocalRayPos ) );
-			if (Dist < ClosestDist)
-			{
-				ClosestDist = Dist;
-				EditHitIdx = EditIdx;
-			}
-		}
+		float ClosestDist = MapScene( Ray.Pos + Ray.Dir * DistTravelled );
 
 		// Stop stepping if we hit a surface (or are close enough to one)
 		if (ClosestDist < Epsilon) { return true; }
@@ -156,6 +141,19 @@ bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
 
 	// No intersections found
 	return false;
+}
+
+// https://iquilezles.org/articles/normalsSDF/
+float3 GetNormal( float3 Pos )
+{
+	// Note that the normals are reversed on the inside of geometry (so for negative distances)
+	// This should be fine, as those should never be visible anyway
+	const float H = 4e-4; // magic value for now, read linked article for details
+	const float2 K = float2( 1, -1 );
+	return normalize( K.xyy * MapScene( Pos + (K.xyy * H) ) +
+					  K.yyx * MapScene( Pos + (K.yyx * H) ) +
+					  K.yxy * MapScene( Pos + (K.yxy * H) ) +
+					  K.xxx * MapScene( Pos + (K.xxx * H) ) );
 }
 
 void TraversePS(
@@ -180,11 +178,9 @@ void TraversePS(
 #if ENABLE_BRUTE_FORCE_SPHERE_TRACING
 	// Sphere trace
 	// Discard this fragment if we don't hit anything, keep whatever was already in the GBuffer
-	uint EditHitIdx;
-	if (! SphereTraceScene( Ray, EditHitIdx )) { discard; }
+	if (! SphereTraceScene( Ray )) { discard; }
 	// Calculate output data
-	const FSDFEdit Edit = SDFEdits[EditHitIdx];
-	const float3 Normal = GetSphereNormal( Edit, RayPos );
+	const float3 Normal = GetNormal( Ray.Pos );
 #else
 	float3 Normal;
 	if (! TraceScene( Ray, Normal )) { discard; }

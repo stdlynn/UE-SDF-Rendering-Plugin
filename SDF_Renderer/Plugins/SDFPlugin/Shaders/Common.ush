@@ -3,16 +3,38 @@
 #include "/Engine/Public/Platform.ush"
 
 static const float Infinity = asfloat( 0x7F7FFFFF );
-static const float SurfaceEpsilon = 5e-4;
+static const float SurfaceEpsilon = 1e-1;
 static const float AABBEpsilon = 5e-3;
+
+enum EOperation : uint
+{
+	Union = 0,
+	Subtract = 1
+};
 
 struct FSDFEdit
 {
 	float3 Pos;
 	float Radius;
+	uint Flags; // bit 0: operation, 1: bSmooths
+	float Smoothing;
 	uint ID;
-	uint Padding[3];
+	uint Padding[1];
+
+	EOperation GetSDFOperation()
+	{
+		return (EOperation)(Flags & 0b1);
+	}
+
+	bool GetSDFSmooths()
+	{
+		return Flags & 0b10;
+	}
 };
+
+// Shader bindings
+StructuredBuffer<FSDFEdit> SDFEdits;
+uint NumEdits;
 
 struct FRay
 {
@@ -174,7 +196,6 @@ bool IsPointInsideAABB( FAABB Bounds, float3 Pos )
 {
 	return all( Pos >= Bounds.Min ) && all( Pos <= Bounds.Max );
 }
-
 // https://iquilezles.org/articles/normalsSDF/
 float3 GetSphereNormal( FSDFEdit SDF, float3 Pos )
 {
@@ -190,4 +211,64 @@ float3 GetSphereNormal( FSDFEdit SDF, float3 Pos )
 					  K.yyx * DistFn::SphereOrigin( SDF, Pos + (K.yyx * H) ) +
 					  K.yxy * DistFn::SphereOrigin( SDF, Pos + (K.yxy * H) ) +
 					  K.xxx * DistFn::SphereOrigin( SDF, Pos + (K.xxx * H) ) );
+}
+
+// [CREDIT] https://iquilezles.org/articles/distfunctions/
+float OpUnion( float a, float b )
+{
+    return min(a,b);
+}
+float OpSubtract( float a, float b )
+{
+    return max(-a,b);
+}
+
+float OpSmoothUnion( float a, float b, float k )
+{
+    k *= 4.0;
+    float h = max(k-abs(a-b),0.0);
+    return min(a, b) - h*h*0.25/k;
+}
+float OpSmoothSubtract( float a, float b, float k )
+{
+    return -OpSmoothUnion(a,-b,k);
+}
+
+float MapScene( float3 Pos )
+{
+	float ClosestDist = Infinity;
+
+	for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
+	{
+		const FSDFEdit Edit = SDFEdits[EditIdx];
+		EOperation Op = Edit.GetSDFOperation();
+		bool bSmooth = Edit.GetSDFSmooths();
+		// Evaluate the distance to the SDF
+		const float Dist = DistFn::SphereOrigin( Edit, Pos - Edit.Pos );
+
+		if (bSmooth)
+		{
+			if (Op == Union)
+			{
+				ClosestDist = OpSmoothUnion(Dist, ClosestDist, Edit.Smoothing);
+			}
+			else if (Op == Subtract)
+			{
+				ClosestDist = OpSmoothSubtract(Dist, ClosestDist, Edit.Smoothing);
+			}
+		}
+		else
+		{
+			if (Op == Union)
+			{
+				ClosestDist = OpUnion(Dist, ClosestDist);
+			}
+			else if (Op == Subtract)
+			{
+				ClosestDist = OpSubtract(Dist, ClosestDist);
+			}
+		}
+	}
+
+	return ClosestDist;
 }

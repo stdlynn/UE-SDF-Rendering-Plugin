@@ -6,8 +6,6 @@ RWBuffer<uint> PtrGrid;
 #include "BrickmapCommon.ush"
 #include "Common.ush"
 
-StructuredBuffer<FSDFEdit> SDFEdits;
-uint NumEdits;
 float3 PtrGridPos;
 float VoxSize;
 
@@ -26,6 +24,8 @@ groupshared bool bContainsSurfaceShared;
 groupshared uint AtlasIdxShared;
 
 static const uint Empty = 0xFFFFFFFFu;
+
+
 
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
 void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID )
@@ -47,12 +47,7 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 	uint AtlasIdx = PtrGrid[GridIdx];
 
 	// Find the closest SDF to the brick point
-	float Closest = Infinity;
-	for (uint EditIdx = 0; EditIdx < NumEdits; EditIdx++)
-	{
-		const FSDFEdit Edit = SDFEdits[EditIdx];
-		Closest = min( Closest, DistFn::SphereOrigin( Edit, WorldPos - Edit.Pos ) );
-	}
+	float Closest = MapScene( WorldPos );
 
 	// Indicate if any geometry is within allocation distance
 	// Sync so any thread gets the chance to indicate a surface within range

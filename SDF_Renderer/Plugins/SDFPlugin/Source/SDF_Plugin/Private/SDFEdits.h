@@ -4,6 +4,13 @@
 #include "Components/SceneComponent.h"
 #include "SDFEdits.generated.h"
 
+UENUM(BlueprintType)
+enum class EOperation : uint8
+{
+	Add       UMETA( DisplayName = "Add" ),
+	Subtract  UMETA( DisplayName = "Subtract" )
+};
+
 // SDF edit representation used for the SDF component
 USTRUCT( BlueprintType )
 struct FGameSDF
@@ -12,6 +19,15 @@ struct FGameSDF
 
 	UPROPERTY( EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0") )
 	float Radius{ 100.0f };
+
+	UPROPERTY( EditAnywhere, BlueprintReadOnly )
+	EOperation Operation{ EOperation::Add };
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	bool bSmooths{ false };
+
+	UPROPERTY( EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "1.0") )
+	float Smoothing{ 0.0f };
 };
 
 // SDF edit representation sent to the render thread
@@ -19,23 +35,31 @@ struct FRenderSDF
 {
 	FRenderSDF( const FGameSDF& GameSDF, FVector3f Pos )
 		: Pos{ Pos }
-		, Radius{ GameSDF.Radius } {}
+		, Radius{ GameSDF.Radius }
+		, Operation{ GameSDF.Operation }
+		, bSmooths{ GameSDF.bSmooths }
+		, SmoothingStrength{ GameSDF.Smoothing } {}
 
 	FVector3f Pos;
 	float Radius;
+	EOperation Operation;
+	bool bSmooths;
+	float SmoothingStrength;
 };
 
 // GPU SDF edits
 struct alignas(16) FGPUSDF
 {
 	// Convert to GPU unit scale
-	FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
-		: Pos{ RenderSDF.Pos * GPUUnitScale }
-		, Radius{ RenderSDF.Radius * GPUUnitScale }
-		, ID{ ID } {}
+	FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale );
+
+	void SetOperation( const EOperation NewOperation );
+	void EnableSmoothing( const bool Enabled );
 
 	FVector3f Pos;
 	float Radius;
+	uint32 Flags; // bit 0: operation, 1: bSmooths
+	float SmoothingStrength;
 	uint32 ID;
 };
 
@@ -61,6 +85,28 @@ public:
 	void SetRadius( float NewRadius )
 	{
 		GameSDF.Radius = NewRadius;
+		SetDirty();
+	}
+
+	UFUNCTION( BlueprintCallable )
+	void SetOperation( EOperation NewOperation )
+	{
+		GameSDF.Operation = NewOperation;
+		SetDirty();
+	}
+
+	UFUNCTION(BlueprintCallable)
+	void SetDoesSmoothing(bool bNewDoesSmoothing)
+	{
+		GameSDF.bSmooths = bNewDoesSmoothing;
+		SetDirty();
+	}
+
+
+	UFUNCTION( BlueprintCallable )
+	void SetSmoothing( float NewSmoothing )
+	{
+		GameSDF.Smoothing = NewSmoothing;
 		SetDirty();
 	}
 
