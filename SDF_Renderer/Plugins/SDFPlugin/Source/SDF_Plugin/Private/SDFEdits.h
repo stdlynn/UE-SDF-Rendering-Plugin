@@ -66,12 +66,15 @@ struct alignas(16) FGPUSDF
 	FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale );
 
 	void SetPrimitive( const EPrimitive NewPrimitive );
+	void SetSphereData( const float Radius );
+	void SetLineData( const FVector3f& B, const float Radius );
+	void SetBoxData( const FVector3f& Size );
 	void SetOperation( const EOperation NewOperation );
 	void EnableSmoothing( const bool Enabled );
 
 	FVector3f Pos;
-	float Radius;
-	uint32 Flags; // bit 0: operation, 1: bSmooths
+	FVector4f Data; // Per-primitive data
+	uint32 Flags; // bits 0-1: primitive, 2: operation, 3: bSmooths
 	float SmoothingStrength;
 	uint32 ID;
 };

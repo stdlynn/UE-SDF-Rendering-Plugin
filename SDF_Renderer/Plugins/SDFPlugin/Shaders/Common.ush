@@ -23,15 +23,34 @@ struct FSDFEdit
 {
 	float3 Pos;
 	uint Flags; // bits 0-1: primitive, 2: operation, 3: bSmooths
-	float4 Data0;
-	float3 Data1;
+	float4 Data; // Per-primitive data
 	float Smoothing;
 	uint ID;
-	//uint Padding[1];
+	uint Padding[2];
 
 	EPrimitive GetPrimitive()
 	{
 		return (EPrimitive)(Flags & 0b11);
+	}
+
+	float GetSphereRadius()
+	{
+		return Data.x;
+	}
+	
+	float3 GetLinePosB()
+	{
+		return Data.xyz;
+	}
+
+	float GetLineRadius()
+	{
+		return Data.x;
+	}
+
+	float3 GetBoxSize()
+	{
+		return Data.xyz;
 	}
 
 	EOperation GetSDFOperation()
@@ -96,26 +115,42 @@ bool IntersectAABB( FAABB Bounds, FRay Ray, out float TNear, out float TFar )
 }
 
 // Distance functions
+// from https://iquilezles.org/articles/distfunctions/
 namespace DistFn
 {
 	float Sphere( FSDFEdit SDF, float3 Pos )
 	{
-		return length( Pos - SDF.Pos ) - SDF.Radius;
+		return length( Pos - SDF.Pos ) - SDF.GetSphereRadius();
 	}
 
 	float Line( FSDFEdit SDF, float3 Pos )
 	{
-		return 0.0; // TODO
+		float3 PA = Pos - SDF.Pos;
+		float3 BA = SDF.GetLinePosB() - PA;
+		float H = clamp( dot(PA, BA) / dot(BA, BA), 0.0, 1.0 );	
+		return length( PA - BA * H ) - SDF.GetLineRadius();
 	}
 
 	float Box( FSDFEdit SDF, float3 Pos )
 	{
-		return 0.0; // TODO
+		float3 Size = SDF.GetBoxSize();
+		float3 Q = abs(Pos) - Size;
+		return length(max(Q, 0.0)) + min(max(Q.x, max(Q.y, Q.z)), 0.0);
 	}
 
 	float SphereOrigin( FSDFEdit SDF, float3 Pos )
 	{
-		return length( Pos ) - SDF.Radius;
+		return length( Pos ) - SDF.GetSphereRadius();
+	}
+
+	float LineOrigin( FSDFEdit SDF, float3 Pos )
+	{
+		return 0.0; // TODO
+	}
+
+	float BoxOrigin( FSDFEdit SDF, float3 Pos )
+	{
+		return 0.0; // TODO
 	}
 } // SDF
 
@@ -124,9 +159,33 @@ namespace AABB
 {
 	FAABB Sphere( FSDFEdit SDF )
 	{
+		const float Radius = SDF.GetSphereRadius();
+
 		FAABB Bounds;
-		Bounds.Min = SDF.Pos - SDF.Radius;
-		Bounds.Max = SDF.Pos + SDF.Radius;
+		Bounds.Min = SDF.Pos - Radius;
+		Bounds.Max = SDF.Pos + Radius;
+		return Bounds;
+	}
+
+	FAABB Line( FSDFEdit SDF )
+	{
+		const float3 PosB = SDF.GetLinePosB();
+		const float Radius = SDF.GetLineRadius();
+		const float3 A = PosB - SDF.Pos;
+
+		FAABB Bounds;
+		Bounds.Min = min(SDF.Pos, PosB) - Radius;
+		Bounds.Max = max(SDF.Pos, PosB) + Radius;
+		return Bounds;
+	}
+
+	FAABB Box( FSDFEdit SDF )
+	{
+		const float3 Size = SDF.GetBoxSize();
+
+		FAABB Bounds;
+		Bounds.Min = SDF.Pos - Size / 2.0;
+		Bounds.Max = SDF.Pos + Size / 2.0;
 		return Bounds;
 	}
 } // AABB

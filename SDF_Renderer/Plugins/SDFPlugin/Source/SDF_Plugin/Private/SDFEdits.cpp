@@ -27,6 +27,21 @@ void FGPUSDF::SetPrimitive(const EPrimitive NewPrimitive)
 	Flags = (Flags & ~Mask) | ((static_cast<uint32>(NewPrimitive) << 2) & Mask);
 }
 
+void FGPUSDF::SetSphereData(const float Radius)
+{
+	Data.X = Radius;
+}
+
+void FGPUSDF::SetLineData(const FVector3f& PosB, const float Radius)
+{
+	Data = FVector4f(PosB, Radius);
+}
+
+void FGPUSDF::SetBoxData(const FVector3f& Size)
+{
+	Data = FVector4f(Size, 0);
+}
+
 void FGPUSDF::SetOperation(const EOperation NewOperation)
 {
 	static constexpr uint32 Mask = 0b100;
