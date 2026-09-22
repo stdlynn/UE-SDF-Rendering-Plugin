@@ -27,7 +27,7 @@ struct FGameSDF
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	bool bDoesSmoothing{ false };
 
-	UPROPERTY( EditAnywhere, BlueprintReadOnly )
+	UPROPERTY( EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "1.0") )
 	float Smoothing{ 0.0f };
 };
 
