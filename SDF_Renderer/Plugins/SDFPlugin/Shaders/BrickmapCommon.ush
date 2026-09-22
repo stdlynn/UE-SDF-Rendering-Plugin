@@ -10,8 +10,8 @@
 // GridCell   | uint3  | 0-63   | PtrGrid cell index					|
 // AtlasCell  |	uint3  | 0-127  | 3D Brick cell index in Atlas			|
 // AtlasUVW   |	float3 | 0-1    | Atlas sample coord (trilinear)		|
-// AtlasPoint |	uint3  | *		| Atlas texel coord						| // TODO: AtlasVox preferable?
-// BrickPoint |	uint3  | 0-7	| Atlas texel coord, local to brick		| // TODO: BrickVox
+// AtlasPoint |	uint3  | *		| Atlas texel coord						|
+// BrickPoint |	uint3  | 0-7	| Atlas texel coord, local to brick		|
 // BrickIdx   |	uint   | 0-16k  | Index to a Brick (stored in PtrGrid)	|
 // GridIdx    | uint   | 0-262k | index to a GridCell					|
 //																		|
@@ -113,11 +113,14 @@ float3 WorldPosToAtlasUVW( float3 WorldPos, float3 GridMin, float VoxSize )
 	// Find the (unnormalized) sample position
 	// All in voxel units [0, AtlasSize)
 	const uint3 AtlasCellOrigin = AtlasCell * BrickRes;
-	const float3 AtlasVoxOrigin = AtlasCellOrigin + BrickLocalVoxOffset;
-	const float3 AtlasVoxCenter = AtlasVoxOrigin + 0.5;
+	const float3 AtlasPoint = AtlasCellOrigin + BrickLocalVoxOffset;
 
-	// [0, AtlasSize) to [0, 1)
-	return AtlasVoxCenter / AtlasSize;
+	// The hardware sampling converts our UVW into a TexCoord through 'TexCoord = (UVW * TexSize) - 0.5'
+	// So we need to compensate for the offset by doing 'UVW = (TexCoord + 0.5) / TexSize'
+	// The offset is added because hardware assumes a texel value represents the texel's center
+	// Directly sampling texel N as 'u=N' results in interpolation between 'N-0.5' and 'N+0.5'
+	// While sampling 'u=N+0.5' gets you exactly the value stored in texel N
+	return (AtlasPoint + 0.5) / AtlasSize;
 }
 
 bool IsBrickAllocated( uint Idx )
