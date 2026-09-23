@@ -28,40 +28,13 @@ struct FSDFEdit
 	uint ID;
 	uint Padding[2];
 
-	EPrimitive GetPrimitive()
-	{
-		return (EPrimitive)(Flags & 0b11);
-	}
-
-	float GetSphereRadius()
-	{
-		return Data.x;
-	}
-	
-	float3 GetLinePosB()
-	{
-		return Data.xyz;
-	}
-
-	float GetLineRadius()
-	{
-		return Data.w;
-	}
-
-	float3 GetBoxHalfExtent()
-	{
-		return Data.xyz;
-	}
-
-	EOperation GetSDFOperation()
-	{
-		return (EOperation)( (Flags >> 2) & 0b1 );
-	}
-
-	bool GetSDFSmooths()
-	{
-		return Flags & 0b1000;
-	}
+	EPrimitive GetPrimitive() { return (EPrimitive)(Flags & 0b11); }
+	float GetSphereRadius() { return Data.x; }
+	float3 GetLinePosB() { return Data.xyz; }
+	float GetLineRadius() { return Data.w; }
+	float3 GetBoxHalfExtent() { return Data.xyz; }
+ 	EOperation GetSDFOperation() { return (EOperation)( (Flags >> 2) & 0b1 ); }
+	bool GetSDFSmooths() { return Flags & 0b1000; }
 };
 
 // Shader bindings
@@ -140,7 +113,6 @@ namespace DistFn
 
 	float SphereOrigin( FSDFEdit SDF, float3 Pos )
 	{
-
 		return length( Pos ) - SDF.GetSphereRadius();
 	}
 
@@ -161,35 +133,17 @@ namespace DistFn
 	float Dist( FSDFEdit SDF, float3 Pos )
 	{
 		EPrimitive Prim = SDF.GetPrimitive();
-		if ( Prim == EPrimitive::Sphere )
-		{
-			return Sphere( SDF, Pos );
-		}
-		else if ( Prim == EPrimitive::Line )
-		{
-			return Line( SDF, Pos );
-		}
-		else
-		{
-			return Box( SDF, Pos );
-		}
+		if ( Prim == EPrimitive::Sphere ) { return Sphere( SDF, Pos ); }
+		if ( Prim == EPrimitive::Line ) { return Line( SDF, Pos ); }
+		return Box( SDF, Pos );
 	}
 
 	float DistOrigin( FSDFEdit SDF, float3 Pos )
 	{
 		EPrimitive Prim = SDF.GetPrimitive();
-		if ( Prim == EPrimitive::Sphere )
-		{
-			return SphereOrigin( SDF, Pos );
-		}
-		else if ( Prim == EPrimitive::Line )
-		{
-			return LineOrigin( SDF, Pos );
-		}
-		else
-		{
-			return BoxOrigin( SDF, Pos );
-		}
+		if ( Prim == EPrimitive::Sphere ) { return SphereOrigin( SDF, Pos ); }
+		if ( Prim == EPrimitive::Line ) { return LineOrigin( SDF, Pos ); }
+		return BoxOrigin( SDF, Pos );
 	}
 } // SDF
 
@@ -282,20 +236,7 @@ float MapScene( float3 Pos )
 		EOperation Op = Edit.GetSDFOperation();
 		bool bSmooth = Edit.GetSDFSmooths();
 		// Evaluate the distance to the SDF
-		float Dist;
-		if (Prim == Sphere)
-		{
-			Dist = DistFn::SphereOrigin(Edit, Pos - Edit.Pos);
-		}
-		else if (Prim == Line)
-		{
-			Dist = DistFn::LineOrigin(Edit, Pos - Edit.Pos);
-		}
-		else
-		{
-			Dist = DistFn::BoxOrigin(Edit, Pos - Edit.Pos);
-		}
-
+		const float Dist = DistFn::DistOrigin( Edit, Pos - Edit.Pos );
 		if (bSmooth)
 		{
 			if (Op == Union)

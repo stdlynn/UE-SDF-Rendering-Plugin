@@ -55,35 +55,17 @@ namespace DistFn
 	inline float Dist( const FGPUSDF& SDF, const FVector3f& Pos )
 	{
 		EPrimitive Prim = SDF.GetPrimitive();
-		if (Prim == EPrimitive::Sphere)
-		{
-			return Sphere(SDF, Pos);
-		}
-		else if (Prim == EPrimitive::Line)
-		{
-			return Line(SDF, Pos);
-		}
-		else
-		{
-			return Box(SDF, Pos);
-		}
+		if (Prim == EPrimitive::Sphere) { return Sphere(SDF, Pos); }
+		if (Prim == EPrimitive::Line) { return Line(SDF, Pos); }
+		return Box(SDF, Pos);
 	}
 
 	inline float DistOrigin( const FGPUSDF& SDF, const FVector3f& Pos )
 	{
 		EPrimitive Prim = SDF.GetPrimitive();
-		if (Prim == EPrimitive::Sphere)
-		{
-			return SphereOrigin(SDF, Pos);
-		}
-		else if (Prim == EPrimitive::Line)
-		{
-			return LineOrigin(SDF, Pos);
-		}
-		else
-		{
-			return BoxOrigin(SDF, Pos);
-		}
+		if (Prim == EPrimitive::Sphere) { return SphereOrigin(SDF, Pos); }
+		else if (Prim == EPrimitive::Line) { return LineOrigin(SDF, Pos); }
+		return BoxOrigin(SDF, Pos);
 	}
 } // SDF
 
@@ -131,17 +113,8 @@ namespace AABB
 	inline FAABB GetSDFAABB( const FGPUSDF& SDF )
 	{
 		EPrimitive Prim = SDF.GetPrimitive();
-		if ( Prim == EPrimitive::Sphere )
-		{
-			return Sphere( SDF );
-		}
-		else if ( Prim == EPrimitive::Line )
-		{
-			return Line( SDF );
-		}
-		else
-		{
-			return Box( SDF );
-		}
+		if ( Prim == EPrimitive::Sphere ) { return Sphere( SDF ); }
+		else if ( Prim == EPrimitive::Line ) { return Line( SDF );}
+		return Box( SDF );
 	}
 } // AABB

@@ -85,18 +85,18 @@ struct alignas(16) FGPUSDF
 	FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale );
 
 	void SetPrimitive( const EPrimitive NewPrimitive );
-	void SetSphereData( const float Radius );
-	void SetLineData( const FVector3f& B, const float Radius );
-	void SetBoxData( const FVector3f& HalfExtent );
+	void SetSphereData( const float Radius ) { Data.X = Radius; }
+	void SetLineData( const FVector3f& B, const float Radius ) { Data = FVector4f(B, Radius); }
+	void SetBoxData( const FVector3f& HalfExtent ) { Data = FVector4f(HalfExtent, 0); }
 	void SetOperation( const EOperation NewOperation );
 	void EnableSmoothing( const bool Enabled );
-	[[nodiscard]] EPrimitive GetPrimitive() const;
-	[[nodiscard]] float GetSphereRadius() const;
-	[[nodiscard]] FVector3f GetLinePosB() const;
-	[[nodiscard]] float GetLineRadius() const;
-	[[nodiscard]] FVector3f GetBoxHalfExtent() const;
-	[[nodiscard]] EOperation GetSDFOperation() const;
-	[[nodiscard]] bool GetSDFSmooths() const;
+	[[nodiscard]] EPrimitive GetPrimitive() const { return static_cast<EPrimitive>( Flags & 0b11 ); }
+	[[nodiscard]] float GetSphereRadius() const { return Data.X; }
+	[[nodiscard]] FVector3f GetLinePosB() const { return FVector3f( Data.X, Data.Y, Data.Z ); }
+	[[nodiscard]] float GetLineRadius() const { return Data.W; }
+	[[nodiscard]] FVector3f GetBoxHalfExtent() const { return FVector3f( Data.X, Data.Y, Data.Z ); }
+	[[nodiscard]] EOperation GetSDFOperation() const { return static_cast<EOperation>((Flags >> 2) & 0b1); }
+	[[nodiscard]] bool GetSDFSmooths() const { return Flags & 0b1000; }
 
 	FVector3f Pos;
 	uint32 Flags; // bits 0-1: primitive, 2: operation, 3: bSmooths
