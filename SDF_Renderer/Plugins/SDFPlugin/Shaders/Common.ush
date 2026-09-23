@@ -45,17 +45,17 @@ struct FSDFEdit
 
 	float GetLineRadius()
 	{
-		return Data.x;
+		return Data.w;
 	}
 
-	float3 GetBoxSize()
+	float3 GetBoxHalfExtent()
 	{
 		return Data.xyz;
 	}
 
 	EOperation GetSDFOperation()
 	{
-		return (EOperation)(Flags & 0b100);
+		return (EOperation)( (Flags >> 2) & 0b1 );
 	}
 
 	bool GetSDFSmooths()
@@ -126,35 +126,75 @@ namespace DistFn
 	float Line( FSDFEdit SDF, float3 Pos )
 	{
 		float3 PA = Pos - SDF.Pos;
-		float3 BA = SDF.GetLinePosB() - PA;
+		float3 BA = SDF.GetLinePosB();
 		float H = clamp( dot(PA, BA) / dot(BA, BA), 0.0, 1.0 );	
 		return length( PA - BA * H ) - SDF.GetLineRadius();
 	}
 
 	float Box( FSDFEdit SDF, float3 Pos )
 	{
-		float3 Size = SDF.GetBoxSize();
-		float3 Q = abs(Pos) - Size;
+		float3 HalfExtent = SDF.GetBoxHalfExtent();
+		float3 Q = abs(Pos - SDF.Pos) - HalfExtent;
 		return length(max(Q, 0.0)) + min(max(Q.x, max(Q.y, Q.z)), 0.0);
 	}
 
 	float SphereOrigin( FSDFEdit SDF, float3 Pos )
 	{
+
 		return length( Pos ) - SDF.GetSphereRadius();
 	}
 
 	float LineOrigin( FSDFEdit SDF, float3 Pos )
 	{
-		return 0.0; // TODO
+		float3 BA = SDF.GetLinePosB();
+		float H = clamp( dot(Pos, BA) / dot(BA, BA), 0.0, 1.0 );	
+		return length( Pos - BA * H ) - SDF.GetLineRadius();
 	}
 
 	float BoxOrigin( FSDFEdit SDF, float3 Pos )
 	{
-		return 0.0; // TODO
+		float3 HalfExtent = SDF.GetBoxHalfExtent();
+		float3 Q = abs(Pos) - HalfExtent;
+		return length(max(Q, 0.0)) + min(max(Q.x, max(Q.y, Q.z)), 0.0);
+	}
+
+	float Dist( FSDFEdit SDF, float3 Pos )
+	{
+		EPrimitive Prim = SDF.GetPrimitive();
+		if ( Prim == EPrimitive::Sphere )
+		{
+			return Sphere( SDF, Pos );
+		}
+		else if ( Prim == EPrimitive::Line )
+		{
+			return Line( SDF, Pos );
+		}
+		else
+		{
+			return Box( SDF, Pos );
+		}
+	}
+
+	float DistOrigin( FSDFEdit SDF, float3 Pos )
+	{
+		EPrimitive Prim = SDF.GetPrimitive();
+		if ( Prim == EPrimitive::Sphere )
+		{
+			return SphereOrigin( SDF, Pos );
+		}
+		else if ( Prim == EPrimitive::Line )
+		{
+			return LineOrigin( SDF, Pos );
+		}
+		else
+		{
+			return BoxOrigin( SDF, Pos );
+		}
 	}
 } // SDF
 
 // Bounding boxes
+// From https://iquilezles.org/articles/bboxes3d/
 namespace AABB
 {
 	FAABB Sphere( FSDFEdit SDF )
@@ -171,21 +211,20 @@ namespace AABB
 	{
 		const float3 PosB = SDF.GetLinePosB();
 		const float Radius = SDF.GetLineRadius();
-		const float3 A = PosB - SDF.Pos;
 
 		FAABB Bounds;
-		Bounds.Min = min(SDF.Pos, PosB) - Radius;
-		Bounds.Max = max(SDF.Pos, PosB) + Radius;
+		Bounds.Min = min(SDF.Pos, SDF.Pos + PosB) - Radius;
+		Bounds.Max = max(SDF.Pos, SDF.Pos + PosB) + Radius;
 		return Bounds;
 	}
 
 	FAABB Box( FSDFEdit SDF )
 	{
-		const float3 Size = SDF.GetBoxSize();
+		const float3 HalfExtent = SDF.GetBoxHalfExtent();
 
 		FAABB Bounds;
-		Bounds.Min = SDF.Pos - Size / 2.0;
-		Bounds.Max = SDF.Pos + Size / 2.0;
+		Bounds.Min = SDF.Pos - HalfExtent;
+		Bounds.Max = SDF.Pos + HalfExtent;
 		return Bounds;
 	}
 } // AABB

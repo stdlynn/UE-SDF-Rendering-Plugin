@@ -87,13 +87,20 @@ struct alignas(16) FGPUSDF
 	void SetPrimitive( const EPrimitive NewPrimitive );
 	void SetSphereData( const float Radius );
 	void SetLineData( const FVector3f& B, const float Radius );
-	void SetBoxData( const FVector3f& Size );
+	void SetBoxData( const FVector3f& HalfExtent );
 	void SetOperation( const EOperation NewOperation );
 	void EnableSmoothing( const bool Enabled );
+	[[nodiscard]] EPrimitive GetPrimitive() const;
+	[[nodiscard]] float GetSphereRadius() const;
+	[[nodiscard]] FVector3f GetLinePosB() const;
+	[[nodiscard]] float GetLineRadius() const;
+	[[nodiscard]] FVector3f GetBoxHalfExtent() const;
+	[[nodiscard]] EOperation GetSDFOperation() const;
+	[[nodiscard]] bool GetSDFSmooths() const;
 
 	FVector3f Pos;
-	FVector4f Data; // Per-primitive data (e.g. radius)
 	uint32 Flags; // bits 0-1: primitive, 2: operation, 3: bSmooths
+	FVector4f Data; // Per-primitive data (e.g. radius)
 	float SmoothingStrength;
 	uint32 ID;
 };

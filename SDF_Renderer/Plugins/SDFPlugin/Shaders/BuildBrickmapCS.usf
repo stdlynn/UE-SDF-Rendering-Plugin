@@ -25,8 +25,6 @@ groupshared uint AtlasIdxShared;
 
 static const uint Empty = 0xFFFFFFFFu;
 
-
-
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
 void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID )
 {
@@ -52,7 +50,7 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 	// Indicate if any geometry is within allocation distance
 	// Sync so any thread gets the chance to indicate a surface within range
 	const float Diagonal = GetDiagonal( VoxSize );
-	if (abs( Closest ) <= Diagonal) { bContainsSurfaceShared = true; }
+	if ( abs( Closest ) <= Diagonal ) { bContainsSurfaceShared = true; }
 	GroupMemoryBarrierWithGroupSync();
 
 	// One thread is in charge of (de)allocation

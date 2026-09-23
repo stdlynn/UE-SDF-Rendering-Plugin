@@ -1,6 +1,8 @@
 // Plugin
 #include "FBrickmapBuilder.h"
 #include "BrickmapCommon.h"
+#include "SDFEdits.h"
+#include "SDFFunctions.h"
 
 void FBrickmapBuilder::AllocateResources()
 {
@@ -57,28 +59,29 @@ void FBrickmapBuilder::SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FV
 	const float BrickSize{ GetBrickSize( VoxSize ) };
 	const FVector3f GridMin{ GetGridMin( PtrGridPos, BrickSize ) };
 	const FIntVector3 GridMax = FIntVector3( PtrGridSize.X, PtrGridSize.Y, PtrGridSize.Z );
+
+	// TODO temporary hack to test deallocation
+	// Add some thickness so it also encapsulates its previous position
 	const float Thickness = BrickSize * 4;
 
-	for (const auto& SDF : SDFs)
+	for ( const auto& SDF : SDFs )
 	{
-		// TODO temporary hack to test deallocation
-		// Add some thickness so it also encapsulates its previous position
-		const float Extent = SDF.Radius + Thickness;
 
-		FIntVector3 MinCell = WorldPosToGridCell( SDF.Pos - Extent, GridMin, BrickSize );
-		FIntVector3 MaxCell = WorldPosToGridCell( SDF.Pos + Extent, GridMin, BrickSize );
+		FAABB AABB = AABB::GetSDFAABB( SDF );
+		const FVector3f MinF = ( AABB.Min - GridMin - Thickness ) / BrickSize;
+		const FVector3f MaxF = ( AABB.Max - GridMin + Thickness ) / BrickSize;
 
-		MinCell = FIntVector3( FMath::Clamp( MinCell.X, 0, GridMax.X ),
-							   FMath::Clamp( MinCell.Y, 0, GridMax.Y ),
-							   FMath::Clamp( MinCell.Z, 0, GridMax.Z ) );
-		MaxCell = FIntVector3( FMath::Clamp( MaxCell.X, 0, GridMax.X ),
-							   FMath::Clamp( MaxCell.Y, 0, GridMax.Y ),
-							   FMath::Clamp( MaxCell.Z, 0, GridMax.Z ) );
+		const FIntVector3 MinCell(FMath::Clamp( FMath::FloorToInt32( MinF.X ), 0, GridMax.X - 1 ),
+								  FMath::Clamp( FMath::FloorToInt32( MinF.Y ), 0, GridMax.Y - 1 ),
+								  FMath::Clamp( FMath::FloorToInt32( MinF.Z ), 0, GridMax.Z - 1 ));
+		const FIntVector3 MaxCell(FMath::Clamp( FMath::FloorToInt32( MaxF.X ), 0, GridMax.X - 1 ),
+								  FMath::Clamp( FMath::FloorToInt32( MaxF.Y ), 0, GridMax.Y - 1 ),
+								  FMath::Clamp( FMath::FloorToInt32( MaxF.Z ), 0, GridMax.Z - 1 ));
 
 		// @formatter:off
-		for (int32 z = MinCell.Z; z <= MaxCell.Z; z++) {
-		for (int32 y = MinCell.Y; y <= MaxCell.Y; y++) {
-		for (int32 x = MinCell.X; x <= MaxCell.X; x++)
+		for ( int32 z = MinCell.Z; z <= MaxCell.Z; z++ )
+		for ( int32 y = MinCell.Y; y <= MaxCell.Y; y++ )
+		for ( int32 x = MinCell.X; x <= MaxCell.X; x++ )
 		{
 			const FIntVector3 GridCell( x, y, z );
 
@@ -94,12 +97,13 @@ void FBrickmapBuilder::SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FV
 										   FMath::Abs( SDF.Pos.Z - Min.Z ) > FMath::Abs( SDF.Pos.Z - Max.Z ) ? Min.Z : Max.Z );
 
 			// TODO: maybe do local to SDF
-			if (SDFSphere( ClosestPoint, SDF.Pos, SDF.Radius ) <= Thickness
-				&& SDFSphere( FarthestPoint, SDF.Pos, SDF.Radius ) >= -Thickness)
+			const float ClosestDist = DistFn::Dist(SDF, ClosestPoint);
+			const float FarthestDist = DistFn::Dist(SDF, FarthestPoint);
+			if (ClosestDist <= Thickness && FarthestDist >= -Thickness)
 			{
 				RT.UpdateListCPU.Add( GridCellToGridIdx( FUintVector3{ GridCell } ) );
 			}
-		}}}
+		}
 		// @formatter:on
 	}
 }
