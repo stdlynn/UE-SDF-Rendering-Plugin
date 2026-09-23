@@ -25,6 +25,9 @@ struct FGameSDF
 {
 	GENERATED_BODY()
 
+	UPROPERTY( EditAnywhere, BlueprintReadOnly )
+	EOperation Operation{ EOperation::Add };
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	EPrimitive Primitive{ EPrimitive::Sphere };
 
@@ -41,14 +44,11 @@ struct FGameSDF
 		EditCondition = "Primitive == EPrimitive::Box", EditConditionHides))
 	FVector3f BoxSize{ 100.0, 100.0, 100.0 };
 
-	UPROPERTY( EditAnywhere, BlueprintReadOnly )
-	EOperation Operation{ EOperation::Add };
-
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	bool bSmooths{ false };
 
 	UPROPERTY( EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "1.0") )
-	float Smoothing{ 0.0f };
+	float Smoothing{ 1.0f };
 };
 
 // SDF edit representation sent to the render thread
