@@ -23,26 +23,33 @@ namespace
 	// TODO: if this is turned on, we need to do a full rebuilt of the brickmap
 	// TODO: since X frames of update lists have been skipped
 	// TODO: Also note that this should be checked before running ANY shader
-	TAutoConsoleVariable<int32> CVarShadersOn( TEXT( "r.SDF.Plugin" ),
-											   1,
-											   TEXT( "Enable SDF Plugin \n" )
-											   TEXT( " 0: OFF;" )
-											   TEXT( " 1: ON." ),
-											   ECVF_RenderThreadSafe );
+	TAutoConsoleVariable CVarShadersOn( TEXT( "r.SDF.Plugin" ),
+										1,
+										TEXT( "Enable SDF Plugin \n" )
+										TEXT( " 0: OFF;" )
+										TEXT( " 1: ON." ),
+										ECVF_RenderThreadSafe );
 
-	TAutoConsoleVariable<int32> CVarRenderEdits( TEXT( "r.SDF.Edits" ),
-												 1,
-												 TEXT( "Enable SDF rendering \n" )
-												 TEXT( " 0: OFF;" )
-												 TEXT( " 1: ON." ),
-												 ECVF_RenderThreadSafe );
+	TAutoConsoleVariable CVarRenderEdits( TEXT( "r.SDF.Edits" ),
+										  1,
+										  TEXT( "Enable SDF rendering \n" )
+										  TEXT( " 0: OFF;" )
+										  TEXT( " 1: ON." ),
+										  ECVF_RenderThreadSafe );
 
-	TAutoConsoleVariable<int32> CVarDebugGrid( TEXT( "r.SDF.Debug.Grid" ),
-											   0,
-											   TEXT( "Enable debug view of the pointer grid \n" )
-											   TEXT( " 0: OFF;" )
-											   TEXT( " 1: ON." ),
-											   ECVF_RenderThreadSafe );
+	TAutoConsoleVariable CVarDebugGrid( TEXT( "r.SDF.Debug.Grid" ),
+										0,
+										TEXT( "Enable debug view of the pointer grid \n" )
+										TEXT( " 0: OFF;" )
+										TEXT( " 1: ON." ),
+										ECVF_RenderThreadSafe );
+
+	TAutoConsoleVariable CVarBruteForceSphereTracing( TEXT( "r.SDF.Debug.GroundTruth" ),
+													  0,
+													  TEXT( "Brute-force sphere tracing \n" )
+													  TEXT( " 0: OFF;" )
+													  TEXT( " 1: ON." ),
+													  ECVF_RenderThreadSafe );
 }
 
 FSDFExtension::FSDFExtension( const FAutoRegister& AutoRegister, UWorld* InWorld )
@@ -96,8 +103,11 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	const USDFSettings* SDFSettings{ GetDefault<USDFSettings>() };
 	if (GT.Settings.PtrGridPos == SDFSettings->PtrGridPos
 		&& GT.Settings.VoxSize == SDFSettings->VoxSize
-		&& GT.Settings.GPUUnitScale == SDFSettings->GPUUnitScale
-		&& GT.Settings.DbgVisMaxBricks == SDFSettings->DbgVisMaxBricks)
+		&& GT.Settings.DbgVisMaxBricks == SDFSettings->DbgVisMaxBricks
+		&& GT.Settings.DbgVisBlendFactor == SDFSettings->DbgVisBlendFactor
+		&& GT.Settings.SurfaceEpsilon == SDFSettings->SurfaceEpsilon
+		&& GT.Settings.DerivativeH == SDFSettings->DerivativeH
+		&& GT.Settings.GPUUnitScale == SDFSettings->GPUUnitScale)
 	{
 		return;
 	}
@@ -105,8 +115,11 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	// Store settings to compare next frame
 	GT.Settings.PtrGridPos = SDFSettings->PtrGridPos;
 	GT.Settings.VoxSize = SDFSettings->VoxSize;
-	GT.Settings.GPUUnitScale = SDFSettings->GPUUnitScale;
 	GT.Settings.DbgVisMaxBricks = SDFSettings->DbgVisMaxBricks;
+	GT.Settings.DbgVisBlendFactor = SDFSettings->DbgVisBlendFactor;
+	GT.Settings.SurfaceEpsilon = SDFSettings->SurfaceEpsilon;
+	GT.Settings.DerivativeH = SDFSettings->DerivativeH;
+	GT.Settings.GPUUnitScale = SDFSettings->GPUUnitScale;
 	GT.Settings.bUnitScaleDirty = true;
 
 	// Transfer lambda
@@ -119,6 +132,8 @@ void FSDFExtension::TransferSettingsToRenderThread()
 		// Convert to GPU unit scale
 		RT.Settings.PtrGridPos *= Settings.GPUUnitScale;
 		RT.Settings.VoxSize *= Settings.GPUUnitScale;
+		RT.Settings.SurfaceEpsilon *= Settings.GPUUnitScale;
+		RT.Settings.DerivativeH *= Settings.GPUUnitScale;
 	} };
 
 	// Perform the transfer safely on the render thread
@@ -343,7 +358,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 
 		const FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture( RT.BrickmapBuilder.GetBrickAtlas(), ERDGTextureFlags::MultiFrame );
 		const FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer( RT.BrickmapBuilder.GetPtrGrid(), ERDGBufferFlags::MultiFrame );
-		FRHISamplerState* BrickSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+		FRHISamplerState* BrickSampler = TStaticSamplerState<SF_Trilinear>::GetRHI();
 
 		FSDFTraverseShader::FParameters* PassParameters =
 				GraphBuilder.AllocParameters<FSDFTraverseShader::FParameters>();
@@ -353,8 +368,11 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 		PassParameters->BrickAtlas = GraphBuilder.CreateSRV( BrickAtlasRDG );
 		PassParameters->BrickSampler = BrickSampler;
 		PassParameters->PtrGrid = GraphBuilder.CreateSRV( PtrBufferRDG, PF_R32_UINT );
+		PassParameters->bBruteForceSphereTracing = CVarBruteForceSphereTracing.GetValueOnRenderThread();
 		PassParameters->PtrGridPos = RT.Settings.PtrGridPos;
 		PassParameters->VoxSize = RT.Settings.VoxSize;
+		PassParameters->SurfaceEpsilon = RT.Settings.SurfaceEpsilon;
+		PassParameters->DerivativeH = RT.Settings.DerivativeH;
 		PassParameters->UnitScale = RT.Settings.GPUUnitScale;
 		PassParameters->RenderTargets = RenderTargets;
 		PassParameters->RenderTargets.DepthStencil = FDepthStencilBinding( DepthTexture,
@@ -443,6 +461,7 @@ FScreenPassTexture FSDFExtension::RenderDebug( FRDGBuilder& GraphBuilder, const 
 		PassParameters->VoxSize = RT.Settings.VoxSize;
 		PassParameters->UnitScale = RT.Settings.GPUUnitScale;
 		PassParameters->DbgVisMaxBricks = RT.Settings.DbgVisMaxBricks;
+		PassParameters->DbgVisBlendFactor = RT.Settings.DbgVisBlendFactor;
 		PassParameters->Output = GraphBuilder.CreateUAV( FRDGTextureUAVDesc( OutputTexture ) );
 
 		FIntPoint PassViewSize = SceneColor.ViewRect.Size();

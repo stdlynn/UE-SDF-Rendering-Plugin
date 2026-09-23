@@ -3,7 +3,6 @@
 #include "/Engine/Public/Platform.ush"
 
 static const float Infinity = asfloat( 0x7F7FFFFF );
-static const float SurfaceEpsilon = 1e-1;
 static const float AABBEpsilon = 5e-3;
 
 enum EOperation : uint
@@ -43,27 +42,108 @@ uint NumEdits;
 
 struct FRay
 {
-	static FRay Create( float3 Pos, float3 Dir, float T = Infinity )
+	static FRay Create( float3 Pos, float3 Dir, float MaxT = Infinity )
 	{
 		FRay Ray;
-		Ray.Pos = Pos;
+		Ray.Origin = Pos;
 		Ray.Dir = Dir;
 		Ray.InvDir = 1.0 / Dir;
-		Ray.T = T;
+		Ray.T = 0.0;
+		Ray.MaxT = MaxT;
 		return Ray;
 	}
 
 	void Advance( float Dist )
 	{
-		Pos += Dir * Dist;
-		// TODO: when this is MaxT, don't subtract, it isn't ""RemainingT""
-		T -= Dist;
+		T += Dist;
 	}
 
-	float3 Pos;
+	void AdvanceOrigin()
+	{
+		Origin += Dir * T;
+		MaxT -= T;
+		T = 0.0;
+	}
+
+	float3 GetPosAt( float Dist ) { return Origin + (Dir * Dist); }
+	float3 GetPosAtOffset( float Offset ) { return GetPosAt( T + Offset); }
+	float3 GetPos() { return GetPosAt( T ); }
+
+	float3 Origin;
 	float3 Dir;
 	float3 InvDir;
-	// TODO: change to MaxT, also add a T (so we don't need to advance the ray pos itself)
+	float T;
+	float MaxT;
+};
+
+// [CREDITS] DDA algorithm from http://www.cs.yorku.ca/~amana/research/grid.pdf
+struct FDDA
+{
+	static FDDA Init( FRay Ray, float3 BoundsMin, float CellSize )
+	{
+		FDDA DDA;
+		const float3 Pos = Ray.GetPos();
+		DDA.CellCoord = int3( floor( (Pos - BoundsMin) / CellSize ) );
+		DDA.CellStep = int3( sign( Ray.Dir ) );
+		DDA.TDelta = abs( CellSize * Ray.InvDir );
+		// The next cell to be hit (on a certain axis) for each axis, in grid space
+		const int3 NextCellCoord = DDA.CellCoord + (DDA.CellStep + 1) / 2;
+		const float3 NextCellCoordWorldSpace = float3( NextCellCoord ) * CellSize + BoundsMin;
+		DDA.TMax = (NextCellCoordWorldSpace - Pos) * Ray.InvDir;
+		for (uint Axis = 0; Axis < 3; ++Axis)
+		{
+			// Handle ray direction being zero
+			if (Ray.Dir[Axis] == 0) { DDA.TMax[Axis] = Infinity; }
+		}
+		DDA.Axis = 0;
+		DDA.T = 0.0;
+		return DDA;
+	}
+
+	void ScaleUnitSize( float Scale )
+	{
+		TDelta *= Scale;
+		TMax *= Scale;
+		T *= Scale;
+	}
+
+	// Step the ray
+	bool TryStep( uint3 GridSize, float RayMaxT )
+	{
+		FindNextAxis();
+
+		// Step to the next cell
+		T = TMax[Axis];
+		CellCoord[Axis] += CellStep[Axis];
+		TMax[Axis] += TDelta[Axis];
+
+		return IsValidCell( GridSize, RayMaxT );
+	}
+
+	// Find the axis on which we are the closest to the next cell
+	void FindNextAxis()
+	{
+		Axis = TMax.x < TMax.y
+				   ? TMax.x < TMax.z
+						 ? 0
+						 : 2
+				   : TMax.y < TMax.z
+						 ? 1
+						 : 2;
+	}
+
+	// Grid and ray bounds check
+	bool IsValidCell( uint3 GridSize, float RayMaxT )
+	{
+		return !(CellCoord[Axis] < 0 || CellCoord[Axis] >= GridSize[Axis] || T > RayMaxT);
+	}
+
+	int3 CellCoord; // The ray position in grid space
+	int3 CellStep; // The step direction for each axis (-1, 0, or 1), in grid space
+	float3 TDelta; // The step size (to move the length of a cell along a certain axis) for each axis, in world space
+	float3 TMax; // The distance to the next cell for each axis, in world space
+
+	uint Axis;
 	float T;
 };
 
@@ -77,12 +157,12 @@ struct FAABB
 // If true, hit_t is the intersection time
 bool IntersectAABB( FAABB Bounds, FRay Ray, out float TNear, out float TFar )
 {
-	const float3 TToMin = (Bounds.Min - Ray.Pos) * Ray.InvDir;
-	const float3 TToMax = (Bounds.Max - Ray.Pos) * Ray.InvDir;
+	const float3 TToMin = (Bounds.Min - Ray.Origin) * Ray.InvDir;
+	const float3 TToMax = (Bounds.Max - Ray.Origin) * Ray.InvDir;
 	const float3 TMin = min( TToMin, TToMax );
 	const float3 TMax = max( TToMin, TToMax );
-	TNear = max( max3( TMin.x, TMin.y, TMin.z ), 0 );
-	TFar = min( min3( TMax.x, TMax.y, TMax.z ), Ray.T );
+	TNear = max( max3( TMin.x, TMin.y, TMin.z ), Ray.T );
+	TFar = min( min3( TMax.x, TMax.y, TMax.z ), Ray.MaxT );
 
 	return TNear <= TFar;
 }
