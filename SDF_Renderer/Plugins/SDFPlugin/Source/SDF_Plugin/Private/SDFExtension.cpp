@@ -368,6 +368,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 		PassParameters->BrickAtlas = GraphBuilder.CreateSRV( BrickAtlasRDG );
 		PassParameters->BrickSampler = BrickSampler;
 		PassParameters->PtrGrid = GraphBuilder.CreateSRV( PtrBufferRDG, PF_R32_UINT );
+		PassParameters->bBruteForceSphereTracing = CVarBruteForceSphereTracing.GetValueOnRenderThread();
 		PassParameters->PtrGridPos = RT.Settings.PtrGridPos;
 		PassParameters->VoxSize = RT.Settings.VoxSize;
 		PassParameters->SurfaceEpsilon = RT.Settings.SurfaceEpsilon;

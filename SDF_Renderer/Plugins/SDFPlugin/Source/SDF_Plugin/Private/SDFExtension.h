@@ -104,6 +104,7 @@ public:
 		SHADER_PARAMETER_RDG_TEXTURE_SRV( Texture3D<float>, BrickAtlas ) // Brick Atlas
 		SHADER_PARAMETER_SAMPLER( SamplerState, BrickSampler ) // Brick Sampler
 		SHADER_PARAMETER_RDG_BUFFER_SRV( Buffer<uint>, PtrGrid ) // Pointer Buffer
+		SHADER_PARAMETER( uint32, bBruteForceSphereTracing )
 		SHADER_PARAMETER( FVector3f, PtrGridPos )
 		SHADER_PARAMETER( float, VoxSize )
 		SHADER_PARAMETER( float, SurfaceEpsilon )

@@ -6,13 +6,11 @@ Buffer<uint> PtrGrid;
 #include "BrickmapCommon.ush"
 #include "Common.ush"
 
-// TODO: enable through a CVar/Uniform
-#define ENABLE_BRUTE_FORCE_SPHERE_TRACING 0
-
 // Shader bindings
 Texture3D<float> BrickAtlas;
 SamplerState BrickSampler;
 float3 PtrGridPos;
+uint bBruteForceSphereTracing;
 float VoxSize;
 float SurfaceEpsilon;
 float DerivativeH;
@@ -143,34 +141,39 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 bool TraceScene( inout FRay Ray, out float3 Normal )
 {
 	bool bHit = false;
-#if ENABLE_BRUTE_FORCE_SPHERE_TRACING
-	for (uint Step = 0; Step < 256; ++Step)
-	{
-		float ClosestDist = MapScene( Ray.GetPos() );
-		if (ClosestDist < SurfaceEpsilon)
-		{
-			Normal = GetNormal( Ray.GetPos() );
-			bHit = true;
-			break;
-		}
-		Ray.Advance( ClosestDist );
-	}
-#else
-	// Assume Ray.T is zero
-    float AABBHitT, AABBOutT;
-    const float BrickSize = GetBrickSize( VoxSize );
-    const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
-    if (IntersectAABB( GridAABB, Ray, AABBHitT, AABBOutT ))
+	// Brute-force sphere tracing
+	if (bBruteForceSphereTracing > 0)
     {
-		// Assuming 'Ray.T' is zero
-		const float Epsilon = AABBEpsilon * UnitScale;
-		if (AABBHitT > 0.0) { AABBHitT += Epsilon; }
-		Ray.MaxT = AABBOutT;
-		Ray.Advance( AABBHitT );
-		//Ray.AdvanceOrigin();
-		bHit = TracePtrGrid( Ray, Normal );
+		for (uint Step = 0; Step < 256; ++Step)
+		{
+			float ClosestDist = MapScene( Ray.GetPos() );
+			if (ClosestDist < SurfaceEpsilon)
+			{
+				Normal = GetNormal( Ray.GetPos() );
+				bHit = true;
+				break;
+			}
+			Ray.Advance( ClosestDist );
+		}
     }
-#endif
+	// Brickmap traversal
+	else
+    {
+		// Assume Ray.T is zero
+	    float AABBHitT, AABBOutT;
+	    const float BrickSize = GetBrickSize( VoxSize );
+	    const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
+	    if (IntersectAABB( GridAABB, Ray, AABBHitT, AABBOutT ))
+	    {
+			// Assuming 'Ray.T' is zero
+			const float Epsilon = AABBEpsilon * UnitScale;
+			if (AABBHitT > 0.0) { AABBHitT += Epsilon; }
+			Ray.MaxT = AABBOutT;
+			Ray.Advance( AABBHitT );
+			//Ray.AdvanceOrigin();
+			bHit = TracePtrGrid( Ray, Normal );
+	    }
+    }
 	Ray.AdvanceOrigin();
 	return bHit;
 }
