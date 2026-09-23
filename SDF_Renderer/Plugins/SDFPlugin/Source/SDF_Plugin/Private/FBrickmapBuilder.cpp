@@ -71,12 +71,12 @@ void FBrickmapBuilder::SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FV
 		const FVector3f MinF = ( AABB.Min - GridMin - Thickness ) / BrickSize;
 		const FVector3f MaxF = ( AABB.Max - GridMin + Thickness ) / BrickSize;
 
-		const FIntVector3 MinCell(FMath::Clamp( FMath::FloorToInt32( MinF.X ), 0, GridMax.X - 1 ),
-								  FMath::Clamp( FMath::FloorToInt32( MinF.Y ), 0, GridMax.Y - 1 ),
-								  FMath::Clamp( FMath::FloorToInt32( MinF.Z ), 0, GridMax.Z - 1 ));
-		const FIntVector3 MaxCell(FMath::Clamp( FMath::FloorToInt32( MaxF.X ), 0, GridMax.X - 1 ),
-								  FMath::Clamp( FMath::FloorToInt32( MaxF.Y ), 0, GridMax.Y - 1 ),
-								  FMath::Clamp( FMath::FloorToInt32( MaxF.Z ), 0, GridMax.Z - 1 ));
+		const FIntVector3 MinCell(FMath::Clamp( FMath::FloorToInt32( MinF.X ), 0, GridMax.X ),
+								  FMath::Clamp( FMath::FloorToInt32( MinF.Y ), 0, GridMax.Y ),
+								  FMath::Clamp( FMath::FloorToInt32( MinF.Z ), 0, GridMax.Z ));
+		const FIntVector3 MaxCell(FMath::Clamp( FMath::FloorToInt32( MaxF.X ), 0, GridMax.X ),
+								  FMath::Clamp( FMath::FloorToInt32( MaxF.Y ), 0, GridMax.Y ),
+								  FMath::Clamp( FMath::FloorToInt32( MaxF.Z ), 0, GridMax.Z ));
 
 		// @formatter:off
 		for ( int32 z = MinCell.Z; z <= MaxCell.Z; z++ )
