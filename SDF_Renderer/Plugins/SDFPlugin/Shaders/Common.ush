@@ -60,15 +60,9 @@ struct FRay
 		T = 0.0;
 	}
 
-	float3 GetPosAt( float Dist )
-	{
-		return Origin + (Dir * Dist);
-	}
-
-	float3 GetPos()
-	{
-		return GetPosAt( T );
-	}
+	float3 GetPosAt( float Dist ) { return Origin + (Dir * Dist); }
+	float3 GetPosAtOffset( float Offset ) { return GetPosAt( T + Offset); }
+	float3 GetPos() { return GetPosAt( T ); }
 
 	float3 Origin;
 	float3 Dir;

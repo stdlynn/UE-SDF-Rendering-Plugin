@@ -43,6 +43,13 @@ namespace
 										TEXT( " 0: OFF;" )
 										TEXT( " 1: ON." ),
 										ECVF_RenderThreadSafe );
+
+	TAutoConsoleVariable CVarBruteForceSphereTracing( TEXT( "r.SDF.Debug.BruteForce" ),
+													  0,
+													  TEXT( "Ground-truth SDF rendering \n" )
+													  TEXT( " 0: OFF;" )
+													  TEXT( " 1: ON." ),
+													  ECVF_RenderThreadSafe );
 }
 
 FSDFExtension::FSDFExtension( const FAutoRegister& AutoRegister, UWorld* InWorld )
@@ -96,10 +103,10 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	const USDFSettings* SDFSettings{ GetDefault<USDFSettings>() };
 	if (GT.Settings.PtrGridPos == SDFSettings->PtrGridPos
 		&& GT.Settings.VoxSize == SDFSettings->VoxSize
-		 && GT.Settings.DbgVisMaxBricks == SDFSettings->DbgVisMaxBricks
-		 && GT.Settings.DbgVisBlendFactor == SDFSettings->DbgVisBlendFactor
-		 && GT.Settings.SurfaceEpsilon == SDFSettings->SurfaceEpsilon
-		 && GT.Settings.DerivativeH == SDFSettings->DerivativeH
+		&& GT.Settings.DbgVisMaxBricks == SDFSettings->DbgVisMaxBricks
+		&& GT.Settings.DbgVisBlendFactor == SDFSettings->DbgVisBlendFactor
+		&& GT.Settings.SurfaceEpsilon == SDFSettings->SurfaceEpsilon
+		&& GT.Settings.DerivativeH == SDFSettings->DerivativeH
 		&& GT.Settings.GPUUnitScale == SDFSettings->GPUUnitScale)
 	{
 		return;
@@ -358,7 +365,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 
 		const FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture( RT.BrickmapBuilder.GetBrickAtlas(), ERDGTextureFlags::MultiFrame );
 		const FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer( RT.BrickmapBuilder.GetPtrGrid(), ERDGBufferFlags::MultiFrame );
-		FRHISamplerState* BrickSampler = TStaticSamplerState<SF_Bilinear, AM_Clamp, AM_Clamp, AM_Clamp>::GetRHI();
+		FRHISamplerState* BrickSampler = TStaticSamplerState<SF_Trilinear>::GetRHI();
 
 		FSDFTraverseShader::FParameters* PassParameters =
 				GraphBuilder.AllocParameters<FSDFTraverseShader::FParameters>();

@@ -86,7 +86,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 		{
 			// Edge case, might start inside any point within a brick
 			//return true;
-#if 0
+#if 1
 			DDA.FindNextAxis(); // TODO: make more efficient
 			const float DistInsideBrick = DDA.TMax[DDA.Axis];
 
@@ -94,7 +94,8 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 			uint i = 0;
 			while (TempT < DistInsideBrick && i < 32)
 			{
-				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAt( TempT ), GridAABB.Min, VoxSize );const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
+				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAtOffset( TempT ), GridAABB.Min, VoxSize );
+				const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
 				if (SampleDist < SurfaceEpsilon)
 				{
@@ -123,7 +124,8 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 			uint i = 0;
 			while (TempT < DistInsideBrick && i < 32)
 			{
-				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAt( TempT ), GridAABB.Min, VoxSize );const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
+				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAtOffset( TempT ), GridAABB.Min, VoxSize );
+				const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
 				if (SampleDist < SurfaceEpsilon)
 				{
@@ -134,38 +136,30 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 				TempT += SampleDist;
 				i++;
 			}
-
-			//const float3 WorldPos = Ray.GetPosAt( DDA.T );
-			//const float3 LocalGridPos = (WorldPos - PtrGridPos) / BrickSize;
-			//const float3 LocalBrickPos = (LocalGridPos - DDA.CellCoord) * VoxelResolution;
-			//
-			//BrickIdxToAtlasCell( PtrGrid[GridIdx] )
 		}
 	}
 }
 
-bool SphereTraceScene( inout FRay Ray, out float3 Normal )
+bool TraceScene( inout FRay Ray, out float3 Normal )
 {
+	bool bHit = false;
+#if ENABLE_BRUTE_FORCE_SPHERE_TRACING
 	for (uint Step = 0; Step < 256; ++Step)
 	{
 		float ClosestDist = MapScene( Ray.GetPos() );
 		if (ClosestDist < SurfaceEpsilon)
 		{
 			Normal = GetNormal( Ray.GetPos() );
-			return true;
+			bHit = true;
+			break;
 		}
 		Ray.Advance( ClosestDist );
 	}
-	return false;
-}
-
-bool TraceScene( inout FRay Ray, out float3 Normal )
-{
+#else
 	// Assume Ray.T is zero
     float AABBHitT, AABBOutT;
     const float BrickSize = GetBrickSize( VoxSize );
-    const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize);
-	bool bHit = false;
+    const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
     if (IntersectAABB( GridAABB, Ray, AABBHitT, AABBOutT ))
     {
 		// Assuming 'Ray.T' is zero
@@ -173,13 +167,11 @@ bool TraceScene( inout FRay Ray, out float3 Normal )
 		if (AABBHitT > 0.0) { AABBHitT += Epsilon; }
 		Ray.MaxT = AABBOutT;
 		Ray.Advance( AABBHitT );
-#if ENABLE_BRUTE_FORCE_SPHERE_TRACING
-		bHit = SphereTraceScene( Ray, Normal );
-#else
+		//Ray.AdvanceOrigin();
 		bHit = TracePtrGrid( Ray, Normal );
-#endif
-		Ray.AdvanceOrigin();
     }
+#endif
+	Ray.AdvanceOrigin();
 	return bHit;
 }
 
