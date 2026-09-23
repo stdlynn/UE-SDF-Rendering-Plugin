@@ -3,8 +3,6 @@
 #include "/Engine/Public/Platform.ush"
 
 static const float Infinity = asfloat( 0x7F7FFFFF );
-// TODO: expose SurfaceEpsilon
-static const float SurfaceEpsilon = 2e-1;
 static const float AABBEpsilon = 5e-3;
 
 enum EOperation : uint

@@ -11,12 +11,11 @@ Texture2D DepthTex;
 SCREEN_PASS_TEXTURE_VIEWPORT( SceneColorViewport )
 RWTexture2D<float4> Output;
 
-// TODO: expose color lerp factor as project setting?
-
 float3 PtrGridPos;
 float VoxSize;
 float UnitScale;
 uint DbgVisMaxBricks;
+float DbgVisBlendFactor;
 
 float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
 {
@@ -114,6 +113,6 @@ void DebugCS( uint2 DispatchThreadId : SV_DispatchThreadID )
 
 	// Compute output color
 	const float4 OriginalColor = OriginalSceneColor.SampleLevel( GlobalPointClampedSampler, SampleUV, 0 );
-	const float3 NewColor = (NumHits > 0) ? lerp( OriginalColor, InfernoQuintic( NumHits ), 0.6 ) : OriginalColor;
+	const float3 NewColor = (NumHits > 0) ? lerp( OriginalColor, InfernoQuintic( NumHits ), DbgVisBlendFactor ) : OriginalColor;
 	Output[SampleCoord] = float4( NewColor, OriginalColor.w );
 }

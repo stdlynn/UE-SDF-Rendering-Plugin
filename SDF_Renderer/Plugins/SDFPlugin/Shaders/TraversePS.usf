@@ -9,14 +9,13 @@ Buffer<uint> PtrGrid;
 // TODO: enable through a CVar/Uniform
 #define ENABLE_BRUTE_FORCE_SPHERE_TRACING 0
 
-// TODO: expose as project setting?
-static const float DerivativeH = 4e-2;
-
 // Shader bindings
 Texture3D<float> BrickAtlas;
 SamplerState BrickSampler;
 float3 PtrGridPos;
 float VoxSize;
+float SurfaceEpsilon;
+float DerivativeH;
 float UnitScale;
 
 // TODO: make this clamped
@@ -35,21 +34,19 @@ float3 GetAtlasNormal( float3 Pos, float3 BoundsMin )
 {
 	// Note that the normals are reversed on the inside of geometry (so for negative distances)
 	// This should be fine, as those should never be visible anyway
-	const float H = DerivativeH * UnitScale;
 	const float2 K = float2( 1, -1 );
-	return normalize( K.xyy * GetAtlasDistClamped( Pos + (K.xyy * H), BoundsMin ) +
-					  K.yyx * GetAtlasDistClamped( Pos + (K.yyx * H), BoundsMin ) +
-					  K.yxy * GetAtlasDistClamped( Pos + (K.yxy * H), BoundsMin ) +
-					  K.xxx * GetAtlasDistClamped( Pos + (K.xxx * H), BoundsMin ) );
+	return normalize( K.xyy * GetAtlasDistClamped( Pos + (K.xyy * DerivativeH), BoundsMin ) +
+					  K.yyx * GetAtlasDistClamped( Pos + (K.yyx * DerivativeH), BoundsMin ) +
+					  K.yxy * GetAtlasDistClamped( Pos + (K.yxy * DerivativeH), BoundsMin ) +
+					  K.xxx * GetAtlasDistClamped( Pos + (K.xxx * DerivativeH), BoundsMin ) );
 }
 float3 GetNormal( float3 Pos )
 {
-	const float H = DerivativeH * UnitScale;
 	const float2 K = float2( 1, -1 );
-	return normalize( K.xyy * MapScene( Pos + (K.xyy * H) ) +
-					  K.yyx * MapScene( Pos + (K.yyx * H) ) +
-					  K.yxy * MapScene( Pos + (K.yxy * H) ) +
-					  K.xxx * MapScene( Pos + (K.xxx * H) ) );
+	return normalize( K.xyy * MapScene( Pos + (K.xyy * DerivativeH) ) +
+					  K.yyx * MapScene( Pos + (K.yyx * DerivativeH) ) +
+					  K.yxy * MapScene( Pos + (K.yxy * DerivativeH) ) +
+					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH) ) );
 }
 
 // Brick Sphere Tracing
@@ -64,7 +61,6 @@ bool TraceBrick( inout FRay Ray )
 bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 {
 	// TODO:
-	const float Epsilon = SurfaceEpsilon * UnitScale;
 	const float BrickSize = GetBrickSize( VoxSize );
 	const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
 	const float Diagonal = GetDiagonal( VoxSize );
@@ -90,6 +86,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 		{
 			// Edge case, might start inside any point within a brick
 			//return true;
+#if 0
 			DDA.FindNextAxis(); // TODO: make more efficient
 			const float DistInsideBrick = DDA.TMax[DDA.Axis];
 
@@ -99,7 +96,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 			{
 				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAt( TempT ), GridAABB.Min, VoxSize );const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
-				if (SampleDist < Epsilon) // TODO: use epsilon
+				if (SampleDist < SurfaceEpsilon)
 				{
 					Ray.Advance( TempT );
 					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
@@ -108,6 +105,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 				TempT += SampleDist;
 				i++;
 			}
+#endif
 		}
 	}
 
@@ -127,7 +125,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 			{
 				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAt( TempT ), GridAABB.Min, VoxSize );const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
-				if (SampleDist < Epsilon) // TODO: use epsilon
+				if (SampleDist < SurfaceEpsilon)
 				{
 					Ray.Advance( TempT );
 					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
@@ -148,11 +146,10 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 
 bool SphereTraceScene( inout FRay Ray, out float3 Normal )
 {
-	const float Epsilon = SurfaceEpsilon * UnitScale;
 	for (uint Step = 0; Step < 256; ++Step)
 	{
 		float ClosestDist = MapScene( Ray.GetPos() );
-		if (ClosestDist < Epsilon)
+		if (ClosestDist < SurfaceEpsilon)
 		{
 			Normal = GetNormal( Ray.GetPos() );
 			return true;
@@ -214,7 +211,7 @@ void TraversePS(
 	OutDepth = ConvertToDeviceZ( ViewZ );
 
 	FGBufferData GBuffer = (FGBufferData)0;
-	GBuffer.BaseColor = (0.1).xxx;
+	GBuffer.BaseColor = (0.4).xxx;
 	GBuffer.WorldNormal = Normal;
 	GBuffer.Metallic = 0.0;
 	GBuffer.Specular = 0.5;
