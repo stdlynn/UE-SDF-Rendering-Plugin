@@ -23,8 +23,6 @@ static const uint NumFreed = 3; // How many bricks are in the FreedList (read-on
 groupshared bool bContainsSurfaceShared;
 groupshared uint AtlasIdxShared;
 
-static const uint Empty = 0xFFFFFFFFu;
-
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
 void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID )
 {

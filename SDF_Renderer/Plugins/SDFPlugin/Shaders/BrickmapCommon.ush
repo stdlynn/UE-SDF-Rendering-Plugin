@@ -27,25 +27,19 @@ static const uint3 AtlasSize = NumAtlasBricks * BrickRes;
 static const uint3 PtrGridSize = uint3( 256, 256, 256 );
 static const uint3 MaxGridIdx = PtrGridSize - 1;
 
-float GetBrickSize( float VoxSize )
-{
-	return VoxSize * VoxRes;
-}
-
-float GetDiagonal( float VoxSize )
-{
-	return (sqrt( 3.0 ) / 2.0) * VoxSize;
-}
+static const uint Empty = 0xFFFFFFFFu;
 
 float EncodeDistance( float Distance, float InvDiagonal )
 {
 	return clamp( Distance * InvDiagonal, -1.0, 1.0 ) * 0.5 + 0.5;
 }
-
 float DecodeDistance( float Distance, float Diagonal )
 {
 	return (Distance - 0.5) * 2.0 * Diagonal;
 }
+
+float GetBrickSize( float VoxSize ) { return VoxSize * VoxRes; }
+float GetDiagonal( float VoxSize ) { return (sqrt( 3.0 ) / 2.0) * VoxSize; }
 
 namespace AABB
 {
@@ -123,31 +117,5 @@ float3 WorldPosToAtlasUVW( float3 WorldPos, float3 GridMin, float VoxSize )
 	return (AtlasPoint + 0.5) / AtlasSize;
 }
 
-bool IsBrickAllocated( uint Idx )
-{
-	return (PtrGrid[Idx] != 0xFFFFFFFF);
-}
-
-bool IsBrickAllocated( uint3 GridCell )
-{
-	return IsBrickAllocated( GridCellToGridIdx( GridCell ) );
-}
-
-// Allocate a brick by storing its index in the pointer grid
-void Allocate( uint3 GridCell )
-{
-	uint NextIndex;
-	InterlockedAdd( BrickAllocCounter[0], 1, NextIndex );
-
-	PtrGrid[GridCellToGridIdx( GridCell )] = NextIndex;
-}
-
-// Allocate a brick, only if this location isn't already allocated
-void AllocateSafe( uint3 GridCell )
-{
-	// TODO: This isn't safe right now (the same ptr grid cell could increment the counter more than once)
-	// Won't be an issue when we upload a list of bricks to update
-	if (IsBrickAllocated( GridCell )) { return; }
-
-	Allocate( GridCell );
-}
+bool IsBrickAllocated( uint Idx ) { return (PtrGrid[Idx] != Empty); }
+bool IsBrickAllocated( uint3 GridCell ) { return IsBrickAllocated( GridCellToGridIdx( GridCell ) );}

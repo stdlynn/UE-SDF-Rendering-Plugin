@@ -11,6 +11,8 @@ Texture2D DepthTex;
 SCREEN_PASS_TEXTURE_VIEWPORT( SceneColorViewport )
 RWTexture2D<float4> Output;
 
+// TODO: expose color lerp factor as project setting?
+
 float3 PtrGridPos;
 float VoxSize;
 float UnitScale;
@@ -26,7 +28,7 @@ float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
 	uint NumHits = 0;
 	if (DDA.IsValidCell( PtrGridSize, Ray.MaxT ))
 	{
-		if (IsBrickAllocated( GridCellToGridIdx( DDA.CellCoord ) ))
+		if (IsBrickAllocated( DDA.CellCoord ))
 		{
 			// Intersection found
 			if (++NumHits >= DbgVisMaxBricks) { NumHits / (float)DbgVisMaxBricks; }
@@ -37,7 +39,7 @@ float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
 	while (true)
 	{
 		if (! DDA.TryStep( PtrGridSize, Ray.MaxT )) { break; }
-		if (IsBrickAllocated( GridCellToGridIdx( DDA.CellCoord ) ))
+		if (IsBrickAllocated( DDA.CellCoord ))
 		{
 			// Intersection found
 			if (++NumHits >= DbgVisMaxBricks) { break; }
