@@ -1,6 +1,8 @@
 // Plugin
 #include "FBrickmapBuilder.h"
 #include "BrickmapCommon.h"
+#include "SDFEdits.h"
+#include "SDFFunctions.h"
 
 void FBrickmapBuilder::AllocateResources()
 {
@@ -57,49 +59,50 @@ void FBrickmapBuilder::SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FV
 	const float BrickSize{ GetBrickSize( VoxSize ) };
 	const FVector3f GridMin{ GetGridMin( PtrGridPos, BrickSize ) };
 	const FIntVector3 GridMax = FIntVector3( PtrGridSize.X, PtrGridSize.Y, PtrGridSize.Z );
+
+	// TODO temporary hack to test deallocation
+	// Add some thickness so it also encapsulates its previous position
 	const float Thickness = BrickSize * 4;
 
-	for (auto [Pos, Radius, ID] : SDFs)
+	for ( const auto& SDF : SDFs )
 	{
-		// TODO temporary hack to test deallocation (put const ref back when removing this)
-		// Add some thickness so it also encapsulates its previous position
-		const float Extent = Radius + Thickness;
 
-		FIntVector3 MinCell = WorldPosToGridCell( Pos - Extent, GridMin, BrickSize );
-		FIntVector3 MaxCell = WorldPosToGridCell( Pos + Extent, GridMin, BrickSize );
+		FAABB AABB = AABB::GetSDFAABB( SDF );
+		const FVector3f MinF = ( AABB.Min - GridMin - Thickness ) / BrickSize;
+		const FVector3f MaxF = ( AABB.Max - GridMin + Thickness ) / BrickSize;
 
-		MinCell = FIntVector3( FMath::Clamp( MinCell.X, 0, GridMax.X ),
-							   FMath::Clamp( MinCell.Y, 0, GridMax.Y ),
-							   FMath::Clamp( MinCell.Z, 0, GridMax.Z ) );
-		MaxCell = FIntVector3( FMath::Clamp( MaxCell.X, 0, GridMax.X ),
-							   FMath::Clamp( MaxCell.Y, 0, GridMax.Y ),
-							   FMath::Clamp( MaxCell.Z, 0, GridMax.Z ) );
+		const FIntVector3 MinCell(FMath::Clamp( FMath::FloorToInt32( MinF.X ), 0, GridMax.X ),
+								  FMath::Clamp( FMath::FloorToInt32( MinF.Y ), 0, GridMax.Y ),
+								  FMath::Clamp( FMath::FloorToInt32( MinF.Z ), 0, GridMax.Z ));
+		const FIntVector3 MaxCell(FMath::Clamp( FMath::FloorToInt32( MaxF.X ), 0, GridMax.X ),
+								  FMath::Clamp( FMath::FloorToInt32( MaxF.Y ), 0, GridMax.Y ),
+								  FMath::Clamp( FMath::FloorToInt32( MaxF.Z ), 0, GridMax.Z ));
 
 		// @formatter:off
-		for (int32 z = MinCell.Z; z <= MaxCell.Z; z++) {
-		for (int32 y = MinCell.Y; y <= MaxCell.Y; y++) {
-		for (int32 x = MinCell.X; x <= MaxCell.X; x++)
+		for ( int32 z = MinCell.Z; z <= MaxCell.Z; z++ )
+		for ( int32 y = MinCell.Y; y <= MaxCell.Y; y++ )
+		for ( int32 x = MinCell.X; x <= MaxCell.X; x++ )
 		{
 			const FIntVector3 GridCell( x, y, z );
 
 			const FVector3f Min = GridCellToWorldPos( GridCell, GridMin, BrickSize );
 			const FVector3f Max = Min + BrickSize;
 
-			const FVector3f ClosestPoint( FMath::Clamp( Pos.X, Min.X, Max.X ),
-										  FMath::Clamp( Pos.Y, Min.Y, Max.Y ),
-										  FMath::Clamp( Pos.Z, Min.Z, Max.Z ) );
+			const FVector3f ClosestPoint( FMath::Clamp( SDF.Pos.X, Min.X, Max.X ),
+										  FMath::Clamp( SDF.Pos.Y, Min.Y, Max.Y ),
+										  FMath::Clamp( SDF.Pos.Z, Min.Z, Max.Z ) );
 
-			const FVector3f FarthestPoint( FMath::Abs( Pos.X - Min.X ) > FMath::Abs( Pos.X - Max.X ) ? Min.X : Max.X,
-										   FMath::Abs( Pos.Y - Min.Y ) > FMath::Abs( Pos.Y - Max.Y ) ? Min.Y : Max.Y,
-										   FMath::Abs( Pos.Z - Min.Z ) > FMath::Abs( Pos.Z - Max.Z ) ? Min.Z : Max.Z );
+			const FVector3f FarthestPoint( FMath::Abs( SDF.Pos.X - Min.X ) > FMath::Abs( SDF.Pos.X - Max.X ) ? Min.X : Max.X,
+										   FMath::Abs( SDF.Pos.Y - Min.Y ) > FMath::Abs( SDF.Pos.Y - Max.Y ) ? Min.Y : Max.Y,
+										   FMath::Abs( SDF.Pos.Z - Min.Z ) > FMath::Abs( SDF.Pos.Z - Max.Z ) ? Min.Z : Max.Z );
 
-			// TODO: maybe do local to SDF
-			if (SDFSphere( ClosestPoint, Pos, Radius ) <= Thickness
-				&& SDFSphere( FarthestPoint, Pos, Radius ) >= -Thickness)
+			const float ClosestDist = DistFn::DistOrigin(SDF, ClosestPoint - SDF.Pos);
+			const float FarthestDist = DistFn::DistOrigin(SDF, FarthestPoint - SDF.Pos);
+			if (ClosestDist <= Thickness && FarthestDist >= -Thickness)
 			{
 				RT.UpdateListCPU.Add( GridCellToGridIdx( FUintVector3{ GridCell } ) );
 			}
-		}}}
+		}
 		// @formatter:on
 	}
 }

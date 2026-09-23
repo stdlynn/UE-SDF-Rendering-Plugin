@@ -3,40 +3,147 @@
 #include "/Engine/Public/Platform.ush"
 
 static const float Infinity = asfloat( 0x7F7FFFFF );
-static const float SurfaceEpsilon = 5e-4;
 static const float AABBEpsilon = 5e-3;
+
+enum EOperation : uint
+{
+	Union = 0,
+	Subtract = 1
+};
+
+enum EPrimitive : uint
+{
+	Sphere = 0,
+	Line = 1,
+	Box = 2
+};
 
 struct FSDFEdit
 {
 	float3 Pos;
-	float Radius;
+	uint Flags; // bits 0-1: primitive, 2: operation, 3: bSmooths
+	float4 Data; // Per-primitive data
+	float Smoothing;
 	uint ID;
-	uint Padding[3];
+	uint Padding[2];
+
+	EPrimitive GetPrimitive() { return (EPrimitive)(Flags & 0b11); }
+	float GetSphereRadius() { return Data.x; }
+	float3 GetLinePosB() { return Data.xyz; }
+	float GetLineRadius() { return Data.w; }
+	float3 GetBoxHalfExtent() { return Data.xyz; }
+ 	EOperation GetSDFOperation() { return (EOperation)( (Flags >> 2) & 0b1 ); }
+	bool GetSDFSmooths() { return Flags & 0b1000; }
 };
+
+// Shader bindings
+StructuredBuffer<FSDFEdit> SDFEdits;
+uint NumEdits;
 
 struct FRay
 {
-	static FRay Create( float3 Pos, float3 Dir, float T = Infinity )
+	static FRay Create( float3 Pos, float3 Dir, float MaxT = Infinity )
 	{
 		FRay Ray;
-		Ray.Pos = Pos;
+		Ray.Origin = Pos;
 		Ray.Dir = Dir;
 		Ray.InvDir = 1.0 / Dir;
-		Ray.T = T;
+		Ray.T = 0.0;
+		Ray.MaxT = MaxT;
 		return Ray;
 	}
 
 	void Advance( float Dist )
 	{
-		Pos += Dir * Dist;
-		// TODO: when this is MaxT, don't subtract, it isn't ""RemainingT""
-		T -= Dist;
+		T += Dist;
 	}
 
-	float3 Pos;
+	void AdvanceOrigin()
+	{
+		Origin += Dir * T;
+		MaxT -= T;
+		T = 0.0;
+	}
+
+	float3 GetPosAt( float Dist ) { return Origin + (Dir * Dist); }
+	float3 GetPosAtOffset( float Offset ) { return GetPosAt( T + Offset); }
+	float3 GetPos() { return GetPosAt( T ); }
+
+	float3 Origin;
 	float3 Dir;
 	float3 InvDir;
-	// TODO: change to MaxT, also add a T (so we don't need to advance the ray pos itself)
+	float T;
+	float MaxT;
+};
+
+// [CREDITS] DDA algorithm from http://www.cs.yorku.ca/~amana/research/grid.pdf
+struct FDDA
+{
+	static FDDA Init( FRay Ray, float3 BoundsMin, float CellSize )
+	{
+		FDDA DDA;
+		const float3 Pos = Ray.GetPos();
+		DDA.CellCoord = int3( floor( (Pos - BoundsMin) / CellSize ) );
+		DDA.CellStep = int3( sign( Ray.Dir ) );
+		DDA.TDelta = abs( CellSize * Ray.InvDir );
+		// The next cell to be hit (on a certain axis) for each axis, in grid space
+		const int3 NextCellCoord = DDA.CellCoord + (DDA.CellStep + 1) / 2;
+		const float3 NextCellCoordWorldSpace = float3( NextCellCoord ) * CellSize + BoundsMin;
+		DDA.TMax = (NextCellCoordWorldSpace - Pos) * Ray.InvDir;
+		for (uint Axis = 0; Axis < 3; ++Axis)
+		{
+			// Handle ray direction being zero
+			if (Ray.Dir[Axis] == 0) { DDA.TMax[Axis] = Infinity; }
+		}
+		DDA.Axis = 0;
+		DDA.T = 0.0;
+		return DDA;
+	}
+
+	void ScaleUnitSize( float Scale )
+	{
+		TDelta *= Scale;
+		TMax *= Scale;
+		T *= Scale;
+	}
+
+	// Step the ray
+	bool TryStep( uint3 GridSize, float RayMaxT )
+	{
+		FindNextAxis();
+
+		// Step to the next cell
+		T = TMax[Axis];
+		CellCoord[Axis] += CellStep[Axis];
+		TMax[Axis] += TDelta[Axis];
+
+		return IsValidCell( GridSize, RayMaxT );
+	}
+
+	// Find the axis on which we are the closest to the next cell
+	void FindNextAxis()
+	{
+		Axis = TMax.x < TMax.y
+				   ? TMax.x < TMax.z
+						 ? 0
+						 : 2
+				   : TMax.y < TMax.z
+						 ? 1
+						 : 2;
+	}
+
+	// Grid and ray bounds check
+	bool IsValidCell( uint3 GridSize, float RayMaxT )
+	{
+		return !(CellCoord[Axis] < 0 || CellCoord[Axis] >= GridSize[Axis] || T > RayMaxT);
+	}
+
+	int3 CellCoord; // The ray position in grid space
+	int3 CellStep; // The step direction for each axis (-1, 0, or 1), in grid space
+	float3 TDelta; // The step size (to move the length of a cell along a certain axis) for each axis, in world space
+	float3 TMax; // The distance to the next cell for each axis, in world space
+
+	uint Axis;
 	float T;
 };
 
@@ -50,38 +157,108 @@ struct FAABB
 // If true, hit_t is the intersection time
 bool IntersectAABB( FAABB Bounds, FRay Ray, out float TNear, out float TFar )
 {
-	const float3 TToMin = (Bounds.Min - Ray.Pos) * Ray.InvDir;
-	const float3 TToMax = (Bounds.Max - Ray.Pos) * Ray.InvDir;
+	const float3 TToMin = (Bounds.Min - Ray.Origin) * Ray.InvDir;
+	const float3 TToMax = (Bounds.Max - Ray.Origin) * Ray.InvDir;
 	const float3 TMin = min( TToMin, TToMax );
 	const float3 TMax = max( TToMin, TToMax );
-	TNear = max( max3( TMin.x, TMin.y, TMin.z ), 0 );
-	TFar = min( min3( TMax.x, TMax.y, TMax.z ), Ray.T );
+	TNear = max( max3( TMin.x, TMin.y, TMin.z ), Ray.T );
+	TFar = min( min3( TMax.x, TMax.y, TMax.z ), Ray.MaxT );
 
 	return TNear <= TFar;
 }
 
 // Distance functions
+// from https://iquilezles.org/articles/distfunctions/
 namespace DistFn
 {
 	float Sphere( FSDFEdit SDF, float3 Pos )
 	{
-		return length( Pos - SDF.Pos ) - SDF.Radius;
+		return length( Pos - SDF.Pos ) - SDF.GetSphereRadius();
+	}
+
+	float Line( FSDFEdit SDF, float3 Pos )
+	{
+		float3 PA = Pos - SDF.Pos;
+		float3 BA = SDF.GetLinePosB();
+		float H = clamp( dot(PA, BA) / dot(BA, BA), 0.0, 1.0 );	
+		return length( PA - BA * H ) - SDF.GetLineRadius();
+	}
+
+	float Box( FSDFEdit SDF, float3 Pos )
+	{
+		float3 HalfExtent = SDF.GetBoxHalfExtent();
+		float3 Q = abs(Pos - SDF.Pos) - HalfExtent;
+		return length(max(Q, 0.0)) + min(max(Q.x, max(Q.y, Q.z)), 0.0);
 	}
 
 	float SphereOrigin( FSDFEdit SDF, float3 Pos )
 	{
-		return length( Pos ) - SDF.Radius;
+		return length( Pos ) - SDF.GetSphereRadius();
+	}
+
+	float LineOrigin( FSDFEdit SDF, float3 Pos )
+	{
+		float3 BA = SDF.GetLinePosB();
+		float H = clamp( dot(Pos, BA) / dot(BA, BA), 0.0, 1.0 );	
+		return length( Pos - BA * H ) - SDF.GetLineRadius();
+	}
+
+	float BoxOrigin( FSDFEdit SDF, float3 Pos )
+	{
+		float3 HalfExtent = SDF.GetBoxHalfExtent();
+		float3 Q = abs(Pos) - HalfExtent;
+		return length(max(Q, 0.0)) + min(max(Q.x, max(Q.y, Q.z)), 0.0);
+	}
+
+	float Dist( FSDFEdit SDF, float3 Pos )
+	{
+		EPrimitive Prim = SDF.GetPrimitive();
+		if ( Prim == EPrimitive::Sphere ) { return Sphere( SDF, Pos ); }
+		if ( Prim == EPrimitive::Line ) { return Line( SDF, Pos ); }
+		return Box( SDF, Pos );
+	}
+
+	float DistOrigin( FSDFEdit SDF, float3 Pos )
+	{
+		EPrimitive Prim = SDF.GetPrimitive();
+		if ( Prim == EPrimitive::Sphere ) { return SphereOrigin( SDF, Pos ); }
+		if ( Prim == EPrimitive::Line ) { return LineOrigin( SDF, Pos ); }
+		return BoxOrigin( SDF, Pos );
 	}
 } // SDF
 
 // Bounding boxes
+// From https://iquilezles.org/articles/bboxes3d/
 namespace AABB
 {
 	FAABB Sphere( FSDFEdit SDF )
 	{
+		const float Radius = SDF.GetSphereRadius();
+
 		FAABB Bounds;
-		Bounds.Min = SDF.Pos - SDF.Radius;
-		Bounds.Max = SDF.Pos + SDF.Radius;
+		Bounds.Min = SDF.Pos - Radius;
+		Bounds.Max = SDF.Pos + Radius;
+		return Bounds;
+	}
+
+	FAABB Line( FSDFEdit SDF )
+	{
+		const float3 PosB = SDF.GetLinePosB();
+		const float Radius = SDF.GetLineRadius();
+
+		FAABB Bounds;
+		Bounds.Min = min(SDF.Pos, SDF.Pos + PosB) - Radius;
+		Bounds.Max = max(SDF.Pos, SDF.Pos + PosB) + Radius;
+		return Bounds;
+	}
+
+	FAABB Box( FSDFEdit SDF )
+	{
+		const float3 HalfExtent = SDF.GetBoxHalfExtent();
+
+		FAABB Bounds;
+		Bounds.Min = SDF.Pos - HalfExtent;
+		Bounds.Max = SDF.Pos + HalfExtent;
 		return Bounds;
 	}
 } // AABB
@@ -90,7 +267,6 @@ bool IsPointInsideAABB( FAABB Bounds, float3 Pos )
 {
 	return all( Pos >= Bounds.Min ) && all( Pos <= Bounds.Max );
 }
-
 // https://iquilezles.org/articles/normalsSDF/
 float3 GetSphereNormal( FSDFEdit SDF, float3 Pos )
 {
@@ -106,4 +282,64 @@ float3 GetSphereNormal( FSDFEdit SDF, float3 Pos )
 					  K.yyx * DistFn::SphereOrigin( SDF, Pos + (K.yyx * H) ) +
 					  K.yxy * DistFn::SphereOrigin( SDF, Pos + (K.yxy * H) ) +
 					  K.xxx * DistFn::SphereOrigin( SDF, Pos + (K.xxx * H) ) );
+}
+
+// [CREDIT] https://iquilezles.org/articles/distfunctions/
+float OpUnion( float a, float b )
+{
+    return min(a,b);
+}
+float OpSubtract( float a, float b )
+{
+    return max(-a,b);
+}
+
+float OpSmoothUnion( float a, float b, float k )
+{
+    k *= 4.0;
+    float h = max(k-abs(a-b),0.0);
+    return min(a, b) - h*h*0.25/k;
+}
+float OpSmoothSubtract( float a, float b, float k )
+{
+    return -OpSmoothUnion(a,-b,k);
+}
+
+float MapScene( float3 Pos )
+{
+	float ClosestDist = Infinity;
+
+	for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
+	{
+		const FSDFEdit Edit = SDFEdits[EditIdx];
+		EPrimitive Prim = Edit.GetPrimitive();
+		EOperation Op = Edit.GetSDFOperation();
+		bool bSmooth = Edit.GetSDFSmooths();
+		// Evaluate the distance to the SDF
+		const float Dist = DistFn::DistOrigin( Edit, Pos - Edit.Pos );
+		if (bSmooth)
+		{
+			if (Op == Union)
+			{
+				ClosestDist = OpSmoothUnion(Dist, ClosestDist, Edit.Smoothing);
+			}
+			else if (Op == Subtract)
+			{
+				ClosestDist = OpSmoothSubtract(Dist, ClosestDist, Edit.Smoothing);
+			}
+		}
+		else
+		{
+			if (Op == Union)
+			{
+				ClosestDist = OpUnion(Dist, ClosestDist);
+			}
+			else if (Op == Subtract)
+			{
+				ClosestDist = OpSubtract(Dist, ClosestDist);
+			}
+		}
+	}
+
+	return ClosestDist;
 }

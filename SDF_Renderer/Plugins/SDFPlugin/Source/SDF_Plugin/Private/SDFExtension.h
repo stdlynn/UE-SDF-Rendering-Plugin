@@ -24,8 +24,11 @@ public:
 	{
 		FVector3f PtrGridPos;
 		float VoxSize;
-		float GPUUnitScale;
 		uint32 DbgVisMaxBricks;
+		float DbgVisBlendFactor;
+		float SurfaceEpsilon;
+		float DerivativeH;
+		float GPUUnitScale;
 		bool bUnitScaleDirty{ true };
 	};
 
@@ -101,8 +104,11 @@ public:
 		SHADER_PARAMETER_RDG_TEXTURE_SRV( Texture3D<float>, BrickAtlas ) // Brick Atlas
 		SHADER_PARAMETER_SAMPLER( SamplerState, BrickSampler ) // Brick Sampler
 		SHADER_PARAMETER_RDG_BUFFER_SRV( Buffer<uint>, PtrGrid ) // Pointer Buffer
+		SHADER_PARAMETER( uint32, bBruteForceSphereTracing )
 		SHADER_PARAMETER( FVector3f, PtrGridPos )
 		SHADER_PARAMETER( float, VoxSize )
+		SHADER_PARAMETER( float, SurfaceEpsilon )
+		SHADER_PARAMETER( float, DerivativeH )
 		SHADER_PARAMETER( float, UnitScale )
 		RENDER_TARGET_BINDING_SLOTS() // GBuffer Textures
 	END_SHADER_PARAMETER_STRUCT()
@@ -223,6 +229,7 @@ public:
 		SHADER_PARAMETER( float, VoxSize )
 		SHADER_PARAMETER( float, UnitScale )
 		SHADER_PARAMETER( uint32, DbgVisMaxBricks )
+		SHADER_PARAMETER( float, DbgVisBlendFactor )
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation( const FGlobalShaderPermutationParameters& Parameters )

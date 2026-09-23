@@ -11,6 +11,56 @@ ASDFActor::ASDFActor()
 	PrimaryActorTick.bCanEverTick = false;
 }
 
+FGPUSDF::FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
+	: Pos{ RenderSDF.Pos * GPUUnitScale }
+	, Flags { 0 }
+	, Data{ RenderSDF.Data * GPUUnitScale }
+	, SmoothingStrength{ RenderSDF.SmoothingStrength * GPUUnitScale }
+	, ID{ ID }
+{
+	SetPrimitive(RenderSDF.Primitive);
+	SetOperation(RenderSDF.Operation);
+	EnableSmoothing(RenderSDF.bSmooths);
+
+	switch (RenderSDF.Primitive)
+	{
+		case EPrimitive::Sphere:
+		{
+			SetSphereData( RenderSDF.Data.X * GPUUnitScale );
+			break;
+		}
+		case EPrimitive::Line:
+		{
+			const FVector3f B{ FVector3f( RenderSDF.Data ) * GPUUnitScale };
+			SetLineData( B, RenderSDF.Data.W * GPUUnitScale );
+			break;
+		}
+		case EPrimitive::Box:
+		{
+			SetBoxData( FVector3f(RenderSDF.Data) * GPUUnitScale );
+			break;
+		}
+	}
+}
+
+void FGPUSDF::SetPrimitive( const EPrimitive NewPrimitive )
+{
+	static constexpr uint32 Mask = 0b11;
+	Flags = (Flags & ~Mask) | (static_cast<uint32>( NewPrimitive ) & Mask);
+}
+
+void FGPUSDF::SetOperation(const EOperation NewOperation)
+{
+	static constexpr uint32 Mask = 0b100;
+	Flags = (Flags & ~Mask) | ((static_cast<uint32>(NewOperation) << 2) & Mask);
+}
+
+void FGPUSDF::EnableSmoothing(const bool Enabled)
+{
+	static constexpr uint32 Mask = 0b1000;
+	Flags = (Flags & ~Mask) | (Enabled ? Mask : 0u);
+}
+
 USDFComponent::USDFComponent()
 	: ID{ NextID++ }
 {
@@ -70,24 +120,12 @@ void USDFSubsystem::RegisterSDF( const USDFComponent& Comp )
 	const FVector3f Pos{ Comp.GetComponentTransform().GetLocation() };
 	RenderSDFs.Add( Comp.GetID(), { Comp.GetSDF(), Pos } );
 	bDirty = true;
-
-	// Debug
-	GEngine->AddOnScreenDebugMessage( -1, // Force newline
-									  5.0f, // Time
-									  FColor::Green,
-									  FString::Printf( TEXT( "[+] SDF Edit (%d total)" ), RenderSDFs.Num() ) );
 }
 
 void USDFSubsystem::UnregisterSDF( const USDFComponent& Comp )
 {
 	RenderSDFs.Remove( Comp.GetID() );
 	bDirty = true;
-
-	// Debug
-	GEngine->AddOnScreenDebugMessage( -1, // Force newline
-									  5.0f, // Time
-									  FColor::Red,
-									  FString::Printf( TEXT( "[-] SDF Edit (%d total)" ), RenderSDFs.Num() ) );
 }
 
 void USDFSubsystem::SetSDFDirty( const USDFComponent& Comp )

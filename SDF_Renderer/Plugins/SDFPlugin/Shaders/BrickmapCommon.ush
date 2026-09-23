@@ -18,34 +18,28 @@
 // * (0-127, 0-127, 0-7)												|
 //______________________________________________________________________|
 
-static const uint BrickResolution = 8;
-static const uint VoxelResolution = BrickResolution - 1;
+static const uint BrickRes = 8;
+static const uint VoxRes = BrickRes - 1;
 
 static const uint3 NumAtlasBricks = uint3( 256, 256, 2 );
-static const uint3 AtlasSize = NumAtlasBricks * BrickResolution;
+static const uint3 AtlasSize = NumAtlasBricks * BrickRes;
 
 static const uint3 PtrGridSize = uint3( 256, 256, 256 );
 static const uint3 MaxGridIdx = PtrGridSize - 1;
 
-float GetBrickSize( float VoxSize )
-{
-	return VoxSize * VoxelResolution;
-}
-
-float GetDiagonal( float VoxSize )
-{
-	return (sqrt( 3.0 ) / 2.0) * VoxSize;
-}
+static const uint Empty = 0xFFFFFFFFu;
 
 float EncodeDistance( float Distance, float InvDiagonal )
 {
 	return clamp( Distance * InvDiagonal, -1.0, 1.0 ) * 0.5 + 0.5;
 }
-
 float DecodeDistance( float Distance, float Diagonal )
 {
 	return (Distance - 0.5) * 2.0 * Diagonal;
 }
+
+float GetBrickSize( float VoxSize ) { return VoxSize * VoxRes; }
+float GetDiagonal( float VoxSize ) { return (sqrt( 3.0 ) / 2.0) * VoxSize; }
 
 namespace AABB
 {
@@ -96,43 +90,32 @@ uint3 BrickIdxToAtlasCell( uint BrickIdx )
 
 float3 WorldPosToAtlasUVW( float3 WorldPos, float3 GridMin, float VoxSize )
 {
+	// Find the grid cell
 	const float BrickSize = GetBrickSize( VoxSize );
 	const uint3 GridCell = WorldPosToGridCell( WorldPos, GridMin, BrickSize );
+	
+	// Retrieve the atlas cell
 	const uint GridIdx = GridCellToGridIdx( GridCell );
 	const uint BrickIdx = PtrGrid[GridIdx];
 	const uint3 AtlasCell = BrickIdxToAtlasCell( BrickIdx );
-	const float3 BrickPos = AtlasCell * BrickResolution;
-	// TODO: wrong?
-	const float3 LocalBrickOffset = fmod( WorldPos - GridMin, BrickSize ) / VoxSize;
-	const float3 LocalBrickPos = BrickPos + LocalBrickOffset;
-	return LocalBrickPos / AtlasSize;
+
+	// Find the voxel offset within the brick
+	const float3 GridLocalPos = WorldPos - GridMin; // World units [0, GridMax)
+	const float3 BrickLocalPos = GridLocalPos - (GridCell * BrickSize); // World units [0, BrickSize)
+	const float3 BrickLocalVoxOffset = BrickLocalPos / VoxSize; // Voxel units [0, VoxRes)
+	
+	// Find the (unnormalized) sample position
+	// All in voxel units [0, AtlasSize)
+	const uint3 AtlasCellOrigin = AtlasCell * BrickRes;
+	const float3 AtlasPoint = AtlasCellOrigin + BrickLocalVoxOffset;
+
+	// The hardware sampling converts our UVW into a TexCoord through 'TexCoord = (UVW * TexSize) - 0.5'
+	// So we need to compensate for the offset by doing 'UVW = (TexCoord + 0.5) / TexSize'
+	// The offset is added because hardware assumes a texel value represents the texel's center
+	// Directly sampling texel N as 'u=N' results in interpolation between 'N-0.5' and 'N+0.5'
+	// While sampling 'u=N+0.5' gets you exactly the value stored in texel N
+	return (AtlasPoint + 0.5) / AtlasSize;
 }
 
-bool IsBrickAllocated( uint Idx )
-{
-	return (PtrGrid[Idx] != 0xFFFFFFFF);
-}
-
-bool IsBrickAllocated( uint3 GridCell )
-{
-	return IsBrickAllocated( GridCellToGridIdx( GridCell ) );
-}
-
-// Allocate a brick by storing its index in the pointer grid
-void Allocate( uint3 GridCell )
-{
-	uint NextIndex;
-	InterlockedAdd( BrickAllocCounter[0], 1, NextIndex );
-
-	PtrGrid[GridCellToGridIdx( GridCell )] = NextIndex;
-}
-
-// Allocate a brick, only if this location isn't already allocated
-void AllocateSafe( uint3 GridCell )
-{
-	// TODO: This isn't safe right now (the same ptr grid cell could increment the counter more than once)
-	// Won't be an issue when we upload a list of bricks to update
-	if (IsBrickAllocated( GridCell )) { return; }
-
-	Allocate( GridCell );
-}
+bool IsBrickAllocated( uint Idx ) { return (PtrGrid[Idx] != Empty); }
+bool IsBrickAllocated( uint3 GridCell ) { return IsBrickAllocated( GridCellToGridIdx( GridCell ) );}

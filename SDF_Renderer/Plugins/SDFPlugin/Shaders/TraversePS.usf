@@ -7,13 +7,13 @@ Buffer<uint> PtrGrid;
 #include "Common.ush"
 
 // Shader bindings
-StructuredBuffer<FSDFEdit> SDFEdits;
-uint NumEdits;
-
 Texture3D<float> BrickAtlas;
 SamplerState BrickSampler;
 float3 PtrGridPos;
+uint bBruteForceSphereTracing;
 float VoxSize;
+float SurfaceEpsilon;
+float DerivativeH;
 float UnitScale;
 
 void SphereTraceFBM( inout FRay Ray )
@@ -27,42 +27,166 @@ void SphereTraceFBM( inout FRay Ray )
 			// clip layer through intersection using max() or smax()
 }
 
-bool SphereTraceScene( inout FRay Ray, out uint EditHitIdx )
+// TODO: make this clamped
+// TODO: if outside of bounds, return Diagonal? Unsure
+float GetAtlasDistClamped( float3 Pos, float3 BoundsMin )
 {
-	const float Epsilon = SurfaceEpsilon * UnitScale;
+	const float Diagonal = GetDiagonal( VoxSize );
+	const float3 UVW = WorldPosToAtlasUVW( Pos, BoundsMin, VoxSize );
+	const float EncodedDist = BrickAtlas.Sample( GlobalTrilinearClampedSampler, UVW );
+	const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
+	return SampleDist;
+}
 
-	// Step through the scene
-	float DistTravelled = 0.0;
-	for (uint Step = 0; Step < 64; ++Step)
+// https://iquilezles.org/articles/normalsSDF/
+float3 GetAtlasNormal( float3 Pos, float3 BoundsMin )
+{
+	// Note that the normals are reversed on the inside of geometry (so for negative distances)
+	// This should be fine, as those should never be visible anyway
+	const float2 K = float2( 1, -1 );
+	return normalize( K.xyy * GetAtlasDistClamped( Pos + (K.xyy * DerivativeH), BoundsMin ) +
+					  K.yyx * GetAtlasDistClamped( Pos + (K.yyx * DerivativeH), BoundsMin ) +
+					  K.yxy * GetAtlasDistClamped( Pos + (K.yxy * DerivativeH), BoundsMin ) +
+					  K.xxx * GetAtlasDistClamped( Pos + (K.xxx * DerivativeH), BoundsMin ) );
+}
+float3 GetNormal( float3 Pos )
+{
+	const float2 K = float2( 1, -1 );
+	return normalize( K.xyy * MapScene( Pos + (K.xyy * DerivativeH) ) +
+					  K.yyx * MapScene( Pos + (K.yyx * DerivativeH) ) +
+					  K.yxy * MapScene( Pos + (K.yxy * DerivativeH) ) +
+					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH) ) );
+}
+
+// Brick Sphere Tracing
+bool TraceBrick( inout FRay Ray )
+{
+	// Compute position local to brick (probably as VoxSize=1.0, yes definitely)
+	// Compute MaxT
+	// Sphere trace
+}
+
+// Pointer Grid DDA
+bool TracePtrGrid( inout FRay Ray, out float3 Normal )
+{
+	// TODO:
+	const float BrickSize = GetBrickSize( VoxSize );
+	const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
+	const float Diagonal = GetDiagonal( VoxSize );
+
+	// Setup
+	FDDA DDA = FDDA::Init( Ray, GridAABB.Min, BrickSize );
+
+	// TODO: idkkk
+	// Step in brick space
+	// DDA.ScaleUnitSize( 1.0 / BrickSize );
+
+	// Initial sample
+	if (DDA.IsValidCell( PtrGridSize, Ray.MaxT ))
 	{
-		// For each step, go over each SDF
-		float ClosestDist = Infinity;
-		for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
+		// TODO:
+		// TODO: DEPTH IS WRONG WHEN OUTSIDE OF THE GRID
+		// TODO: you can tell when moving the sphere partially outside the grid
+		// TODO: while the below code is enabled
+		// TODO:
+		// TODO: Depth in general is wrong, enable the debug visualization and see
+		// TODO:
+		if (IsBrickAllocated( DDA.CellCoord ))
 		{
-			// Evaluate the distance to the SDF
-			const FSDFEdit Edit = SDFEdits[EditIdx];
-			const float3 RayPos = (Ray.Pos - Edit.Pos) + (Ray.Dir * DistTravelled);
-			const float Dist = abs( DistFn::SphereOrigin( Edit, RayPos ) );
-			if (Dist < ClosestDist)
+			// Edge case, might start inside any point within a brick
+			//return true;
+#if 1
+			DDA.FindNextAxis(); // TODO: make more efficient
+			const float DistInsideBrick = DDA.TMax[DDA.Axis];
+
+			float TempT = DDA.T;
+			uint i = 0;
+			while (TempT < DistInsideBrick && i < 32)
 			{
-				ClosestDist = Dist;
-				EditHitIdx = EditIdx;
+				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAtOffset( TempT ), GridAABB.Min, VoxSize );
+				const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
+				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
+				if (SampleDist < SurfaceEpsilon)
+				{
+					Ray.Advance( TempT );
+					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
+					return true;
+				}
+				TempT += SampleDist;
+				i++;
 			}
+#endif
 		}
-
-		// Stop stepping if we hit a surface (or are close enough to one)
-		if (ClosestDist < Epsilon)
-		{
-			Ray.Advance( DistTravelled );
-			return true;
-		}
-
-		// Step
-		DistTravelled += ClosestDist;
 	}
 
-	// No intersections found
-	return false;
+	// Should be safe
+	while (true)
+	{
+		if (! DDA.TryStep( PtrGridSize, Ray.MaxT )) { return false; }
+		uint GridIdx = GridCellToGridIdx( DDA.CellCoord );
+		if (IsBrickAllocated( GridIdx ))
+		{
+			DDA.FindNextAxis(); // TODO: make more efficient
+			const float DistInsideBrick = DDA.TMax[DDA.Axis];
+
+			float TempT = DDA.T;
+			uint i = 0;
+			while (TempT < DistInsideBrick && i < 32)
+			{
+				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAtOffset( TempT ), GridAABB.Min, VoxSize );
+				const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
+				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
+				if (SampleDist < SurfaceEpsilon)
+				{
+					Ray.Advance( TempT );
+					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
+					return true;
+				}
+				TempT += SampleDist;
+				i++;
+			}
+		}
+	}
+}
+
+bool TraceScene( inout FRay Ray, out float3 Normal )
+{
+	bool bHit = false;
+	// Brute-force sphere tracing
+	if (bBruteForceSphereTracing > 0)
+    {
+		for (uint Step = 0; Step < 256; ++Step)
+		{
+			float ClosestDist = MapScene( Ray.GetPos() );
+			if (ClosestDist < SurfaceEpsilon)
+			{
+				Normal = GetNormal( Ray.GetPos() );
+				bHit = true;
+				break;
+			}
+			Ray.Advance( ClosestDist );
+		}
+    }
+	// Brickmap traversal
+	else
+    {
+		// Assume Ray.T is zero
+	    float AABBHitT, AABBOutT;
+	    const float BrickSize = GetBrickSize( VoxSize );
+	    const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
+	    if (IntersectAABB( GridAABB, Ray, AABBHitT, AABBOutT ))
+	    {
+			// Assuming 'Ray.T' is zero
+			const float Epsilon = AABBEpsilon * UnitScale;
+			if (AABBHitT > 0.0) { AABBHitT += Epsilon; }
+			Ray.MaxT = AABBOutT;
+			Ray.Advance( AABBHitT );
+			//Ray.AdvanceOrigin();
+			bHit = TracePtrGrid( Ray, Normal );
+	    }
+    }
+	Ray.AdvanceOrigin();
+	return bHit;
 }
 
 void TraversePS(
@@ -83,21 +207,17 @@ void TraversePS(
 	const float3 Dir = normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w );
 	const float3 Origin = View.ViewOriginHigh * UnitScale; // Convert unit size
 	FRay Ray = FRay::Create( Origin, Dir );
+	
+	// Trace
+	float3 Normal;
+	if (! TraceScene( Ray, Normal )) { discard; }
 
-	// Sphere trace
-	// Discard this fragment if we don't hit anything, keep whatever was already in the GBuffer
-	uint EditHitIdx;
-	if (! SphereTraceScene( Ray, EditHitIdx )) { discard; }
-
-	// Calculate output data
-	const FSDFEdit Edit = SDFEdits[EditHitIdx];
-	const float3 Normal = GetSphereNormal( Edit, Ray.Pos );
 	// Convert unit size
-	float ViewZ = mul( float4( (Ray.Pos - Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
+	float ViewZ = mul( float4( (Ray.GetPos() - Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
 	OutDepth = ConvertToDeviceZ( ViewZ );
 
 	FGBufferData GBuffer = (FGBufferData)0;
-	GBuffer.BaseColor = (0.6).xxx;
+	GBuffer.BaseColor = (0.4).xxx;
 	GBuffer.WorldNormal = Normal;
 	GBuffer.Metallic = 0.0;
 	GBuffer.Specular = 0.5;
