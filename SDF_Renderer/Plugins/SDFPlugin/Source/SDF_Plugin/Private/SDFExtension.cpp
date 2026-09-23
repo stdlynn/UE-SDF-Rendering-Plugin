@@ -44,9 +44,9 @@ namespace
 										TEXT( " 1: ON." ),
 										ECVF_RenderThreadSafe );
 
-	TAutoConsoleVariable CVarBruteForceSphereTracing( TEXT( "r.SDF.Debug.BruteForce" ),
+	TAutoConsoleVariable CVarBruteForceSphereTracing( TEXT( "r.SDF.Debug.GroundTruth" ),
 													  0,
-													  TEXT( "Ground-truth SDF rendering \n" )
+													  TEXT( "Brute-force sphere tracing \n" )
 													  TEXT( " 0: OFF;" )
 													  TEXT( " 1: ON." ),
 													  ECVF_RenderThreadSafe );
