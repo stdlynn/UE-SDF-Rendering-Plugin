@@ -131,13 +131,6 @@ void FSDFExtension::TransferSDFsToRenderThread()
 	USDFSubsystem* SDFSubsystem{ GT.World->GetSubsystem<USDFSubsystem>() };
 	if (not SDFSubsystem->GetAndResetDirty() && not GT.Settings.bUnitScaleDirty) { return; }
 
-	// TODO: remove before PR (also other debug messages)
-	// Debug
-	GEngine->AddOnScreenDebugMessage( -1, // Force newline
-									  0.2f, // Time
-									  FColor::Yellow,
-									  FString::Printf( TEXT( "Dirty SDF(s) found, updating render thread..." ) ) );
-
 	// Grab the game thread's SDFs
 	const auto& SDFs{ SDFSubsystem->GetRenderSDFs() };
 

@@ -12,24 +12,29 @@ enum EOperation : uint
 	Subtract = 1
 };
 
+enum EPrimitive : uint
+{
+	Sphere = 0,
+	Line = 1,
+	Box = 2
+};
+
 struct FSDFEdit
 {
 	float3 Pos;
-	float Radius;
-	uint Flags; // bit 0: operation, 1: bSmooths
+	uint Flags; // bits 0-1: primitive, 2: operation, 3: bSmooths
+	float4 Data; // Per-primitive data
 	float Smoothing;
 	uint ID;
-	uint Padding[1];
+	uint Padding[2];
 
-	EOperation GetSDFOperation()
-	{
-		return (EOperation)(Flags & 0b1);
-	}
-
-	bool GetSDFSmooths()
-	{
-		return Flags & 0b10;
-	}
+	EPrimitive GetPrimitive() { return (EPrimitive)(Flags & 0b11); }
+	float GetSphereRadius() { return Data.x; }
+	float3 GetLinePosB() { return Data.xyz; }
+	float GetLineRadius() { return Data.w; }
+	float3 GetBoxHalfExtent() { return Data.xyz; }
+ 	EOperation GetSDFOperation() { return (EOperation)( (Flags >> 2) & 0b1 ); }
+	bool GetSDFSmooths() { return Flags & 0b1000; }
 };
 
 // Shader bindings
@@ -83,27 +88,97 @@ bool IntersectAABB( FAABB Bounds, FRay Ray, out float TNear, out float TFar )
 }
 
 // Distance functions
+// from https://iquilezles.org/articles/distfunctions/
 namespace DistFn
 {
 	float Sphere( FSDFEdit SDF, float3 Pos )
 	{
-		return length( Pos - SDF.Pos ) - SDF.Radius;
+		return length( Pos - SDF.Pos ) - SDF.GetSphereRadius();
+	}
+
+	float Line( FSDFEdit SDF, float3 Pos )
+	{
+		float3 PA = Pos - SDF.Pos;
+		float3 BA = SDF.GetLinePosB();
+		float H = clamp( dot(PA, BA) / dot(BA, BA), 0.0, 1.0 );	
+		return length( PA - BA * H ) - SDF.GetLineRadius();
+	}
+
+	float Box( FSDFEdit SDF, float3 Pos )
+	{
+		float3 HalfExtent = SDF.GetBoxHalfExtent();
+		float3 Q = abs(Pos - SDF.Pos) - HalfExtent;
+		return length(max(Q, 0.0)) + min(max(Q.x, max(Q.y, Q.z)), 0.0);
 	}
 
 	float SphereOrigin( FSDFEdit SDF, float3 Pos )
 	{
-		return length( Pos ) - SDF.Radius;
+		return length( Pos ) - SDF.GetSphereRadius();
+	}
+
+	float LineOrigin( FSDFEdit SDF, float3 Pos )
+	{
+		float3 BA = SDF.GetLinePosB();
+		float H = clamp( dot(Pos, BA) / dot(BA, BA), 0.0, 1.0 );	
+		return length( Pos - BA * H ) - SDF.GetLineRadius();
+	}
+
+	float BoxOrigin( FSDFEdit SDF, float3 Pos )
+	{
+		float3 HalfExtent = SDF.GetBoxHalfExtent();
+		float3 Q = abs(Pos) - HalfExtent;
+		return length(max(Q, 0.0)) + min(max(Q.x, max(Q.y, Q.z)), 0.0);
+	}
+
+	float Dist( FSDFEdit SDF, float3 Pos )
+	{
+		EPrimitive Prim = SDF.GetPrimitive();
+		if ( Prim == EPrimitive::Sphere ) { return Sphere( SDF, Pos ); }
+		if ( Prim == EPrimitive::Line ) { return Line( SDF, Pos ); }
+		return Box( SDF, Pos );
+	}
+
+	float DistOrigin( FSDFEdit SDF, float3 Pos )
+	{
+		EPrimitive Prim = SDF.GetPrimitive();
+		if ( Prim == EPrimitive::Sphere ) { return SphereOrigin( SDF, Pos ); }
+		if ( Prim == EPrimitive::Line ) { return LineOrigin( SDF, Pos ); }
+		return BoxOrigin( SDF, Pos );
 	}
 } // SDF
 
 // Bounding boxes
+// From https://iquilezles.org/articles/bboxes3d/
 namespace AABB
 {
 	FAABB Sphere( FSDFEdit SDF )
 	{
+		const float Radius = SDF.GetSphereRadius();
+
 		FAABB Bounds;
-		Bounds.Min = SDF.Pos - SDF.Radius;
-		Bounds.Max = SDF.Pos + SDF.Radius;
+		Bounds.Min = SDF.Pos - Radius;
+		Bounds.Max = SDF.Pos + Radius;
+		return Bounds;
+	}
+
+	FAABB Line( FSDFEdit SDF )
+	{
+		const float3 PosB = SDF.GetLinePosB();
+		const float Radius = SDF.GetLineRadius();
+
+		FAABB Bounds;
+		Bounds.Min = min(SDF.Pos, SDF.Pos + PosB) - Radius;
+		Bounds.Max = max(SDF.Pos, SDF.Pos + PosB) + Radius;
+		return Bounds;
+	}
+
+	FAABB Box( FSDFEdit SDF )
+	{
+		const float3 HalfExtent = SDF.GetBoxHalfExtent();
+
+		FAABB Bounds;
+		Bounds.Min = SDF.Pos - HalfExtent;
+		Bounds.Max = SDF.Pos + HalfExtent;
 		return Bounds;
 	}
 } // AABB
@@ -157,11 +232,11 @@ float MapScene( float3 Pos )
 	for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
 	{
 		const FSDFEdit Edit = SDFEdits[EditIdx];
+		EPrimitive Prim = Edit.GetPrimitive();
 		EOperation Op = Edit.GetSDFOperation();
 		bool bSmooth = Edit.GetSDFSmooths();
 		// Evaluate the distance to the SDF
-		const float Dist = DistFn::SphereOrigin( Edit, Pos - Edit.Pos );
-
+		const float Dist = DistFn::DistOrigin( Edit, Pos - Edit.Pos );
 		if (bSmooth)
 		{
 			if (Op == Union)
