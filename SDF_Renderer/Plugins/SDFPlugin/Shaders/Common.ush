@@ -65,15 +65,50 @@ struct FRay
 		T = 0.0;
 	}
 
+	void SetHitT( float Dist )
+	{
+		MaxT = Dist - T;
+	}
+
 	float3 GetPosAt( float Dist ) { return Origin + (Dir * Dist); }
 	float3 GetPosAtOffset( float Offset ) { return GetPosAt( T + Offset); }
 	float3 GetPos() { return GetPosAt( T ); }
+	float3 GetHitPos() { return GetPosAt( MaxT ); }
 
 	float3 Origin;
 	float3 Dir;
 	float3 InvDir;
 	float T;
 	float MaxT;
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	// TODO:
+	bool bHit; // TODO:
 };
 
 // [CREDITS] DDA algorithm from http://www.cs.yorku.ca/~amana/research/grid.pdf

@@ -16,8 +16,23 @@ float SurfaceEpsilon;
 float DerivativeH;
 float UnitScale;
 
-void SphereTraceFBM( inout FRay Ray )
+bool SphereTraceFBM( inout FRay Ray )
 {
+	const float PlaneZ = 0.0;
+	const float HeightAbovePlane = Ray.GetPos().z - PlaneZ;
+	const bool AbovePlane = HeightAbovePlane >= 0.0;
+	if ((AbovePlane && Ray.Dir.z >= 0.0) || (!AbovePlane && Ray.Dir.z <= 0.0)) { return false; }
+	
+	const float ClosingRateT = -Ray.Dir.z;
+	const float IntersectT = HeightAbovePlane / ClosingRateT;
+
+	if (IntersectT <= Ray.MaxT)
+	{
+		Ray.SetHitT( IntersectT );
+		return true;
+	}
+	return false;
+
 	// TODO: also have a parameter that is multiplied with the 'k' every octave
 
 	// for loop (stepping)
@@ -108,8 +123,8 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
 				if (SampleDist < SurfaceEpsilon)
 				{
-					Ray.Advance( TempT );
-					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
+					Ray.SetHitT( TempT );
+					Normal = GetAtlasNormal( Ray.GetHitPos(), GridAABB.Min );
 					return true;
 				}
 				TempT += SampleDist;
@@ -138,8 +153,8 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
 				if (SampleDist < SurfaceEpsilon)
 				{
-					Ray.Advance( TempT );
-					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
+					Ray.SetHitT( TempT );
+					Normal = GetAtlasNormal( Ray.GetHitPos(), GridAABB.Min );
 					return true;
 				}
 				TempT += SampleDist;
@@ -152,14 +167,24 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 bool TraceScene( inout FRay Ray, out float3 Normal )
 {
 	bool bHit = false;
+
+	// Terrain
+	if (SphereTraceFBM( Ray ))
+	{
+		Normal = float3(0,0,1);
+		bHit = true;
+	}
+
 	// Brute-force sphere tracing
 	if (bBruteForceSphereTracing > 0)
     {
 		for (uint Step = 0; Step < 256; ++Step)
 		{
 			float ClosestDist = MapScene( Ray.GetPos() );
+			if (ClosestDist > Ray.MaxT) { break; }
 			if (ClosestDist < SurfaceEpsilon)
 			{
+				Ray.SetHitT( ClosestDist );
 				Normal = GetNormal( Ray.GetPos() );
 				bHit = true;
 				break;
@@ -179,13 +204,12 @@ bool TraceScene( inout FRay Ray, out float3 Normal )
 			// Assuming 'Ray.T' is zero
 			const float Epsilon = AABBEpsilon * UnitScale;
 			if (AABBHitT > 0.0) { AABBHitT += Epsilon; }
-			Ray.MaxT = AABBOutT;
+			// TODO: currently disabled because of brute-force terrain, uncomment once we have terrain caching
+	    	//Ray.MaxT = AABBOutT;
 			Ray.Advance( AABBHitT );
-			//Ray.AdvanceOrigin();
-			bHit = TracePtrGrid( Ray, Normal );
+			if (TracePtrGrid( Ray, Normal )) { bHit = true; }
 	    }
     }
-	Ray.AdvanceOrigin();
 	return bHit;
 }
 
@@ -213,7 +237,7 @@ void TraversePS(
 	if (! TraceScene( Ray, Normal )) { discard; }
 
 	// Convert unit size
-	float ViewZ = mul( float4( (Ray.GetPos() - Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
+	float ViewZ = mul( float4( (Ray.GetHitPos() - Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
 	OutDepth = ConvertToDeviceZ( ViewZ );
 
 	FGBufferData GBuffer = (FGBufferData)0;
