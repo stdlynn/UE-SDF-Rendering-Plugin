@@ -97,8 +97,8 @@ void FBrickmapBuilder::SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FV
 										   FMath::Abs( SDF.Pos.Z - Min.Z ) > FMath::Abs( SDF.Pos.Z - Max.Z ) ? Min.Z : Max.Z );
 
 			// TODO: maybe do local to SDF
-			const float ClosestDist = DistFn::Dist(SDF, ClosestPoint);
-			const float FarthestDist = DistFn::Dist(SDF, FarthestPoint);
+			const float ClosestDist = DistFn::DistOrigin(SDF, ClosestPoint - SDF.Pos);
+			const float FarthestDist = DistFn::DistOrigin(SDF, FarthestPoint - SDF.Pos);
 			if (ClosestDist <= Thickness && FarthestDist >= -Thickness)
 			{
 				RT.UpdateListCPU.Add( GridCellToGridIdx( FUintVector3{ GridCell } ) );

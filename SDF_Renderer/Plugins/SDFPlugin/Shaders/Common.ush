@@ -285,15 +285,15 @@ float MapScene( float3 Pos )
 		float Dist;
 		if (Prim == Sphere)
 		{
-			Dist = DistFn::Sphere(Edit, Pos);
+			Dist = DistFn::SphereOrigin(Edit, Pos - Edit.Pos);
 		}
 		else if (Prim == Line)
 		{
-			Dist = DistFn::Line(Edit, Pos);
+			Dist = DistFn::LineOrigin(Edit, Pos - Edit.Pos);
 		}
 		else
 		{
-			Dist = DistFn::Box(Edit, Pos);
+			Dist = DistFn::BoxOrigin(Edit, Pos - Edit.Pos);
 		}
 
 		if (bSmooth)
