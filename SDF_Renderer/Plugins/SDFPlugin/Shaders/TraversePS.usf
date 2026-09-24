@@ -116,7 +116,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 
 			float TempT = DDA.T;
 			uint i = 0;
-			while (TempT < DistInsideBrick && i < 32)
+			while (TempT < DistInsideBrick)
 			{
 				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAtOffset( TempT ), GridAABB.Min, VoxSize );
 				const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
@@ -146,7 +146,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 
 			float TempT = DDA.T;
 			uint i = 0;
-			while (TempT < DistInsideBrick && i < 32)
+			while (TempT < DistInsideBrick)
 			{
 				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAtOffset( TempT ), GridAABB.Min, VoxSize );
 				const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
