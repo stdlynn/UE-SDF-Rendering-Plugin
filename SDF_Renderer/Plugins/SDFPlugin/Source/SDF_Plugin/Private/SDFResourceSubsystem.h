@@ -17,6 +17,8 @@ public:
 
 	virtual void Initialize( FSubsystemCollectionBase& Collection ) override;
 	virtual void Deinitialize() override;
+	
+	void ResetSDF() const;
 
 protected:
 
