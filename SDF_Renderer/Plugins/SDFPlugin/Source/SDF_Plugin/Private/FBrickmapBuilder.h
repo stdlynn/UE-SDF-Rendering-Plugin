@@ -27,6 +27,9 @@ public:
 	void ReleaseResources();
 	bool AreResourcesValid() const;
 
+	// Useful for removing stale cached geometry
+	void ClearBrickmap(FRDGBuilder& GraphBuilder );
+
 	// All variables passed should have the GPU unit size conversions applied
 	void SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FVector3f& PtrGridPos, float VoxSize );
 	void AllocateBrickList();

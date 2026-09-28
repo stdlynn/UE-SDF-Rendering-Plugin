@@ -84,6 +84,11 @@ bool FSDFExtension::IsActiveThisFrame_Internal( const FSceneViewExtensionContext
 	return false;
 }
 
+void FSDFExtension::Reset()
+{
+	RT.BrickmapBuilder.bReset = true;
+}
+
 void FSDFExtension::BeginRenderViewFamily( FSceneViewFamily& InViewFamily )
 {
 	// 'BeginRenderViewFamily' is called when the view family is about to be rendered
@@ -209,12 +214,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 
 		if (RT.BrickmapBuilder.bReset)
 		{
-			AddClearUAVPass( GraphBuilder, GraphBuilder.CreateUAV( PtrBufferRDG, PF_R32_UINT ), 0xFFFFFFFFu );
-			AddClearUAVPass( GraphBuilder, GraphBuilder.CreateUAV( BrickAtlasRDG ), 1.0f );
-			AddClearUAVPass( GraphBuilder, FreedListUAV, 0xFFFFFFFFu );
-			AddClearUAVPass( GraphBuilder, DeallocatedListUAV, 0xFFFFFFFFu );
-			AddClearUAVPass( GraphBuilder, AllocCountersUAV, 0u );
-			RT.BrickmapBuilder.bReset = false;
+			RT.BrickmapBuilder.ClearBrickmap( GraphBuilder );
 		}
 
 		FBuildBrickmapShader::FParameters* ParametersBuild = GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
