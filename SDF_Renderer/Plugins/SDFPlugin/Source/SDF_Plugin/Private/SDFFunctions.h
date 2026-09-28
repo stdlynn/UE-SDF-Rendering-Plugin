@@ -10,6 +10,13 @@
 // from https://iquilezles.org/articles/distfunctions/
 namespace DistFn
 {
+	inline FVector3f RotatePoint(FVector3f Pos, FQuat Quat)
+	{
+		const FVector3f QuatXYZ = FVector3f(Quat.X, Quat.Y, Quat.Z) * -1.0f;
+		FVector3f T = 2.0 * QuatXYZ.Cross(Pos);
+		return Pos + Quat.W * T + QuatXYZ.Cross(T);
+	}
+
 	inline float Sphere( const FGPUSDF& SDF, const FVector3f& Pos )
 	{
 		return (Pos - SDF.Pos).Size() - SDF.GetSphereRadius();
@@ -25,8 +32,9 @@ namespace DistFn
 
 	inline float Box( const FGPUSDF& SDF, const FVector3f& Pos )
 	{
+		const FVector3f RotatedPos = RotatePoint(Pos, SDF.GetBoxQuat());
 		FVector3f HalfExtent = SDF.GetBoxHalfExtent();
-		FVector3f Q = (Pos - SDF.Pos).GetAbs() - HalfExtent;
+		FVector3f Q = (RotatedPos - SDF.Pos).GetAbs() - HalfExtent;
 		return Q.ComponentMax(FVector3f::ZeroVector).Size()
 			+ FMath::Min(FMath::Max3(Q.X, Q.Y, Q.Z), 0.0f);
 	}
@@ -46,8 +54,9 @@ namespace DistFn
 
 	inline float BoxOrigin( const FGPUSDF& SDF, const FVector3f& Pos )
 	{
+		const FVector3f RotatedPos = RotatePoint(Pos, SDF.GetBoxQuat());
 		FVector3f HalfExtent = SDF.GetBoxHalfExtent();
-		FVector3f Q = Pos.GetAbs() - HalfExtent;
+		FVector3f Q = RotatedPos.GetAbs() - HalfExtent;
 		return Q.ComponentMax(FVector3f::ZeroVector).Size() 
 			+ FMath::Min(FMath::Max3(Q.X, Q.Y, Q.Z), 0.0f);
 	}
@@ -103,10 +112,29 @@ namespace AABB
 	inline FAABB Box( const FGPUSDF& SDF )
 	{
 		const FVector3f HalfExtent = SDF.GetBoxHalfExtent();
+		const FQuat Quat = SDF.GetBoxQuat();
+
+		float xx = Quat.X * Quat.X;
+		float yy = Quat.Y * Quat.Y;
+		float zz = Quat.Z * Quat.Z;
+		float xy = Quat.X * Quat.Y;
+		float xz = Quat.X * Quat.Z;
+		float yz = Quat.Y * Quat.Z;
+		float wx = Quat.W * Quat.X;
+		float wy = Quat.W * Quat.Y;
+		float wz = Quat.W * Quat.Z;
+
+		FVector3f Row0 = FVector3f(1.0 - 2.0 * (yy + zz), 2.0 * (xy - wz), 2.0 * (xz + wy));
+		FVector3f Row1 = FVector3f(2.0 * (xy + wz), 1.0 - 2.0 * (xx + zz), 2.0 * (yz - wx));
+		FVector3f Row2 = FVector3f(2.0 * (xz - wy), 2.0 * (yz + wx), 1.0 - 2.0 * (xx + yy));
+
+		FVector3f E = FVector3f(Row0.GetAbs().Dot(HalfExtent),
+								Row1.GetAbs().Dot(HalfExtent),
+								Row2.GetAbs().Dot(HalfExtent));
 
 		FAABB Bounds;
-		Bounds.Min = SDF.Pos - HalfExtent;
-		Bounds.Max = SDF.Pos + HalfExtent;
+		Bounds.Min = SDF.Pos - E;
+		Bounds.Max = SDF.Pos + E;
 		return Bounds;
 	}
 
