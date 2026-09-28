@@ -289,7 +289,6 @@ namespace AABB
         FAABB Bounds;
         Bounds.Min = SDF.Pos - E;
         Bounds.Max = SDF.Pos + E;
-
 		return Bounds;
 	}
 } // AABB
