@@ -22,16 +22,18 @@ struct FSDFEdit
 {
 	float3 Pos;
 	uint Flags; // bits 0-1: primitive, 2: operation, 3: bSmooths
-	float4 Data; // Per-primitive data
+	float4 Data0; // Per-primitive data
+    float4 Data1; // Per-primitive data
 	float Smoothing;
 	uint ID;
 	uint Padding[2];
 
 	EPrimitive GetPrimitive() { return (EPrimitive)(Flags & 0b11); }
-	float GetSphereRadius() { return Data.x; }
-	float3 GetLinePosB() { return Data.xyz; }
-	float GetLineRadius() { return Data.w; }
-	float3 GetBoxHalfExtent() { return Data.xyz; }
+	float GetSphereRadius() { return Data0.x; }
+	float3 GetLinePosB() { return Data0.xyz; }
+	float GetLineRadius() { return Data0.w; }
+	float3 GetBoxHalfExtent() { return Data0.xyz; }
+	float4 GetBoxQuat() { return Data1.xyzw; }
  	EOperation GetSDFOperation() { return (EOperation)( (Flags >> 2) & 0b1 ); }
 	bool GetSDFSmooths() { return Flags & 0b1000; }
 };
@@ -171,6 +173,13 @@ bool IntersectAABB( FAABB Bounds, FRay Ray, out float TNear, out float TFar )
 // from https://iquilezles.org/articles/distfunctions/
 namespace DistFn
 {
+    float3 RotatePoint(float3 Pos, float4 Quat)
+    {
+        Quat.xyz *= -1.0;
+        float3 t = 2.0 * cross(Quat.xyz, Pos);
+        return Pos + Quat.w * t + cross(Quat.xyz, t);
+    }
+
 	float Sphere( FSDFEdit SDF, float3 Pos )
 	{
 		return length( Pos - SDF.Pos ) - SDF.GetSphereRadius();
@@ -186,6 +195,7 @@ namespace DistFn
 
 	float Box( FSDFEdit SDF, float3 Pos )
 	{
+        Pos = RotatePoint(Pos, SDF.GetBoxQuat());
 		float3 HalfExtent = SDF.GetBoxHalfExtent();
 		float3 Q = abs(Pos - SDF.Pos) - HalfExtent;
 		return length(max(Q, 0.0)) + min(max(Q.x, max(Q.y, Q.z)), 0.0);
@@ -205,6 +215,7 @@ namespace DistFn
 
 	float BoxOrigin( FSDFEdit SDF, float3 Pos )
 	{
+        Pos = RotatePoint(Pos, SDF.GetBoxQuat());
 		float3 HalfExtent = SDF.GetBoxHalfExtent();
 		float3 Q = abs(Pos) - HalfExtent;
 		return length(max(Q, 0.0)) + min(max(Q.x, max(Q.y, Q.z)), 0.0);
@@ -255,10 +266,30 @@ namespace AABB
 	FAABB Box( FSDFEdit SDF )
 	{
 		const float3 HalfExtent = SDF.GetBoxHalfExtent();
+        const float4 Quat = SDF.GetBoxQuat();
 
-		FAABB Bounds;
-		Bounds.Min = SDF.Pos - HalfExtent;
-		Bounds.Max = SDF.Pos + HalfExtent;
+        float xx = Quat.x * Quat.x;
+		float yy = Quat.y * Quat.y;
+		float zz = Quat.z * Quat.z;
+        float xy = Quat.x * Quat.y;
+		float xz = Quat.x * Quat.z;
+		float yz = Quat.y * Quat.z;
+        float wx = Quat.w * Quat.x;
+        float wy = Quat.w * Quat.y;
+		float wz = Quat.w * Quat.z;
+
+        float3 Row0 = float3(1.0 - 2.0 * (yy + zz), 2.0 * (xy - wz), 2.0 * (xz + wy));
+        float3 Row1 = float3(2.0 * (xy + wz), 1.0 - 2.0 * (xx + zz), 2.0 * (yz - wx));
+        float3 Row2 = float3(2.0 * (xz - wy), 2.0 * (yz + wx), 1.0 - 2.0 * (xx + yy));
+
+        float3 E = float3(dot(abs(Row0), HalfExtent),
+						  dot(abs(Row1), HalfExtent),
+						  dot(abs(Row2), HalfExtent));
+
+        FAABB Bounds;
+        Bounds.Min = SDF.Pos - E;
+        Bounds.Max = SDF.Pos + E;
+
 		return Bounds;
 	}
 } // AABB
