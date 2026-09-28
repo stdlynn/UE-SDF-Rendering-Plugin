@@ -36,11 +36,17 @@ struct FGameSDF
 		EditConditionHides))
 	float Radius{ 100.0f };
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0",
+		EditCondition = "Primitive == EPrimitive::Box", EditConditionHides))
+	float Rounding{ 0.0f };
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (
+		DisplayName = "Line End Position",
 		EditCondition = "Primitive == EPrimitive::Line", EditConditionHides))
 	FVector3f LinePosB{ 0.0, 0.0, 100.0 };
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0",
+		DisplayName = "Extent (half)",
 		EditCondition = "Primitive == EPrimitive::Box", EditConditionHides))
 	FVector3f BoxSize{ 100.0, 100.0, 100.0 };
 
@@ -66,14 +72,14 @@ struct FRenderSDF
 		{
 			case EPrimitive::Sphere: Data = FVector4f(GameSDF.Radius, 0.f, 0.f, 0.f); break;
 			case EPrimitive::Line: Data = FVector4f(GameSDF.LinePosB, GameSDF.Radius); break;
-			case EPrimitive::Box: Data = FVector4f(GameSDF.BoxSize, 0.f); break;
+			case EPrimitive::Box: Data = FVector4f(GameSDF.BoxSize, GameSDF.Rounding); break;
 			default: Data = FVector4f(0.f, 0.f, 0.f, 0.f); break;
 		}
 	}
 
 	FVector3f Pos;
 	EPrimitive Primitive;
-	FQuat Quat;
+	FQuat Quat; // Data1 in FGPUSDF
 	EOperation Operation;
 	FVector4f Data;
 	bool bSmooths;
@@ -89,7 +95,7 @@ struct alignas(16) FGPUSDF
 	void SetPrimitive( const EPrimitive NewPrimitive );
 	void SetSphereData( const float Radius );
 	void SetLineData( const FVector3f& B, const float Radius );
-	void SetBoxData( const FVector3f& HalfExtent, const FQuat& Quat );
+	void SetBoxData( const FVector3f& HalfExtent, const FQuat& Quat, const float Rounding );
 	void SetOperation( const EOperation NewOperation );
 	void EnableSmoothing( const bool Enabled );
 	[[nodiscard]] EPrimitive GetPrimitive() const { return static_cast<EPrimitive>( Flags & 0b11 ); }
@@ -97,6 +103,7 @@ struct alignas(16) FGPUSDF
 	[[nodiscard]] FVector3f GetLinePosB() const { return FVector3f( Data0.X, Data0.Y, Data0.Z ); }
 	[[nodiscard]] float GetLineRadius() const { return Data0.W; }
 	[[nodiscard]] FVector3f GetBoxHalfExtent() const { return FVector3f( Data0.X, Data0.Y, Data0.Z ); }
+	[[nodiscard]] float GetBoxRounding() const { return Data0.W; }
 	[[nodiscard]] FQuat GetBoxQuat() const { return FQuat(Data1.X, Data1.Y, Data1.Z, Data1.W); }
 	[[nodiscard]] EOperation GetSDFOperation() const { return static_cast<EOperation>((Flags >> 2) & 0b1); }
 	[[nodiscard]] bool GetSDFSmooths() const { return Flags & 0b1000; }
@@ -141,6 +148,12 @@ public:
 		SetDirty();
 	}
 
+	void SetRounding( float NewRounding )
+	{
+		GameSDF.Rounding = NewRounding;
+		SetDirty();
+	}
+
 	UFUNCTION( BlueprintCallable )
 	void SetOperation( EOperation NewOperation )
 	{
@@ -154,7 +167,6 @@ public:
 		GameSDF.bSmooths = bNewDoesSmoothing;
 		SetDirty();
 	}
-
 
 	UFUNCTION( BlueprintCallable )
 	void SetSmoothing( float NewSmoothing )
