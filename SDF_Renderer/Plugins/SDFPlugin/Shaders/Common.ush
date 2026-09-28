@@ -34,6 +34,7 @@ struct FSDFEdit
 	float GetLineRadius() { return Data0.w; }
 	float3 GetBoxHalfExtent() { return Data0.xyz; }
 	float4 GetBoxQuat() { return Data1.xyzw; }
+	float4 GetBoxRounding() { return Data0.w; }
  	EOperation GetSDFOperation() { return (EOperation)( (Flags >> 2) & 0b1 ); }
 	bool GetSDFSmooths() { return Flags & 0b1000; }
 };
@@ -195,11 +196,12 @@ namespace DistFn
 
 	float Box( FSDFEdit SDF, float3 Pos )
 	{
+        float Rounding = SDF.GetBoxRounding();
         Pos = RotatePoint(Pos, SDF.GetBoxQuat());
-		float3 HalfExtent = SDF.GetBoxHalfExtent();
+        float3 HalfExtent = SDF.GetBoxHalfExtent() - Rounding;
 		float3 Q = abs(Pos - SDF.Pos) - HalfExtent;
-		return length(max(Q, 0.0)) + min(max(Q.x, max(Q.y, Q.z)), 0.0);
-	}
+        return length(max(Q, 0.0)) + min(max(Q.x, max(Q.y, Q.z)), 0.0) - Rounding;
+    }
 
 	float SphereOrigin( FSDFEdit SDF, float3 Pos )
 	{
@@ -215,10 +217,11 @@ namespace DistFn
 
 	float BoxOrigin( FSDFEdit SDF, float3 Pos )
 	{
+        float Rounding = SDF.GetBoxRounding();
         Pos = RotatePoint(Pos, SDF.GetBoxQuat());
-		float3 HalfExtent = SDF.GetBoxHalfExtent();
+		float3 HalfExtent = SDF.GetBoxHalfExtent() - Rounding;
 		float3 Q = abs(Pos) - HalfExtent;
-		return length(max(Q, 0.0)) + min(max(Q.x, max(Q.y, Q.z)), 0.0);
+		return length(max(Q, 0.0)) + min(max(Q.x, max(Q.y, Q.z)), 0.0) - Rounding;
 	}
 
 	float Dist( FSDFEdit SDF, float3 Pos )

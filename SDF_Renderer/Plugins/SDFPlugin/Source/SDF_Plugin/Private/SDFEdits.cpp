@@ -14,7 +14,6 @@ ASDFActor::ASDFActor()
 FGPUSDF::FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
 	: Pos{ RenderSDF.Pos * GPUUnitScale }
 	, Flags { 0 }
-	, Data0{ RenderSDF.Data * GPUUnitScale }
 	, SmoothingStrength{ RenderSDF.SmoothingStrength * GPUUnitScale }
 	, ID{ ID }
 {
@@ -37,7 +36,7 @@ FGPUSDF::FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
 		}
 		case EPrimitive::Box:
 		{
-			SetBoxData( FVector3f(RenderSDF.Data) * GPUUnitScale, RenderSDF.Quat );
+			SetBoxData( FVector3f(RenderSDF.Data) * GPUUnitScale, RenderSDF.Quat, RenderSDF.Data.W * GPUUnitScale );
 			break;
 		}
 	}
@@ -59,9 +58,9 @@ void FGPUSDF::SetLineData( const FVector3f& B, const float Radius )
 	Data0 = FVector4f(B, Radius);
 }
 
-void FGPUSDF::SetBoxData( const FVector3f& HalfExtent, const FQuat& Quat )
+void FGPUSDF::SetBoxData( const FVector3f& HalfExtent, const FQuat& Quat, const float Rounding )
 {
-	Data0 = FVector4f(HalfExtent, 0);
+	Data0 = FVector4f(HalfExtent, Rounding);
 	Data1 = FVector4f(Quat.X, Quat.Y, Quat.Z, Quat.W);
 }
 

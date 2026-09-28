@@ -32,11 +32,12 @@ namespace DistFn
 
 	inline float Box( const FGPUSDF& SDF, const FVector3f& Pos )
 	{
+		float Rounding = SDF.GetBoxRounding();
 		const FVector3f RotatedPos = RotatePoint(Pos, SDF.GetBoxQuat());
-		FVector3f HalfExtent = SDF.GetBoxHalfExtent();
+		FVector3f HalfExtent = SDF.GetBoxHalfExtent() - Rounding;
 		FVector3f Q = (RotatedPos - SDF.Pos).GetAbs() - HalfExtent;
 		return Q.ComponentMax(FVector3f::ZeroVector).Size()
-			+ FMath::Min(FMath::Max3(Q.X, Q.Y, Q.Z), 0.0f);
+			+ FMath::Min(FMath::Max3(Q.X, Q.Y, Q.Z), 0.0f) - Rounding;
 	}
 
 	inline float SphereOrigin( const FGPUSDF& SDF, const FVector3f& Pos )
@@ -54,11 +55,12 @@ namespace DistFn
 
 	inline float BoxOrigin( const FGPUSDF& SDF, const FVector3f& Pos )
 	{
+		float Rounding = SDF.GetBoxRounding();
 		const FVector3f RotatedPos = RotatePoint(Pos, SDF.GetBoxQuat());
-		FVector3f HalfExtent = SDF.GetBoxHalfExtent();
+		FVector3f HalfExtent = SDF.GetBoxHalfExtent() - Rounding;
 		FVector3f Q = RotatedPos.GetAbs() - HalfExtent;
 		return Q.ComponentMax(FVector3f::ZeroVector).Size() 
-			+ FMath::Min(FMath::Max3(Q.X, Q.Y, Q.Z), 0.0f);
+			+ FMath::Min(FMath::Max3(Q.X, Q.Y, Q.Z), 0.0f) - Rounding;
 	}
 
 	inline float Dist( const FGPUSDF& SDF, const FVector3f& Pos )
