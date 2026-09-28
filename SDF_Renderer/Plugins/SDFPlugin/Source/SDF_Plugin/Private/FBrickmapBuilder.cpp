@@ -62,7 +62,7 @@ void FBrickmapBuilder::SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FV
 
 	// TODO temporary hack to test deallocation
 	// Add some thickness so it also encapsulates its previous position
-	const float Thickness = BrickSize * 1;
+	const float Thickness = BrickSize * 4;
 
 	for ( const auto& SDF : SDFs )
 	{
