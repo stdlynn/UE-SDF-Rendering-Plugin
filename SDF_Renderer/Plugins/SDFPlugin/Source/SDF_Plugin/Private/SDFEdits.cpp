@@ -14,7 +14,6 @@ ASDFActor::ASDFActor()
 FGPUSDF::FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
 	: Pos{ RenderSDF.Pos * GPUUnitScale }
 	, Flags { 0 }
-	, Data{ RenderSDF.Data * GPUUnitScale }
 	, SmoothingStrength{ RenderSDF.SmoothingStrength * GPUUnitScale }
 	, ID{ ID }
 {
@@ -37,7 +36,7 @@ FGPUSDF::FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
 		}
 		case EPrimitive::Box:
 		{
-			SetBoxData( FVector3f(RenderSDF.Data) * GPUUnitScale );
+			SetBoxData( FVector3f(RenderSDF.Data) * GPUUnitScale, RenderSDF.Quat, RenderSDF.Data.W * GPUUnitScale );
 			break;
 		}
 	}
@@ -49,13 +48,29 @@ void FGPUSDF::SetPrimitive( const EPrimitive NewPrimitive )
 	Flags = (Flags & ~Mask) | (static_cast<uint32>( NewPrimitive ) & Mask);
 }
 
-void FGPUSDF::SetOperation(const EOperation NewOperation)
+void FGPUSDF::SetSphereData( const float Radius )
+{
+	Data0.X = Radius;
+}
+
+void FGPUSDF::SetLineData( const FVector3f& B, const float Radius )
+{
+	Data0 = FVector4f(B, Radius);
+}
+
+void FGPUSDF::SetBoxData( const FVector3f& HalfExtent, const FQuat& Quat, const float Rounding )
+{
+	Data0 = FVector4f(HalfExtent, Rounding);
+	Data1 = FVector4f(Quat.X, Quat.Y, Quat.Z, Quat.W);
+}
+
+void FGPUSDF::SetOperation( const EOperation NewOperation )
 {
 	static constexpr uint32 Mask = 0b100;
 	Flags = (Flags & ~Mask) | ((static_cast<uint32>(NewOperation) << 2) & Mask);
 }
 
-void FGPUSDF::EnableSmoothing(const bool Enabled)
+void FGPUSDF::EnableSmoothing( const bool Enabled )
 {
 	static constexpr uint32 Mask = 0b1000;
 	Flags = (Flags & ~Mask) | (Enabled ? Mask : 0u);
@@ -118,7 +133,8 @@ bool USDFSubsystem::DoesSupportWorldType( const EWorldType::Type WorldType ) con
 void USDFSubsystem::RegisterSDF( const USDFComponent& Comp )
 {
 	const FVector3f Pos{ Comp.GetComponentTransform().GetLocation() };
-	RenderSDFs.Add( Comp.GetID(), { Comp.GetSDF(), Pos } );
+	const FQuat Quat{ Comp.GetComponentTransform().GetRotation() };
+	RenderSDFs.Add( Comp.GetID(), { Comp.GetSDF(), Pos, Quat } );
 	bDirty = true;
 }
 
@@ -131,6 +147,7 @@ void USDFSubsystem::UnregisterSDF( const USDFComponent& Comp )
 void USDFSubsystem::SetSDFDirty( const USDFComponent& Comp )
 {
 	const FVector3f Pos{ Comp.GetComponentTransform().GetLocation() };
-	RenderSDFs[Comp.GetID()] = FRenderSDF{ Comp.GetSDF(), Pos };
+	const FQuat Quat{ Comp.GetComponentTransform().GetRotation() };
+	RenderSDFs[Comp.GetID()] = FRenderSDF{ Comp.GetSDF(), Pos, Quat };
 	bDirty = true;
 }
