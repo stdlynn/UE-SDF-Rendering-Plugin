@@ -7,6 +7,7 @@ Buffer<uint> PtrGrid;
 #include "Common.ush"
 
 // Shader bindings
+StructuredBuffer<FSDFMaterial> Materials;
 Texture3D<float> BrickAtlas;
 SamplerState BrickSampler;
 float3 PtrGridPos;
@@ -196,21 +197,23 @@ void TraversePS(
 	const float3 Dir = normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w );
 	const float3 Origin = View.ViewOriginHigh * UnitScale; // Convert unit size
 	FRay Ray = FRay::Create( Origin, Dir );
-	
+
 	// Trace
 	float3 Normal;
-	if (! TraceScene( Ray, Normal )) { discard; }
+	if ( !TraceScene(Ray, Normal) ) { discard; }
 
 	// Convert unit size
 	float ViewZ = mul( float4( (Ray.GetPos() - Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
 	OutDepth = ConvertToDeviceZ( ViewZ );
+	
+	FSDFMaterial Material = Materials[0];
 
 	FGBufferData GBuffer = (FGBufferData)0;
-	GBuffer.BaseColor = (0.4).xxx;
+	GBuffer.BaseColor = Material.Albedo;
 	GBuffer.WorldNormal = Normal;
-	GBuffer.Metallic = 0.0;
+	GBuffer.Metallic = Material.Metalness;
 	GBuffer.Specular = 0.5;
-	GBuffer.Roughness = 0.6;
+	GBuffer.Roughness = Material.Roughness;
 	GBuffer.PerObjectGBufferData = 0.0; // 0 means we don't have distance or height field for this mesh
 	GBuffer.SelectiveOutputMask = 0; // No selective output (we don't need this)
 	GBuffer.GBufferAO = 1.0; // No occlusion
@@ -220,7 +223,7 @@ void TraversePS(
 	// Write to the packed GBuffer channels
 	float4 GA, GB, GC, GD, GE, GV;
 	EncodeGBuffer( GBuffer, GA, GB, GC, GD, GE, GV );
-	OutSceneColor = (0).xxxx;
+	OutSceneColor = float4(Material.Emission, 0.0);
 	OutGBufferA = GA;
 	OutGBufferB = GB;
 	OutGBufferC = GC;

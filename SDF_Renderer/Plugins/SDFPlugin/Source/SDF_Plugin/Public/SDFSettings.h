@@ -2,6 +2,10 @@
 
 #pragma once
 
+// Plugin
+#include "SDFMaterial.h"
+
+// UE
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
 #include "SDFSettings.generated.h"
@@ -51,7 +55,17 @@ public:
 			UIMax = "0.1") )
 	float GPUUnitScale{ 1e-2f };
 
+	UPROPERTY(EditAnywhere, Config, Category = "Rendering",
+		meta = (DisplayName = "Materials"))
+	TArray<FSDFMaterial> Materials;
+
+	bool bMaterialsDirty = true;
+
 	virtual FName GetCategoryName() const override { return TEXT( "Plugins" ); }
+
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
 
 	// TODO: add PtrGridSize (uint3) and AtlasCapacity (measured in bricks)
 

@@ -5,6 +5,7 @@
 
 // Plugin
 #include "SDFEdits.h"
+#include "SDFMaterial.h"
 #include "FBrickmapBuilder.h"
 
 // UE
@@ -68,19 +69,24 @@ private:
 	void TransferSettingsToRenderThread();
 	void TransferSDFsToRenderThread();
 	void UpdateSDFBuffer();
+	void UpdateMaterialBuffer();
 	FRDGBufferRef RegisterSDFBuffer( FRDGBuilder& GraphBuilder );
+	FRDGBufferRef RegisterMaterialBuffer( FRDGBuilder& GraphBuilder );
 
 	// Game thread
 	struct
 	{
 		TWeakObjectPtr<UWorld> World;
 		FSettings Settings;
+		TArray<FSDFMaterial> Materials;
 	} GT{};
 
 	// Render thread
 	struct
 	{
 		FSettings Settings;
+		TArray<FSDFMaterial> Materials;
+		FSDFResources MaterialsResource;
 		TArray<FGPUSDF> SDFs;
 		FSDFResources SDFResources;
 		FBrickmapBuilder BrickmapBuilder;
@@ -99,6 +105,7 @@ public:
 
 	BEGIN_SHADER_PARAMETER_STRUCT( FParameters, )
 		SHADER_PARAMETER_STRUCT_REF( FViewUniformShaderParameters, View ) // View/Camera
+		SHADER_PARAMETER_RDG_BUFFER_SRV( StructuredBuffer<FSDFMaterial>, Materials )
 		SHADER_PARAMETER_RDG_BUFFER_SRV( StructuredBuffer<FGPUSDF>, SDFEdits )
 		SHADER_PARAMETER( uint32, NumEdits )
 		SHADER_PARAMETER_RDG_TEXTURE_SRV( Texture3D<float>, BrickAtlas ) // Brick Atlas

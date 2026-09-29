@@ -43,6 +43,14 @@ struct FSDFEdit
 StructuredBuffer<FSDFEdit> SDFEdits;
 uint NumEdits;
 
+struct FSDFMaterial
+{
+	float3 Albedo;
+	float Roughness;
+	float3 Emission;
+	float Metalness;
+};
+
 struct FRay
 {
 	static FRay Create( float3 Pos, float3 Dir, float MaxT = Infinity )
@@ -340,7 +348,7 @@ float OpSmoothSubtract( float a, float b, float k )
 
 float MapScene( float3 Pos )
 {
-	float ClosestDist = Infinity;
+	float ClosestDist = 1e35;
 
 	for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
 	{
