@@ -16,12 +16,42 @@ float VoxSize;
 float SurfaceEpsilon;
 float DerivativeH;
 float UnitScale;
+// Terrain
+float PlaneZ;
+uint NumOctaves;
+float Frequency;
+float Lacunarity;
+float Amplitude;
+float Persistence;
+float Inflation;
+float InflationGain;
+float UnionSmoothing;
+float ClippingSmoothing;
+float MaxRadiusVariance;
+
+FTerrainParams GetTerrainParams()
+{
+    FTerrainParams Params;
+    Params.PlaneZ             = PlaneZ;
+    Params.NumOctaves         = NumOctaves;
+    Params.Frequency          = Frequency;
+    Params.Lacunarity         = Lacunarity;
+    Params.Amplitude          = Amplitude;
+    Params.Persistence        = Persistence;
+    Params.Inflation          = Inflation;
+    Params.InflationGain      = InflationGain;
+    Params.UnionSmoothing     = UnionSmoothing;
+    Params.ClippingSmoothing  = ClippingSmoothing;
+    Params.MaxRadiusVariance  = MaxRadiusVariance;
+    return Params;
+}
 
 bool SphereTraceFBM( inout FRay Ray )
 {
-	for (uint Step = 0; Step < 256; ++Step)
+	FTerrainParams Params = GetTerrainParams();
+	for (uint Step = 0; Step < 32; ++Step)
 	{
-		float ClosestDist = DistFn::FBM( Ray.GetPos() );
+		float ClosestDist = DistFn::FBM( Ray.GetPos(), Params );
 		if (ClosestDist > Ray.RelativeMaxT) { break; }
 		if (ClosestDist < SurfaceEpsilon)
 		{

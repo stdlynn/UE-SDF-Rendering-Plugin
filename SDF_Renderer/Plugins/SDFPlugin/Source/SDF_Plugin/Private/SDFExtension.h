@@ -22,6 +22,20 @@ public:
 
 	struct FSettings
 	{
+		struct TerrainParams
+		{
+			float PlaneZ;
+			uint32 NumOctaves;
+			float Frequency;
+			float Lacunarity;
+			float Amplitude;
+			float Persistence;
+			float Inflation;
+			float InflationGain;
+			float UnionSmoothing;
+			float ClippingSmoothing;
+			float MaxRadiusVariance;
+		} Terrain;
 		FVector3f PtrGridPos;
 		float VoxSize;
 		uint32 DbgVisMaxBricks;
@@ -110,6 +124,18 @@ public:
 		SHADER_PARAMETER( float, SurfaceEpsilon )
 		SHADER_PARAMETER( float, DerivativeH )
 		SHADER_PARAMETER( float, UnitScale )
+		// Terrain
+		SHADER_PARAMETER(float, PlaneZ)
+		SHADER_PARAMETER(uint32, NumOctaves)
+		SHADER_PARAMETER(float, Frequency)
+		SHADER_PARAMETER(float, Lacunarity)
+		SHADER_PARAMETER(float, Amplitude)
+		SHADER_PARAMETER(float, Persistence)
+		SHADER_PARAMETER(float, Inflation)
+		SHADER_PARAMETER(float, InflationGain)
+		SHADER_PARAMETER(float, UnionSmoothing)
+		SHADER_PARAMETER(float, ClippingSmoothing)
+		SHADER_PARAMETER(float, MaxRadiusVariance)
 		RENDER_TARGET_BINDING_SLOTS() // GBuffer Textures
 	END_SHADER_PARAMETER_STRUCT()
 

@@ -13,43 +13,72 @@ class SDFPLUGIN_API USDFSettings : public UDeveloperSettings
 
 public:
 
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain",
+			   meta = (DisplayName = "Plane Z Coord") )
+	float PlaneZ{ 0.0f };
+
 	// TODO: default
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
-			   meta = (DisplayName = "Num Octaves") )
+			   meta = (DisplayName = "Num Octaves",
+						ClampMin = "1") )
 	uint32 NumOctaves{ 3 };
 
-	UPROPERTY( EditAnywhere, Config, Category = "Terrain|fBM",
-			   meta = (DisplayName = "Frequency") )
-	float Frequency{ 1.0 };
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
+			   meta = (DisplayName = "Frequency",
+						ClampMin = "0.1") )
+	float Frequency{ 1.0f };
 
-	UPROPERTY( EditAnywhere, Config, Category = "Terrain|fBM",
-			   meta = (DisplayName = "Lacunarity") )
-	float Lacunarity{ 2.0 };
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
+			   meta = (DisplayName = "Lacunarity",
+						ClampMin = "1.0") )
+	float Lacunarity{ 2.0f };
 
-	UPROPERTY( EditAnywhere, Config, Category = "Terrain|fBM",
-			   meta = (DisplayName = "Amplitude (sphere radius)") )
-	float Amplitude{ 0.5 };
+	// TODO: default
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
+			   meta = (DisplayName = "Amplitude (sphere radius)",
+						ClampMin = "0.1") )
+	float Amplitude{ 1.0f };
 
-	UPROPERTY( EditAnywhere, Config, Category = "Terrain|fBM",
-			   meta = (DisplayName = "Persistence") )
-	float Persistence{ 0.5 };
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
+			   meta = (DisplayName = "Persistence",
+						ClampMin = "0.1",
+						ClampMax = "1.0") )
+	float Persistence{ 0.5f };
 
-	UPROPERTY( EditAnywhere, Config, Category = "Terrain",
-			   meta = (DisplayName = "Base Radius") )
-	float BaseRadius{ 0.0 };
+	// TODO: default
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
+			   meta = (DisplayName = "Inflation Percentage",
+						ClampMin = "1.0") )
+	float Inflation{ 1.0f };
 
-	UPROPERTY( EditAnywhere, Config, Category = "Terrain",
-			   meta = (DisplayName = "Plane Z Coord") )
-	float PlaneZ{ 0.0 };
+	// TODO: default
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
+			   meta = (DisplayName = "Inflation Gain",
+						ClampMin = "0.1",
+						ClampMax = "1.0") )
+	float InflationGain{ 1.0f };
 
-	UPROPERTY( EditAnywhere, Config, Category = "Terrain",
-			   meta = (DisplayName = "Plane Z Coord") )
-	float BaseInflation{ 0.0 };
+	// TODO: default
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
+			   meta = (DisplayName = "Union Smoothing",
+						ClampMin = "1.0") )
+	float UnionSmoothing{ 0.0f };
 
-	// TODO: inflation multiplier
+	// TODO: default
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
+			   meta = (DisplayName = "Clipping Smoothing",
+						ClampMin = "1.0") )
+	float ClippingSmoothing{ 1.0f };
+
+	// TODO: default
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
+			   meta = (DisplayName = "Max. Radius Variance (%)",
+						ClampMin = "0.0",
+						ClampMax = "1.0") )
+	float MaxRadiusVariance{ 0.15f };
+
 	// TODO: radius randomness thing (e.g. if 1.2, use '1-(1.2-1)' to find lower range, clamp [1,2])
 	// actually clamp it [0,1] and do +1 in shader)
-	// TODO: K1 and K2
 
 	// ========================
 	// fBM above, other beneath
@@ -93,7 +122,14 @@ public:
 			UIMax = "0.1") )
 	float GPUUnitScale{ 1e-2f };
 
+	// True if any setting is dirty (NOT materials)
+	bool bSettingDirty = true;
+
 	virtual FName GetCategoryName() const override { return TEXT( "Plugins" ); }
+
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
 
 	// TODO: add PtrGridSize (uint3) and AtlasCapacity (measured in bricks)
 

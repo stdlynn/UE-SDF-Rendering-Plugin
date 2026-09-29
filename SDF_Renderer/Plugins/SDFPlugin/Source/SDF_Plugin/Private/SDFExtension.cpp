@@ -100,26 +100,31 @@ void FSDFExtension::BeginRenderViewFamily( FSceneViewFamily& InViewFamily )
 void FSDFExtension::TransferSettingsToRenderThread()
 {
 	// Check if any of the settings are dirty
-	const USDFSettings* SDFSettings{ GetDefault<USDFSettings>() };
-	if (GT.Settings.PtrGridPos == SDFSettings->PtrGridPos
-		&& GT.Settings.VoxSize == SDFSettings->VoxSize
-		&& GT.Settings.DbgVisMaxBricks == SDFSettings->DbgVisMaxBricks
-		&& GT.Settings.DbgVisBlendFactor == SDFSettings->DbgVisBlendFactor
-		&& GT.Settings.SurfaceEpsilon == SDFSettings->SurfaceEpsilon
-		&& GT.Settings.DerivativeH == SDFSettings->DerivativeH
-		&& GT.Settings.GPUUnitScale == SDFSettings->GPUUnitScale)
-	{
-		return;
-	}
+	USDFSettings* SDFSettings{ GetMutableDefault<USDFSettings>() };
+	if (not SDFSettings->bSettingDirty) { return; }
+	SDFSettings->bSettingDirty = false;
 
 	// Store settings to compare next frame
-	GT.Settings.PtrGridPos = SDFSettings->PtrGridPos;
-	GT.Settings.VoxSize = SDFSettings->VoxSize;
+	// Convert the unit scale where necessary
+	GT.Settings.PtrGridPos = SDFSettings->PtrGridPos * SDFSettings->GPUUnitScale;
+	GT.Settings.VoxSize = SDFSettings->VoxSize * SDFSettings->GPUUnitScale;
 	GT.Settings.DbgVisMaxBricks = SDFSettings->DbgVisMaxBricks;
 	GT.Settings.DbgVisBlendFactor = SDFSettings->DbgVisBlendFactor;
-	GT.Settings.SurfaceEpsilon = SDFSettings->SurfaceEpsilon;
-	GT.Settings.DerivativeH = SDFSettings->DerivativeH;
+	GT.Settings.SurfaceEpsilon = SDFSettings->SurfaceEpsilon * SDFSettings->GPUUnitScale;
+	GT.Settings.DerivativeH = SDFSettings->DerivativeH * SDFSettings->GPUUnitScale;
 	GT.Settings.GPUUnitScale = SDFSettings->GPUUnitScale;
+	// Terrain
+	GT.Settings.Terrain.PlaneZ = SDFSettings->PlaneZ * SDFSettings->GPUUnitScale;
+	GT.Settings.Terrain.NumOctaves = SDFSettings->NumOctaves;
+	GT.Settings.Terrain.Frequency = SDFSettings->Frequency; // TODO: * UnitScale?
+	GT.Settings.Terrain.Lacunarity = SDFSettings->Lacunarity;
+	GT.Settings.Terrain.Amplitude = SDFSettings->Amplitude * SDFSettings->GPUUnitScale;
+	GT.Settings.Terrain.Persistence = SDFSettings->Persistence;
+	GT.Settings.Terrain.Inflation = 1.0f / SDFSettings->Inflation;
+	GT.Settings.Terrain.InflationGain = 1.0f / SDFSettings->InflationGain;
+	GT.Settings.Terrain.UnionSmoothing = SDFSettings->UnionSmoothing;
+	GT.Settings.Terrain.ClippingSmoothing = SDFSettings->ClippingSmoothing;
+	GT.Settings.Terrain.MaxRadiusVariance = SDFSettings->MaxRadiusVariance;
 	GT.Settings.bUnitScaleDirty = true;
 
 	// Transfer lambda
@@ -128,12 +133,6 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	{
 		// Copy the settings over to the render thread
 		RT.Settings = Settings;
-
-		// Convert to GPU unit scale
-		RT.Settings.PtrGridPos *= Settings.GPUUnitScale;
-		RT.Settings.VoxSize *= Settings.GPUUnitScale;
-		RT.Settings.SurfaceEpsilon *= Settings.GPUUnitScale;
-		RT.Settings.DerivativeH *= Settings.GPUUnitScale;
 	} };
 
 	// Perform the transfer safely on the render thread
@@ -374,6 +373,18 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 		PassParameters->SurfaceEpsilon = RT.Settings.SurfaceEpsilon;
 		PassParameters->DerivativeH = RT.Settings.DerivativeH;
 		PassParameters->UnitScale = RT.Settings.GPUUnitScale;
+		// Terrain
+		PassParameters->PlaneZ = RT.Settings.Terrain.PlaneZ;
+		PassParameters->NumOctaves = RT.Settings.Terrain.NumOctaves;
+		PassParameters->Frequency = RT.Settings.Terrain.Frequency;
+		PassParameters->Lacunarity = RT.Settings.Terrain.Lacunarity;
+		PassParameters->Amplitude = RT.Settings.Terrain.Amplitude;
+		PassParameters->Persistence = RT.Settings.Terrain.Persistence;
+		PassParameters->Inflation = RT.Settings.Terrain.Inflation;
+		PassParameters->InflationGain = RT.Settings.Terrain.InflationGain;
+		PassParameters->UnionSmoothing = RT.Settings.Terrain.UnionSmoothing;
+		PassParameters->ClippingSmoothing = RT.Settings.Terrain.ClippingSmoothing;
+		PassParameters->MaxRadiusVariance = RT.Settings.Terrain.MaxRadiusVariance;
 		PassParameters->RenderTargets = RenderTargets;
 		PassParameters->RenderTargets.DepthStencil = FDepthStencilBinding( DepthTexture,
 																		   ERenderTargetLoadAction::ELoad, // Depth

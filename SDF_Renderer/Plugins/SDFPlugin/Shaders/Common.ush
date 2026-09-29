@@ -350,6 +350,10 @@ float OpUnion( float a, float b )
 {
     return min(a,b);
 }
+float OpIntersect( float a, float b )
+{
+    return max(a,b);
+}
 float OpSubtract( float a, float b )
 {
     return max(-a,b);

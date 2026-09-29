@@ -1,5 +1,20 @@
 #pragma once
 
+struct FTerrainParams
+{
+    float PlaneZ;
+    uint NumOctaves;
+    float Frequency;
+    float Lacunarity;
+    float Amplitude;
+    float Persistence;
+    float Inflation;
+    float InflationGain;
+    float UnionSmoothing;
+    float ClippingSmoothing;
+    float MaxRadiusVariance;
+};
+
 // [CREDITS] https://www.shadertoy.com/view/sfXXzX
 uint VMulU32U24( uint a, uint b ) { return (a & 0x00ffffffu) * (b & 0x00ffffffu); }
 float SimpleHash32V3( uint3 Seed )
@@ -17,6 +32,8 @@ float SimpleHash32V3( uint3 Seed )
 	return (float)m1 / (float)0xFFFFFFFFu;
 }
 
+// TODO: I think max amplitude can be 1.0, since otherwise it will go past the origin of other spheres
+// TODO: but then make amplitude the MAX (instead of average) (rename 'MaxRadiusVariance')
 float SampleHashSphere( int3 CellPos, float3 PosFract, uint3 CornerOffset, float AvgRadius )
 {
 	// TODO: radius
@@ -25,6 +42,7 @@ float SampleHashSphere( int3 CellPos, float3 PosFract, uint3 CornerOffset, float
 	// Decide the radius based on a hash
 	const int3 CornerCell = CellPos + CornerOffset;
 	const uint3 Seed = uint3( asuint( CornerCell.x ), asuint( CornerCell.y ), asuint( CornerCell.z ) );
+	const float RadiusModifier = SimpleHash32V3( Seed );
 	const float Radius = AvgRadius + (0.5 * SimpleHash32V3( Seed ));
 
 	//
@@ -48,47 +66,36 @@ float SampleHashSphere8( float3 Pos, float AvgRadius )
 
 namespace DistFn
 {
-	float PlaneXY( float3 Pos, float PlaneZ )
+	float FBM( float3 Pos, FTerrainParams Params )
 	{
-		return Pos.z - PlaneZ;
-	}
-
-	float FBM( float3 Pos )
-	{
-	    const uint NumOctaves = 5;
-	    const float Lacunarity = 2.0;
-	    const float Persistence = 0.5;
-
 		// Sample from a base SDF to get our initial field
 		// The octaves will subsequently add noise to said field
-	    float Dist = PlaneXY( Pos, 0.0 ); // TODO: plane Z
+	    float Dist = Pos.z - Params.PlaneZ;
 
 		// Go over each octave
-        float Frequency = 1.0; // Controls sphere frequency
-        float Amplitude = 1.0; // Controls sphere radius
-        for (uint i = 0; i < NumOctaves; ++i)
+        for (uint i = 0; i < Params.NumOctaves; ++i)
         {
 			// TODO: does the math work out that we can just multiple the sample with Frequency
 			// SDF of an infinite grid of spheres
 			// Sample the closest 8 to determine the distance
-            const float SampleDist = SampleHashSphere8( Pos, Amplitude );
+            const float SampleDist = SampleHashSphere8( Pos, Params.Amplitude );
 
-			// TODO: inflation param
 			// Inflate the current terrain distance field (from the previous octaves/base SDF)
-            const float InflatedDist = Dist * 0.9; // TODO: change per octave?
+            const float InflatedDist = Dist * Params.Inflation;
 			// Calculate the distance field of the INTERSECTION between
 			// the sampled distance and the inflated SDF
 			// Effectively, we mask out any noise out of distance of out terrain
-            const float ClippedDist = OpSmoothIntersect(SampleDist, InflatedDist, 1.0); // TODO: K1
+            const float ClippedDist = OpSmoothIntersect( SampleDist, InflatedDist, Params.ClippingSmoothing );
     		// Add the noise on top of the current distance field (smoothed)
-            Dist = OpSmoothUnion(Dist, ClippedDist, 1.0); // TODO: K2
+            Dist = OpSmoothUnion( Dist, ClippedDist, Params.UnionSmoothing );
 
 			// Set the next octave's parameters
 			Pos = mul( float3x3(  0.00,  1.60,  1.20,
 								 -1.60,  0.72, -0.96,
 								 -1.20, -0.96,  1.28 ), Pos );
-            Frequency *= Lacunarity;
-            Amplitude *= Persistence;
+            Params.Frequency *= Params.Lacunarity;
+            Params.Amplitude *= Params.Persistence;
+			Params.Inflation *= Params.InflationGain;
         }
         return Dist;
     }
