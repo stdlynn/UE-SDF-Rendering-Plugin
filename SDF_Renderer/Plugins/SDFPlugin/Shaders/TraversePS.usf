@@ -43,10 +43,11 @@ float3 GetAtlasNormal( float3 Pos, float3 BoundsMin )
 float3 GetNormal( float3 Pos )
 {
 	const float2 K = float2( 1, -1 );
-	return normalize( K.xyy * MapScene( Pos + (K.xyy * DerivativeH) ) +
-					  K.yyx * MapScene( Pos + (K.yyx * DerivativeH) ) +
-					  K.yxy * MapScene( Pos + (K.yxy * DerivativeH) ) +
-					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH) ) );
+	uint EditID;
+	return normalize( K.xyy * MapScene( Pos + (K.xyy * DerivativeH), EditID ) +
+					  K.yyx * MapScene( Pos + (K.yyx * DerivativeH), EditID ) +
+					  K.yxy * MapScene( Pos + (K.yxy * DerivativeH), EditID ) +
+					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH), EditID ) );
 }
 
 // Brick Sphere Tracing
@@ -58,7 +59,7 @@ bool TraceBrick( inout FRay Ray )
 }
 
 // Pointer Grid DDA
-bool TracePtrGrid( inout FRay Ray, out float3 Normal )
+bool TracePtrGrid( inout FRay Ray, out float3 Normal, out uint HitIdx )
 {
 	// TODO:
 	const float BrickSize = GetBrickSize( VoxSize );
@@ -140,7 +141,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 	}
 }
 
-bool TraceScene( inout FRay Ray, out float3 Normal )
+bool TraceScene( inout FRay Ray, out float3 Normal, out uint HitIdx )
 {
 	bool bHit = false;
 	// Brute-force sphere tracing
@@ -148,7 +149,7 @@ bool TraceScene( inout FRay Ray, out float3 Normal )
     {
 		for (uint Step = 0; Step < 256; ++Step)
 		{
-			float ClosestDist = MapScene( Ray.GetPos() );
+			float ClosestDist = MapScene( Ray.GetPos(), HitIdx );
 			if (ClosestDist < SurfaceEpsilon)
 			{
 				Normal = GetNormal( Ray.GetPos() );
@@ -190,7 +191,7 @@ void TraversePS(
 	out float OutDepth : SV_DEPTH ) // Depth
 {
 	// Screen UV
-	const float2 ViewportUV = (InPosition.xy - View.ViewRectMin.xy) * View.ViewSizeAndInvSize.zw;
+	const float2 ViewportUV = ( InPosition.xy - View.ViewRectMin.xy ) * View.ViewSizeAndInvSize.zw;
 	const float2 NDC = ViewportUV * float2( 2, -2 ) + float2( -1, 1 );
 
 	// Ray setup
@@ -201,13 +202,14 @@ void TraversePS(
 
 	// Trace
 	float3 Normal;
-	if ( !TraceScene(Ray, Normal) ) { discard; }
+	uint HitIdx;
+	if ( !TraceScene( Ray, Normal, HitIdx ) ) { discard; }
 
 	// Convert unit size
 	float ViewZ = mul( float4( (Ray.GetPos() - Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
 	OutDepth = ConvertToDeviceZ( ViewZ );
 	
-	FSDFMaterial Material = Materials[0];
+	FSDFMaterial Material = Materials[SDFEdits[HitIdx].MatIdx];
 
 	FGBufferData GBuffer = (FGBufferData)0;
 	GBuffer.BaseColor = Material.Albedo;

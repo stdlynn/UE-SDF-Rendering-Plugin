@@ -26,7 +26,8 @@ struct FSDFEdit
     float4 Data1; // Per-primitive data
 	float Smoothing;
 	uint ID;
-	uint Padding[2];
+	uint MatIdx;
+	uint Padding[1];
 
 	EPrimitive GetPrimitive() { return (EPrimitive)(Flags & 0b11); }
 	float GetSphereRadius() { return Data0.x; }
@@ -346,10 +347,11 @@ float OpSmoothSubtract( float a, float b, float k )
     return -OpSmoothUnion(a,-b,k);
 }
 
-float MapScene( float3 Pos )
+float MapScene( float3 Pos, out uint HitIdx )
 {
 	float ClosestDist = 1e35;
 
+	HitIdx = 0xffffffff;
 	for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
 	{
 		const FSDFEdit Edit = SDFEdits[EditIdx];
@@ -358,6 +360,7 @@ float MapScene( float3 Pos )
 		bool bSmooth = Edit.GetSDFSmooths();
 		// Evaluate the distance to the SDF
 		const float Dist = DistFn::DistOrigin( Edit, Pos - Edit.Pos );
+		const float PrevDist = ClosestDist;
 		if (bSmooth)
 		{
 			if (Op == Union)
@@ -379,6 +382,10 @@ float MapScene( float3 Pos )
 			{
 				ClosestDist = OpSubtract(Dist, ClosestDist);
 			}
+		}
+		if (ClosestDist != PrevDist)
+		{
+			HitIdx = EditIdx;
 		}
 	}
 

@@ -55,6 +55,11 @@ struct FGameSDF
 
 	UPROPERTY( EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "1.0") )
 	float Smoothing{ 1.0f };
+
+	UPROPERTY( EditAnywhere, BlueprintReadOnly, meta = 
+		(ClampMin = "0",
+		ClampMax = "255") )
+	int MaterialIndex{ 0 };
 };
 
 // SDF edit representation sent to the render thread
@@ -67,6 +72,7 @@ struct FRenderSDF
 		, Operation{ GameSDF.Operation }
 		, bSmooths{ GameSDF.bSmooths }
 		, SmoothingStrength{ GameSDF.Smoothing }
+		, MatIdx{ static_cast<uint32>(GameSDF.MaterialIndex) }
 	{
 		switch (GameSDF.Primitive)
 		{
@@ -84,6 +90,7 @@ struct FRenderSDF
 	FVector4f Data;
 	bool bSmooths;
 	float SmoothingStrength;
+	uint32 MatIdx;
 };
 
 // GPU SDF edits
@@ -114,6 +121,7 @@ struct alignas(16) FGPUSDF
 	FVector4f Data1; // Per-primitive data
 	float SmoothingStrength;
 	uint32 ID;
+	uint32 MatIdx;
 };
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
@@ -172,6 +180,13 @@ public:
 	void SetSmoothing( float NewSmoothing )
 	{
 		GameSDF.Smoothing = NewSmoothing;
+		SetDirty();
+	}
+
+	UFUNCTION( BlueprintCallable )
+	void SetMaterialIndex( int NewMaterialIndex )
+	{
+		GameSDF.MaterialIndex = NewMaterialIndex;
 		SetDirty();
 	}
 

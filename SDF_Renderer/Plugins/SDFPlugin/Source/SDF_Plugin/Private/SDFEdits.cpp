@@ -16,6 +16,7 @@ FGPUSDF::FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
 	, Flags { 0 }
 	, SmoothingStrength{ RenderSDF.SmoothingStrength * GPUUnitScale }
 	, ID{ ID }
+	, MatIdx{ RenderSDF.MatIdx }
 {
 	SetPrimitive(RenderSDF.Primitive);
 	SetOperation(RenderSDF.Operation);

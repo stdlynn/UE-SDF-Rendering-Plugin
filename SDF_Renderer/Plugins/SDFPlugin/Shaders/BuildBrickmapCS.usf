@@ -44,7 +44,8 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 	uint AtlasIdx = PtrGrid[GridIdx];
 
 	// Find the closest SDF to the brick point
-	float Closest = MapScene( WorldPos );
+	uint EditID;
+	float Closest = MapScene( WorldPos, EditID );
 
 	// Indicate if any geometry is within allocation distance
 	// Sync so any thread gets the chance to indicate a surface within range
