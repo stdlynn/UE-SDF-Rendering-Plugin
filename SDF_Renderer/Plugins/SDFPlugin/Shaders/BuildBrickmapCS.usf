@@ -6,6 +6,7 @@ RWBuffer<uint> PtrGrid;
 #include "BrickmapCommon.ush"
 #include "Common.ush"
 
+RWBuffer<uint> MaterialAtlas;
 float3 PtrGridPos;
 float VoxSize;
 

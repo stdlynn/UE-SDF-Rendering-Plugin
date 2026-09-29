@@ -10,6 +10,7 @@ Buffer<uint> PtrGrid;
 StructuredBuffer<FSDFMaterial> Materials;
 Texture3D<float> BrickAtlas;
 SamplerState BrickSampler;
+Buffer<uint> MaterialAtlas;
 float3 PtrGridPos;
 uint bBruteForceSphereTracing;
 float VoxSize;

@@ -15,6 +15,7 @@ public:
 	FBrickmapBuilder() = default;
 
 	[[nodiscard]] IPooledRenderTarget* GetBrickAtlas() const { return RT.BrickAtlas; }
+	[[nodiscard]] FRDGPooledBuffer* GetMaterialAtlas() const { return RT.MaterialAtlas; }
 	[[nodiscard]] FRDGPooledBuffer* GetPtrGrid() const { return RT.PtrGrid; }
 	[[nodiscard]] FRDGPooledBuffer* GetBrickAllocCounter() const { return RT.BrickAllocCounters; }
 	[[nodiscard]] FRDGPooledBuffer* GetFreedList() const { return RT.FreedListResource; }
@@ -41,6 +42,7 @@ private:
 	{
 		uint32 LastBuildFrame = MAX_uint32;
 		TRefCountPtr<IPooledRenderTarget> BrickAtlas;
+		TRefCountPtr<FRDGPooledBuffer> MaterialAtlas;
 		TRefCountPtr<FRDGPooledBuffer> PtrGrid;
 
 		TSet<uint32> UpdateListCPU;

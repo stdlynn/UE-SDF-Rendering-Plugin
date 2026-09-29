@@ -110,6 +110,7 @@ public:
 		SHADER_PARAMETER( uint32, NumEdits )
 		SHADER_PARAMETER_RDG_TEXTURE_SRV( Texture3D<float>, BrickAtlas ) // Brick Atlas
 		SHADER_PARAMETER_SAMPLER( SamplerState, BrickSampler ) // Brick Sampler
+		SHADER_PARAMETER_RDG_BUFFER_SRV( Buffer<uint>, MaterialAtlas ) // Material Atlas
 		SHADER_PARAMETER_RDG_BUFFER_SRV( Buffer<uint>, PtrGrid ) // Pointer Buffer
 		SHADER_PARAMETER( uint32, bBruteForceSphereTracing )
 		SHADER_PARAMETER( FVector3f, PtrGridPos )
@@ -145,8 +146,9 @@ public:
 	BEGIN_SHADER_PARAMETER_STRUCT( FParameters, )
 		SHADER_PARAMETER( uint32, NumEdits )
 		SHADER_PARAMETER_RDG_BUFFER_SRV( StructuredBuffer<FGPUSDF>, SDFEdits )
-		SHADER_PARAMETER_RDG_BUFFER_UAV( Buffer<uint32>, PtrGrid )
 		SHADER_PARAMETER_RDG_TEXTURE_UAV( Texture3D<float>, BrickAtlas )
+		SHADER_PARAMETER_RDG_BUFFER_UAV( Buffer<uint>, MaterialAtlas )
+		SHADER_PARAMETER_RDG_BUFFER_UAV( Buffer<uint32>, PtrGrid )
 		SHADER_PARAMETER( FIntVector, GridSize )
 		SHADER_PARAMETER( FIntVector, AtlasSize )
 		SHADER_PARAMETER( FVector3f, PtrGridPos )
