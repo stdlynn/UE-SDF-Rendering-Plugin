@@ -20,7 +20,6 @@ float DbgVisBlendFactor;
 float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
 {
 	// DDA setup
-	Ray.AdvanceOrigin();
 	FDDA DDA = FDDA::Init( Ray, BoundsMin, BrickSize );
 
 	// Initial sample
@@ -59,16 +58,6 @@ float3 InfernoQuintic( float Normalized )
 		dot( x1.xyzw, float4( +0.014065206, +0.015360518, +1.605395918, -4.821108251 ) ) + dot( x2.xy, float2( +8.389314011, -4.193858954 ) ),
 		dot( x1.xyzw, float4( -0.019628385, +3.122510347, -5.893222355, +2.798380308 ) ) + dot( x2.xy, float2( -3.608884658, +4.324996022 ) ) ) );
 }
-float3 MagmaQuintic( float Normalized )
-{
-	Normalized = saturate( Normalized );
-	float4 X1 = float4( 1.0, Normalized, Normalized * Normalized, Normalized * Normalized * Normalized ); // 1 x x2 x3
-	float4 X2 = X1 * X1.w * Normalized; // x4 x5 x6 x7
-	return saturate( float3(
-		dot( X1.xyzw, float4( -0.023226960, +1.087154378, -0.109964741, +6.333665763 ) ) + dot( X2.xy, float2( -11.640596589, +5.337625354 ) ),
-		dot( X1.xyzw, float4( +0.010680993, +0.176613780, +1.638227448, -6.743522237 ) ) + dot( X2.xy, float2( +11.426396979, -5.523236379 ) ),
-		dot( X1.xyzw, float4( -0.008260782, +2.244286052, +3.005587601, -24.279769818 ) ) + dot( X2.xy, float2( +32.484310068, -12.688259703 ) ) ) );
-}
 
 [numthreads(8, 8, 1)]
 void DebugCS( uint2 DispatchThreadId : SV_DispatchThreadID )
@@ -103,10 +92,9 @@ void DebugCS( uint2 DispatchThreadId : SV_DispatchThreadID )
 	if (IntersectAABB( GridAABB, Ray, AABBHitT, AABBOutT ))
 	{
 		// Grid DDA
-		// Assuming 'Ray.T' is zero
 		const float Epsilon = AABBEpsilon * UnitScale;
 		if (AABBHitT > 0.0) { AABBHitT += Epsilon; }
-		Ray.MaxT = AABBOutT;
+		Ray.SetMaxT( AABBOutT );
 		Ray.Advance( AABBHitT );
 		NumHits = NumBrickHits( Ray, GridAABB.Min, BrickSize );
 	}

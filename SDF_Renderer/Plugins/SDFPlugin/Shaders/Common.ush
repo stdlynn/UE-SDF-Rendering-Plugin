@@ -53,6 +53,8 @@ struct FRay
 		Ray.InvDir = 1.0 / Dir;
 		Ray.T = 0.0;
 		Ray.MaxT = MaxT;
+		Ray.HitT = Infinity;
+		Ray.bHit = false;
 		return Ray;
 	}
 
@@ -61,57 +63,36 @@ struct FRay
 		T += Dist;
 	}
 
-	void AdvanceOrigin()
+	// 'Dist' relative to 'T'
+	void SetMaxT( float Dist )
 	{
-		Origin += Dir * T;
-		MaxT -= T;
-		T = 0.0;
+		MaxT = T + Dist;
 	}
 
+	// 'Dist' relative to 'T'
 	void SetHitT( float Dist )
 	{
-		MaxT = Dist - T;
+		// TODO: correct?
+		HitT = T + Dist;
+		MaxT = HitT;
+		bHit = true;
 	}
+	
+	// 'Dist' relative to 'T'
+	float3 GetPosAt( float Dist ) { return Origin + (Dir * (T + Dist)); }
+	float3 GetPos() { return GetPosAt( 0.0 ); }
+	float3 GetHitPos() { return Origin + (Dir * HitT); }
 
-	float3 GetPosAt( float Dist ) { return Origin + (Dir * Dist); }
-	float3 GetPosAtOffset( float Offset ) { return GetPosAt( T + Offset); }
-	float3 GetPos() { return GetPosAt( T ); }
-	float3 GetHitPos() { return GetPosAt( MaxT ); }
-
+	// Const
 	float3 Origin;
 	float3 Dir;
 	float3 InvDir;
+
+	// Mutable
 	float T;
 	float MaxT;
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	// TODO:
-	bool bHit; // TODO:
+	float HitT;
+	bool bHit;
 };
 
 // [CREDITS] DDA algorithm from http://www.cs.yorku.ca/~amana/research/grid.pdf
@@ -199,7 +180,7 @@ bool IntersectAABB( FAABB Bounds, FRay Ray, out float TNear, out float TFar )
 	const float3 TToMax = (Bounds.Max - Ray.Origin) * Ray.InvDir;
 	const float3 TMin = min( TToMin, TToMax );
 	const float3 TMax = max( TToMin, TToMax );
-	TNear = max( max3( TMin.x, TMin.y, TMin.z ), Ray.T );
+	TNear = max( max3( TMin.x, TMin.y, TMin.z ), 0.0 );
 	TFar = min( min3( TMax.x, TMax.y, TMax.z ), Ray.MaxT );
 
 	return TNear <= TFar;
