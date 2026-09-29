@@ -24,7 +24,7 @@ float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
 
 	// Initial sample
 	uint NumHits = 0;
-	if (DDA.IsValidCell( PtrGridSize, Ray.MaxT ))
+	if (DDA.IsValidCell( PtrGridSize, Ray.RelativeMaxT ))
 	{
 		if (IsBrickAllocated( DDA.CellCoord ))
 		{
@@ -36,7 +36,7 @@ float NumBrickHits( FRay Ray, float3 BoundsMin, float BrickSize )
 	// Should be safe
 	while (true)
 	{
-		if (! DDA.TryStep( PtrGridSize, Ray.MaxT )) { break; }
+		if (! DDA.TryStep( PtrGridSize, Ray.RelativeMaxT )) { break; }
 		if (IsBrickAllocated( DDA.CellCoord ))
 		{
 			// Intersection found

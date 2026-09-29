@@ -26,7 +26,7 @@ bool SphereTraceFBM( inout FRay Ray )
 	const float ClosingRateT = -Ray.Dir.z;
 	const float IntersectT = HeightAbovePlane / ClosingRateT;
 
-	if (IntersectT <= Ray.MaxT) { Ray.SetHitT( IntersectT ); }
+	if (IntersectT <= Ray.RelativeMaxT) { Ray.SetHitT( IntersectT ); }
 	return Ray.bHit;
 
 	// TODO: also have a parameter that is multiplied with the 'k' every octave
@@ -93,7 +93,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 	// DDA.ScaleUnitSize( 1.0 / BrickSize );
 
 	// Initial sample
-	if (DDA.IsValidCell( PtrGridSize, Ray.MaxT ))
+	if (DDA.IsValidCell( PtrGridSize, Ray.RelativeMaxT ))
 	{
 		// TODO:
 		// TODO: DEPTH IS WRONG WHEN OUTSIDE OF THE GRID
@@ -133,7 +133,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 	// Should be safe
 	while (true)
 	{
-		if (! DDA.TryStep( PtrGridSize, Ray.MaxT )) { return false; }
+		if (! DDA.TryStep( PtrGridSize, Ray.RelativeMaxT )) { return false; }
 		uint GridIdx = GridCellToGridIdx( DDA.CellCoord );
 		if (IsBrickAllocated( GridIdx ))
 		{
@@ -174,7 +174,7 @@ bool TraceScene( inout FRay Ray, out float3 Normal )
 		for (uint Step = 0; Step < 256; ++Step)
 		{
 			float ClosestDist = MapScene( Ray.GetPos() );
-			if (ClosestDist > Ray.MaxT) { break; }
+			if (ClosestDist > Ray.RelativeMaxT) { break; }
 			if (ClosestDist < SurfaceEpsilon)
 			{
 				Ray.SetHitT( ClosestDist );

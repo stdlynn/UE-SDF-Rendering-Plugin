@@ -52,8 +52,8 @@ struct FRay
 		Ray.Dir = Dir;
 		Ray.InvDir = 1.0 / Dir;
 		Ray.T = 0.0;
-		Ray.MaxT = MaxT;
-		Ray.HitT = Infinity;
+		Ray.RelativeMaxT = MaxT;
+		Ray.RelativeHitT = Infinity;
 		Ray.bHit = false;
 		return Ray;
 	}
@@ -61,27 +61,30 @@ struct FRay
 	void Advance( float Dist )
 	{
 		T += Dist;
+		RelativeMaxT -= T;
+		RelativeHitT -= T;
 	}
 
 	// 'Dist' relative to 'T'
 	void SetMaxT( float Dist )
 	{
-		MaxT = T + Dist;
+		RelativeMaxT = Dist;
 	}
 
 	// 'Dist' relative to 'T'
 	void SetHitT( float Dist )
 	{
-		// TODO: correct?
-		HitT = T + Dist;
-		MaxT = HitT;
+		RelativeHitT = Dist;
+		RelativeMaxT = RelativeHitT;
 		bHit = true;
 	}
-	
+
 	// 'Dist' relative to 'T'
 	float3 GetPosAt( float Dist ) { return Origin + (Dir * (T + Dist)); }
 	float3 GetPos() { return GetPosAt( 0.0 ); }
-	float3 GetHitPos() { return Origin + (Dir * HitT); }
+	float3 GetHitPos() { return GetPosAt( RelativeHitT ); }
+	float GetMaxT() { return T + RelativeMaxT; }
+	float GetHitT() { return T + RelativeHitT; }
 
 	// Const
 	float3 Origin;
@@ -90,8 +93,8 @@ struct FRay
 
 	// Mutable
 	float T;
-	float MaxT;
-	float HitT;
+	float RelativeMaxT;
+	float RelativeHitT;
 	bool bHit;
 };
 
@@ -117,13 +120,6 @@ struct FDDA
 		DDA.Axis = 0;
 		DDA.T = 0.0;
 		return DDA;
-	}
-
-	void ScaleUnitSize( float Scale )
-	{
-		TDelta *= Scale;
-		TMax *= Scale;
-		T *= Scale;
 	}
 
 	// Step the ray
@@ -181,7 +177,7 @@ bool IntersectAABB( FAABB Bounds, FRay Ray, out float TNear, out float TFar )
 	const float3 TMin = min( TToMin, TToMax );
 	const float3 TMax = max( TToMin, TToMax );
 	TNear = max( max3( TMin.x, TMin.y, TMin.z ), 0.0 );
-	TFar = min( min3( TMax.x, TMax.y, TMax.z ), Ray.MaxT );
+	TFar = min( min3( TMax.x, TMax.y, TMax.z ), Ray.GetMaxT() );
 
 	return TNear <= TFar;
 }
