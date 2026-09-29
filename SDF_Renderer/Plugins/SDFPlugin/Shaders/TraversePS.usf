@@ -19,6 +19,20 @@ float UnitScale;
 
 bool SphereTraceFBM( inout FRay Ray )
 {
+	for (uint Step = 0; Step < 256; ++Step)
+	{
+		float ClosestDist = DistFn::FBM( Ray.GetPos() );
+		if (ClosestDist > Ray.RelativeMaxT) { break; }
+		if (ClosestDist < SurfaceEpsilon)
+		{
+			Ray.SetHitT( ClosestDist );
+			//Normal = GetNormal( Ray.GetHitPos() );
+			break;
+		}
+		Ray.Advance( ClosestDist );
+	}
+	return Ray.bHit;
+
 	const float PlaneZ = 0.0;
 	const float HeightAbovePlane = Ray.GetPos().z - PlaneZ;
 	const bool AbovePlane = HeightAbovePlane >= 0.0;

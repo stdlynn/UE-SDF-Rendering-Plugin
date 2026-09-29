@@ -34,7 +34,7 @@ float SampleHashSphere( int3 CellPos, float3 PosFract, uint3 CornerOffset, float
 // [CREDITS] https://iquilezles.org/articles/fbmsdf/
 float SampleHashSphere8( float3 Pos, float AvgRadius )
 {
-	const int3 CellPos = floor( Pos ); // TODO: floor to different "sizes", as a way to do lacunarity
+	const int3 CellPos = floor( Pos );
 	const float3 PosFract = frac( Pos );
 	return min( min( min( SampleHashSphere( CellPos, PosFract, int3( 0, 0, 0), AvgRadius ),
 						  SampleHashSphere( CellPos, PosFract, int3( 0, 0, 1), AvgRadius ) ),
@@ -55,10 +55,9 @@ namespace DistFn
 
 	float FBM( float3 Pos )
 	{
-	    const uint NumOctaves = 3;
+	    const uint NumOctaves = 5;
 	    const float Lacunarity = 2.0;
 	    const float Persistence = 0.5;
-		const float BaseRadius = 1.0;
 
 		// Sample from a base SDF to get our initial field
 		// The octaves will subsequently add noise to said field
@@ -69,9 +68,10 @@ namespace DistFn
         float Amplitude = 1.0; // Controls sphere radius
         for (uint i = 0; i < NumOctaves; ++i)
         {
+			// TODO: does the math work out that we can just multiple the sample with Frequency
 			// SDF of an infinite grid of spheres
 			// Sample the closest 8 to determine the distance
-            const float SampleDist = SampleHashSphere8( Pos, BaseRadius * Amplitude );
+            const float SampleDist = SampleHashSphere8( Pos, Amplitude );
 
 			// TODO: inflation param
 			// Inflate the current terrain distance field (from the previous octaves/base SDF)

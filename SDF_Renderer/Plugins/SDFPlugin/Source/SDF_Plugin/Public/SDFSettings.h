@@ -13,6 +13,48 @@ class SDFPLUGIN_API USDFSettings : public UDeveloperSettings
 
 public:
 
+	// TODO: default
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
+			   meta = (DisplayName = "Num Octaves") )
+	uint32 NumOctaves{ 3 };
+
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|fBM",
+			   meta = (DisplayName = "Frequency") )
+	float Frequency{ 1.0 };
+
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|fBM",
+			   meta = (DisplayName = "Lacunarity") )
+	float Lacunarity{ 2.0 };
+
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|fBM",
+			   meta = (DisplayName = "Amplitude (sphere radius)") )
+	float Amplitude{ 0.5 };
+
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|fBM",
+			   meta = (DisplayName = "Persistence") )
+	float Persistence{ 0.5 };
+
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain",
+			   meta = (DisplayName = "Base Radius") )
+	float BaseRadius{ 0.0 };
+
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain",
+			   meta = (DisplayName = "Plane Z Coord") )
+	float PlaneZ{ 0.0 };
+
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain",
+			   meta = (DisplayName = "Plane Z Coord") )
+	float BaseInflation{ 0.0 };
+
+	// TODO: inflation multiplier
+	// TODO: radius randomness thing (e.g. if 1.2, use '1-(1.2-1)' to find lower range, clamp [1,2])
+	// actually clamp it [0,1] and do +1 in shader)
+	// TODO: K1 and K2
+
+	// ========================
+	// fBM above, other beneath
+	// ========================
+
 	UPROPERTY( EditAnywhere, Config, Category = "Grid",
 			   meta = (DisplayName = "Grid Pos") )
 	FVector3f PtrGridPos{ FVector3f::ZeroVector };
