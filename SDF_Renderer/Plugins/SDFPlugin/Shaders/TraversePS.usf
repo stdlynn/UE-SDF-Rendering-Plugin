@@ -5,6 +5,7 @@ Buffer<uint> PtrGrid;
 #include "/Engine/Private/DeferredShadingCommon.ush"
 #include "BrickmapCommon.ush"
 #include "Common.ush"
+#include "Terrain.ush"
 
 // Shader bindings
 Texture3D<float> BrickAtlas;

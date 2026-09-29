@@ -1,0 +1,95 @@
+#pragma once
+
+// [CREDITS] https://www.shadertoy.com/view/sfXXzX
+uint VMulU32U24( uint a, uint b ) { return (a & 0x00ffffffu) * (b & 0x00ffffffu); }
+float SimpleHash32V3( uint3 Seed )
+{
+	uint sx = (0xb543c3a6u ^ Seed.x) + Seed.z;
+	uint sy = (0x526f94e2u ^ Seed.y) + sx;
+	uint sz = (0x74743c1bu ^ Seed.z) + sy;
+	uint l0 = VMulU32U24( sx, sy );
+	uint l1 = VMulU32U24( l0, sz );
+	uint u0 = VMulU32U24( sz >> 16, l1 );
+	uint m0 = l1 ^ (u0 >> 16);
+	uint m1 = m0 ^ u0;
+
+	// [0, 1]
+	return (float)m1 / (float)0xFFFFFFFFu;
+}
+
+float SampleHashSphere( int3 CellPos, float3 PosFract, uint3 CornerOffset, float AvgRadius )
+{
+	// TODO: radius
+	// TODO: avg radius
+	// TODO: but also the range (e.g. [0.8xAvg, 1.2xAvg]
+	// Decide the radius based on a hash
+	const int3 CornerCell = CellPos + CornerOffset;
+	const uint3 Seed = uint3( asuint( CornerCell.x ), asuint( CornerCell.y ), asuint( CornerCell.z ) );
+	const float Radius = AvgRadius + (0.5 * SimpleHash32V3( Seed ));
+
+	//
+	return length( PosFract - CornerOffset ) - Radius;
+}
+
+// [CREDITS] https://iquilezles.org/articles/fbmsdf/
+float SampleHashSphere8( float3 Pos, float AvgRadius )
+{
+	const int3 CellPos = floor( Pos ); // TODO: floor to different "sizes", as a way to do lacunarity
+	const float3 PosFract = frac( Pos );
+	return min( min( min( SampleHashSphere( CellPos, PosFract, int3( 0, 0, 0), AvgRadius ),
+						  SampleHashSphere( CellPos, PosFract, int3( 0, 0, 1), AvgRadius ) ),
+					 min( SampleHashSphere( CellPos, PosFract, int3( 0, 1, 0), AvgRadius ),
+						  SampleHashSphere( CellPos, PosFract, int3( 0, 1, 1), AvgRadius ) ) ),
+				min( min( SampleHashSphere( CellPos, PosFract, int3( 1, 0, 0), AvgRadius ),
+						  SampleHashSphere( CellPos, PosFract, int3( 1, 0, 1), AvgRadius ) ),
+					 min( SampleHashSphere( CellPos, PosFract, int3( 1, 1, 0), AvgRadius ),
+						  SampleHashSphere( CellPos, PosFract, int3( 1, 1, 1), AvgRadius ) ) ) );
+}
+
+namespace DistFn
+{
+	float PlaneXY( float3 Pos, float PlaneZ )
+	{
+		return Pos.z - PlaneZ;
+	}
+
+	float FBM( float3 Pos )
+	{
+	    const uint NumOctaves = 3;
+	    const float Lacunarity = 2.0;
+	    const float Persistence = 0.5;
+		const float BaseRadius = 1.0;
+
+		// Sample from a base SDF to get our initial field
+		// The octaves will subsequently add noise to said field
+	    float Dist = PlaneXY( Pos, 0.0 ); // TODO: plane Z
+
+		// Go over each octave
+        float Frequency = 1.0; // Controls sphere frequency
+        float Amplitude = 1.0; // Controls sphere radius
+        for (uint i = 0; i < NumOctaves; ++i)
+        {
+			// SDF of an infinite grid of spheres
+			// Sample the closest 8 to determine the distance
+            const float SampleDist = SampleHashSphere8( Pos, BaseRadius * Amplitude );
+
+			// TODO: inflation param
+			// Inflate the current terrain distance field (from the previous octaves/base SDF)
+            const float InflatedDist = Dist * 0.9; // TODO: change per octave?
+			// Calculate the distance field of the INTERSECTION between
+			// the sampled distance and the inflated SDF
+			// Effectively, we mask out any noise out of distance of out terrain
+            const float ClippedDist = OpSmoothIntersect(SampleDist, InflatedDist, 1.0); // TODO: K1
+    		// Add the noise on top of the current distance field (smoothed)
+            Dist = OpSmoothUnion(Dist, ClippedDist, 1.0); // TODO: K2
+
+			// Set the next octave's parameters
+			Pos = mul( float3x3(  0.00,  1.60,  1.20,
+								 -1.60,  0.72, -0.96,
+								 -1.20, -0.96,  1.28 ), Pos );
+            Frequency *= Lacunarity;
+            Amplitude *= Persistence;
+        }
+        return Dist;
+    }
+}
