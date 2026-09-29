@@ -75,10 +75,10 @@ namespace DistFn
 		// Go over each octave
         for (uint i = 0; i < Params.NumOctaves; ++i)
         {
-			// TODO: does the math work out that we can just multiple the sample with Frequency
+			// TODO: does the math work out that we can just multiply the sample with Frequency
 			// SDF of an infinite grid of spheres
 			// Sample the closest 8 to determine the distance
-            const float SampleDist = SampleHashSphere8( Pos, Params.Amplitude );
+            const float SampleDist = Params.Frequency * SampleHashSphere8( Pos, Params.Amplitude );
 
 			// Inflate the current terrain distance field (from the previous octaves/base SDF)
             const float InflatedDist = Dist * Params.Inflation;

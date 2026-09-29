@@ -46,7 +46,46 @@ FTerrainParams GetTerrainParams()
     return Params;
 }
 
-bool SphereTraceFBM( inout FRay Ray )
+// TODO: make this clamped
+// TODO: if outside of bounds, return Diagonal? Unsure
+float GetAtlasDistClamped( float3 Pos, float3 BoundsMin )
+{
+	const float Diagonal = GetDiagonal( VoxSize );
+	const float3 UVW = WorldPosToAtlasUVW( Pos, BoundsMin, VoxSize );
+	const float EncodedDist = BrickAtlas.Sample( GlobalTrilinearClampedSampler, UVW );
+	const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
+	return SampleDist;
+}
+
+// https://iquilezles.org/articles/normalsSDF/
+float3 GetAtlasNormal( float3 Pos, float3 BoundsMin )
+{
+	// Note that the normals are reversed on the inside of geometry (so for negative distances)
+	// This should be fine, as those should never be visible anyway
+	const float2 K = float2( 1, -1 );
+	return normalize( K.xyy * GetAtlasDistClamped( Pos + (K.xyy * DerivativeH), BoundsMin ) +
+					  K.yyx * GetAtlasDistClamped( Pos + (K.yyx * DerivativeH), BoundsMin ) +
+					  K.yxy * GetAtlasDistClamped( Pos + (K.yxy * DerivativeH), BoundsMin ) +
+					  K.xxx * GetAtlasDistClamped( Pos + (K.xxx * DerivativeH), BoundsMin ) );
+}
+float3 GetTerrainNormal( float3 Pos, FTerrainParams Params )
+{
+	const float2 K = float2( 1, -1 );
+	return normalize( K.xyy * DistFn::FBM( Pos + (K.xyy * DerivativeH), Params ) +
+					  K.yyx * DistFn::FBM( Pos + (K.yyx * DerivativeH), Params ) +
+					  K.yxy * DistFn::FBM( Pos + (K.yxy * DerivativeH), Params ) +
+					  K.xxx * DistFn::FBM( Pos + (K.xxx * DerivativeH), Params ) );
+}
+float3 GetNormal( float3 Pos )
+{
+	const float2 K = float2( 1, -1 );
+	return normalize( K.xyy * MapScene( Pos + (K.xyy * DerivativeH) ) +
+					  K.yyx * MapScene( Pos + (K.yyx * DerivativeH) ) +
+					  K.yxy * MapScene( Pos + (K.yxy * DerivativeH) ) +
+					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH) ) );
+}
+
+bool SphereTraceFBM( inout FRay Ray, out float3 Normal )
 {
 	FTerrainParams Params = GetTerrainParams();
 	for (uint Step = 0; Step < 32; ++Step)
@@ -56,7 +95,7 @@ bool SphereTraceFBM( inout FRay Ray )
 		if (ClosestDist < SurfaceEpsilon)
 		{
 			Ray.SetHitT( ClosestDist );
-			//Normal = GetNormal( Ray.GetHitPos() );
+			Normal = GetTerrainNormal( Ray.GetHitPos(), Params );
 			break;
 		}
 		Ray.Advance( ClosestDist );
@@ -81,37 +120,6 @@ bool SphereTraceFBM( inout FRay Ray )
 		// for loop (octaves)
 			// find distance to closest sphere (use SDF repetition)
 			// clip layer through intersection using max() or smax()
-}
-
-// TODO: make this clamped
-// TODO: if outside of bounds, return Diagonal? Unsure
-float GetAtlasDistClamped( float3 Pos, float3 BoundsMin )
-{
-	const float Diagonal = GetDiagonal( VoxSize );
-	const float3 UVW = WorldPosToAtlasUVW( Pos, BoundsMin, VoxSize );
-	const float EncodedDist = BrickAtlas.Sample( GlobalTrilinearClampedSampler, UVW );
-	const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
-	return SampleDist;
-}
-
-// https://iquilezles.org/articles/normalsSDF/
-float3 GetAtlasNormal( float3 Pos, float3 BoundsMin )
-{
-	// Note that the normals are reversed on the inside of geometry (so for negative distances)
-	// This should be fine, as those should never be visible anyway
-	const float2 K = float2( 1, -1 );
-	return normalize( K.xyy * GetAtlasDistClamped( Pos + (K.xyy * DerivativeH), BoundsMin ) +
-					  K.yyx * GetAtlasDistClamped( Pos + (K.yyx * DerivativeH), BoundsMin ) +
-					  K.yxy * GetAtlasDistClamped( Pos + (K.yxy * DerivativeH), BoundsMin ) +
-					  K.xxx * GetAtlasDistClamped( Pos + (K.xxx * DerivativeH), BoundsMin ) );
-}
-float3 GetNormal( float3 Pos )
-{
-	const float2 K = float2( 1, -1 );
-	return normalize( K.xyy * MapScene( Pos + (K.xyy * DerivativeH) ) +
-					  K.yyx * MapScene( Pos + (K.yyx * DerivativeH) ) +
-					  K.yxy * MapScene( Pos + (K.yxy * DerivativeH) ) +
-					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH) ) );
 }
 
 // Brick Sphere Tracing
@@ -208,9 +216,8 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 bool TraceScene( inout FRay Ray, out float3 Normal, out float3 Albedo )
 {
 	// Terrain
-	if (SphereTraceFBM( Ray ))
+	if (SphereTraceFBM( Ray, Normal ))
 	{
-		Normal = float3(0,0,1);
 		Albedo = float3(0.18, 0.5, 0.13);
 	}
 

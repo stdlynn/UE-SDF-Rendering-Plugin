@@ -62,7 +62,7 @@ public:
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Union Smoothing",
 						ClampMin = "1.0") )
-	float UnionSmoothing{ 0.0f };
+	float UnionSmoothing{ 1.0f };
 
 	// TODO: default
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
