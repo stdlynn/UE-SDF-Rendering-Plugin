@@ -61,8 +61,8 @@ struct FRay
 	void Advance( float Dist )
 	{
 		T += Dist;
-		RelativeMaxT -= T;
-		RelativeHitT -= T;
+		RelativeMaxT -= Dist;
+		RelativeHitT -= Dist;
 	}
 
 	// 'Dist' relative to 'T'

@@ -178,7 +178,7 @@ bool TraceScene( inout FRay Ray, out float3 Normal )
 			if (ClosestDist < SurfaceEpsilon)
 			{
 				Ray.SetHitT( ClosestDist );
-				Normal = GetNormal( Ray.GetPos() );
+				Normal = GetNormal( Ray.GetHitPos() );
 				break;
 			}
 			Ray.Advance( ClosestDist );
