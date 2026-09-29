@@ -85,17 +85,12 @@ void DebugCS( uint2 DispatchThreadId : SV_DispatchThreadID )
 	FRay Ray = FRay::Create( View.ViewOriginHigh * UnitScale, Dir, Depth * UnitScale ); // Convert unit size
 
 	// Grid AABB check
-	float AABBHitT, AABBOutT;
 	float NumHits = 0;
 	const float BrickSize = GetBrickSize( VoxSize );
 	const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
-	if (IntersectAABB( GridAABB, Ray, AABBHitT, AABBOutT ))
+	if (MoveRayToAABB( GridAABB, Ray, UnitScale ))
 	{
 		// Grid DDA
-		const float Epsilon = AABBEpsilon * UnitScale;
-		if (AABBHitT > 0.0) { AABBHitT += Epsilon; }
-		Ray.SetMaxT( AABBOutT );
-		Ray.Advance( AABBHitT );
 		NumHits = NumBrickHits( Ray, GridAABB.Min, BrickSize );
 	}
 

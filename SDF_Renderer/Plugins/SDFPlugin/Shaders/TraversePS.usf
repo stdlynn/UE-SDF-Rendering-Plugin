@@ -138,7 +138,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 		if (IsBrickAllocated( GridIdx ))
 		{
 			DDA.FindNextAxis(); // TODO: make more efficient
-			const float DistInsideBrick = DDA.TMax[DDA.Axis];
+			const float DistInsideBrick = min( DDA.TMax[DDA.Axis], Ray.RelativeMaxT );
 
 			float TempT = DDA.T;
 			uint i = 0;
@@ -160,12 +160,13 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 	}
 }
 
-bool TraceScene( inout FRay Ray, out float3 Normal )
+bool TraceScene( inout FRay Ray, out float3 Normal, out float3 Albedo )
 {
 	// Terrain
 	if (SphereTraceFBM( Ray ))
 	{
-		Normal = normalize(float3(0,1,.1));
+		Normal = float3(0,0,1);
+		Albedo = float3(0.18, 0.5, 0.13);
 	}
 
 	// Brute-force sphere tracing
@@ -179,6 +180,7 @@ bool TraceScene( inout FRay Ray, out float3 Normal )
 			{
 				Ray.SetHitT( ClosestDist );
 				Normal = GetNormal( Ray.GetHitPos() );
+				Albedo = (0.4).xxx;
 				break;
 			}
 			Ray.Advance( ClosestDist );
@@ -187,19 +189,14 @@ bool TraceScene( inout FRay Ray, out float3 Normal )
 	// Brickmap traversal
 	else
     {
-		// Assume Ray.T is zero
-	    float AABBHitT, AABBOutT;
 	    const float BrickSize = GetBrickSize( VoxSize );
 	    const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
-	    if (IntersectAABB( GridAABB, Ray, AABBHitT, AABBOutT ))
+	    if (MoveRayToAABB( GridAABB, Ray, UnitScale ))
 	    {
-			// Assuming 'Ray.T' is zero
-			const float Epsilon = AABBEpsilon * UnitScale;
-			if (AABBHitT > 0.0) { AABBHitT += Epsilon; }
-			// TODO: currently disabled because of brute-force terrain, uncomment once we have terrain caching
-	    	//Ray.SetMaxT( AABBOutT );
-			Ray.Advance( AABBHitT );
-			TracePtrGrid( Ray, Normal );
+			if (TracePtrGrid( Ray, Normal ))
+			{
+				Albedo = float3(0.8, 0.1, 0.1);
+			}
 	    }
     }
 	return Ray.bHit;
@@ -224,15 +221,15 @@ void TraversePS(
 	FRay Ray = FRay::Create( View.ViewOriginHigh * UnitScale, Dir ); // Convert unit size
 	
 	// Trace
-	float3 Normal;
-	if (! TraceScene( Ray, Normal )) { discard; }
+	float3 Normal, Albedo;
+	if (! TraceScene( Ray, Normal, Albedo )) { discard; }
 
 	// Convert unit size
 	float ViewZ = mul( float4( (Ray.GetHitPos() - Ray.Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
 	OutDepth = ConvertToDeviceZ( ViewZ );
 
 	FGBufferData GBuffer = (FGBufferData)0;
-	GBuffer.BaseColor = (0.4).xxx;
+	GBuffer.BaseColor = Albedo;
 	GBuffer.WorldNormal = Normal;
 	GBuffer.Metallic = 0.0;
 	GBuffer.Specular = 0.5;

@@ -172,14 +172,30 @@ struct FAABB
 // If true, hit_t is the intersection time
 bool IntersectAABB( FAABB Bounds, FRay Ray, out float TNear, out float TFar )
 {
-	const float3 TToMin = (Bounds.Min - Ray.Origin) * Ray.InvDir;
-	const float3 TToMax = (Bounds.Max - Ray.Origin) * Ray.InvDir;
+	// Relative to 'Ray.T'
+	const float3 TToMin = (Bounds.Min - Ray.GetPos()) * Ray.InvDir;
+	const float3 TToMax = (Bounds.Max - Ray.GetPos()) * Ray.InvDir;
 	const float3 TMin = min( TToMin, TToMax );
 	const float3 TMax = max( TToMin, TToMax );
-	TNear = max( max3( TMin.x, TMin.y, TMin.z ), 0.0 );
+	TNear = max( max3( TMin.x, TMin.y, TMin.z ), 0.0 ); // 0.0 because relative to 'Ray.T'
 	TFar = min( min3( TMax.x, TMax.y, TMax.z ), Ray.GetMaxT() );
 
 	return TNear <= TFar;
+}
+
+// Set 'Ray.T' and 'Ray.RelativeMaxT'
+bool MoveRayToAABB( FAABB Bounds, inout FRay Ray, float UnitScale )
+{
+	float AABBHitT, AABBOutT;
+	if (IntersectAABB( Bounds, Ray, AABBHitT, AABBOutT ))
+	{
+		const float Epsilon = AABBEpsilon * UnitScale;
+		if (AABBHitT > 0.0) { AABBHitT += Epsilon; }
+		Ray.SetMaxT( AABBOutT );
+		Ray.Advance( AABBHitT );
+		return true;
+	}
+	return false;
 }
 
 // Distance functions
