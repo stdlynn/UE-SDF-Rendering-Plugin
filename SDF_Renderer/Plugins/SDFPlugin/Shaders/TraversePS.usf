@@ -59,7 +59,7 @@ bool TraceBrick( inout FRay Ray )
 }
 
 // Pointer Grid DDA
-bool TracePtrGrid( inout FRay Ray, out float3 Normal, out uint HitIdx )
+bool TracePtrGrid( inout FRay Ray, out float3 Normal, out uint MatIdx )
 {
 	// TODO:
 	const float BrickSize = GetBrickSize( VoxSize );
@@ -93,7 +93,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal, out uint HitIdx )
 
 			float TempT = DDA.T;
 			uint i = 0;
-			while (TempT < DistInsideBrick && i < 32)
+			while (TempT < DistInsideBrick)
 			{
 				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAtOffset( TempT ), GridAABB.Min, VoxSize );
 				const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
@@ -102,6 +102,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal, out uint HitIdx )
 				{
 					Ray.Advance( TempT );
 					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
+					MatIdx = MaterialAtlas[AtlasUVWToAtlasIndex( UVW )];
 					return true;
 				}
 				TempT += SampleDist;
@@ -132,6 +133,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal, out uint HitIdx )
 				{
 					Ray.Advance( TempT );
 					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
+					MatIdx = MaterialAtlas[AtlasUVWToAtlasIndex( UVW )];
 					return true;
 				}
 				TempT += SampleDist;
@@ -141,7 +143,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal, out uint HitIdx )
 	}
 }
 
-bool TraceScene( inout FRay Ray, out float3 Normal, out uint HitIdx )
+bool TraceScene( inout FRay Ray, out float3 Normal, out uint MatIdx )
 {
 	bool bHit = false;
 	// Brute-force sphere tracing
@@ -149,7 +151,7 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out uint HitIdx )
     {
 		for (uint Step = 0; Step < 256; ++Step)
 		{
-			float ClosestDist = MapScene( Ray.GetPos(), HitIdx );
+			float ClosestDist = MapScene( Ray.GetPos(), MatIdx );
 			if (ClosestDist < SurfaceEpsilon)
 			{
 				Normal = GetNormal( Ray.GetPos() );
@@ -174,7 +176,7 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out uint HitIdx )
 			Ray.MaxT = AABBOutT;
 			Ray.Advance( AABBHitT );
 			//Ray.AdvanceOrigin();
-			bHit = TracePtrGrid( Ray, Normal );
+			bHit = TracePtrGrid( Ray, Normal, MatIdx );
 	    }
     }
 	Ray.AdvanceOrigin();
@@ -202,14 +204,18 @@ void TraversePS(
 
 	// Trace
 	float3 Normal;
-	uint HitIdx;
-	if ( !TraceScene( Ray, Normal, HitIdx ) ) { discard; }
+	uint MatIdx;
+	if ( !TraceScene( Ray, Normal, MatIdx ) ) { discard; }
 
 	// Convert unit size
 	float ViewZ = mul( float4( (Ray.GetPos() - Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
 	OutDepth = ConvertToDeviceZ( ViewZ );
 	
-	FSDFMaterial Material = Materials[SDFEdits[HitIdx].MatIdx];
+	FSDFMaterial Material = Materials[MatIdx];
+	if (MatIdx == 0xFF)
+	{
+		Material.Emission = float3( 1.0, 0.0, 0.0 );
+	}
 
 	FGBufferData GBuffer = (FGBufferData)0;
 	GBuffer.BaseColor = Material.Albedo;

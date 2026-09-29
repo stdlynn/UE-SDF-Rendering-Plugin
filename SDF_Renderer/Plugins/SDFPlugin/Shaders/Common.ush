@@ -347,11 +347,11 @@ float OpSmoothSubtract( float a, float b, float k )
     return -OpSmoothUnion(a,-b,k);
 }
 
-float MapScene( float3 Pos, out uint HitIdx )
+float MapScene( float3 Pos, out uint MatIdx )
 {
 	float ClosestDist = 1e35;
 
-	HitIdx = 0xffffffff;
+	MatIdx = 0xff;
 	for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
 	{
 		const FSDFEdit Edit = SDFEdits[EditIdx];
@@ -385,7 +385,7 @@ float MapScene( float3 Pos, out uint HitIdx )
 		}
 		if (ClosestDist != PrevDist)
 		{
-			HitIdx = EditIdx;
+			MatIdx = SDFEdits[EditIdx].MatIdx;
 		}
 	}
 

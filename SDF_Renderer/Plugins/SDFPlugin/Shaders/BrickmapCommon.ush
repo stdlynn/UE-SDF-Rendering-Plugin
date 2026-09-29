@@ -11,6 +11,7 @@
 // AtlasCell  |	uint3  | 0-127  | 3D Brick cell index in Atlas			|
 // AtlasUVW   |	float3 | 0-1    | Atlas sample coord (trilinear)		|
 // AtlasPoint |	uint3  | *		| Atlas texel coord						|
+// AtlasIndex |	uint   | 0-131k	| Atlas buffer index					|
 // BrickPoint |	uint3  | 0-7	| Atlas texel coord, local to brick		|
 // BrickIdx   |	uint   | 0-16k  | Index to a Brick (stored in PtrGrid)	|
 // GridIdx    | uint   | 0-262k | index to a GridCell					|
@@ -68,6 +69,19 @@ uint GridCellToGridIdx( uint3 GridCell )
 	return GridCell.x
 		   + (GridCell.y * PtrGridSize.x)
 		   + (GridCell.z * PtrGridSize.x * PtrGridSize.y);
+}
+
+uint AtlasPointToAtlasIndex( uint3 AtlasPoint )
+{
+	return AtlasPoint.x
+		   + AtlasPoint.y * AtlasSize.x
+		   + AtlasPoint.z * AtlasSize.x * AtlasSize.y;
+}
+
+uint AtlasUVWToAtlasIndex( float3 UVW )
+{
+	const uint3 AtlasPoint = min( uint3( floor( UVW * float3( AtlasSize ) ) ), AtlasSize - 1 );
+	return AtlasPointToAtlasIndex( AtlasPoint );
 }
 
 uint3 GridIdxToGridCell( uint GridIdx )
