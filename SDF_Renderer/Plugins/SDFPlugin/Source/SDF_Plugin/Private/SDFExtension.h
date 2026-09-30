@@ -124,7 +124,7 @@ public:
 	// Basic shader initialization
 	static bool ShouldCompilePermutation( const FGlobalShaderPermutationParameters& Parameters )
 	{
-		return IsFeatureLevelSupported( Parameters.Platform, ERHIFeatureLevel::SM5 );
+		return IsFeatureLevelSupported( Parameters.Platform, ERHIFeatureLevel::SM6 );
 	}
 
 	// Define environment variables used by compute shader
