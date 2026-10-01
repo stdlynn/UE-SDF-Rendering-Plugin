@@ -348,54 +348,6 @@ float OpSmoothSubtract( float a, float b, float k )
     return -OpSmoothUnion(a,-b,k);
 }
 
-// TODO: don't duplicate function
-float MapScene( float3 Pos, out uint MatIdx )
-{
-	float ClosestDist = 1e35;
-
-	MatIdx = 0xFF;
-
-	for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
-	{
-		const FSDFEdit Edit = SDFEdits[EditIdx];
-		EPrimitive Prim = Edit.GetPrimitive();
-		EOperation Op = Edit.GetSDFOperation();
-		bool bSmooth = Edit.GetSDFSmooths();
-		// Evaluate the distance to the SDF
-		const float Dist = DistFn::DistOrigin( Edit, Pos - Edit.Pos );
-		const float PrevDist = ClosestDist;
-		if (bSmooth)
-		{
-			if (Op == Union)
-			{
-				ClosestDist = OpSmoothUnion(Dist, ClosestDist, Edit.Smoothing);
-			}
-			else if (Op == Subtract)
-			{
-				ClosestDist = OpSmoothSubtract(Dist, ClosestDist, Edit.Smoothing);
-			}
-		}
-		else
-		{
-			if (Op == Union)
-			{
-				ClosestDist = OpUnion(Dist, ClosestDist);
-			}
-			else if (Op == Subtract)
-			{
-				ClosestDist = OpSubtract(Dist, ClosestDist);
-			}
-		}
-		// TODO: we can optimize this. Doesn't need to be checked more than once
-		if (ClosestDist != PrevDist)
-		{
-			MatIdx = SDFEdits[EditIdx].MatIdx;
-		}
-	}
-
-	return ClosestDist;
-}
-
 float MapScene( float3 Pos )
 {
 	float ClosestDist = 1e35;

@@ -38,11 +38,10 @@ float3 GetAtlasNormal( float3 Pos, float3 BoundsMin )
 float3 GetNormal( float3 Pos )
 {
 	const float2 K = float2( 1, -1 );
-	uint EditID;
-	return normalize( K.xyy * MapScene( Pos + (K.xyy * DerivativeH), EditID ) +
-					  K.yyx * MapScene( Pos + (K.yyx * DerivativeH), EditID ) +
-					  K.yxy * MapScene( Pos + (K.yxy * DerivativeH), EditID ) +
-					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH), EditID ) );
+	return normalize( K.xyy * MapScene( Pos + (K.xyy * DerivativeH) ) +
+					  K.yyx * MapScene( Pos + (K.yyx * DerivativeH) ) +
+					  K.yxy * MapScene( Pos + (K.yxy * DerivativeH) ) +
+					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH) ) );
 }
 
 // Brick Sphere Tracing
@@ -136,7 +135,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 	}
 }
 
-bool TraceScene( inout FRay Ray, out float3 Normal, out FSDFMaterial Material )
+bool TraceScene( inout FRay Ray, out float3 Normal )
 {
 	bool bHit = false;
 	// Brute-force sphere tracing
@@ -148,8 +147,6 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out FSDFMaterial Material )
 			if (ClosestDist < SurfaceEpsilon)
 			{
 				Normal = GetNormal( Ray.GetPos() );
-				float3 GridMin = AABB::PtrGrid( PtrGridPos, GetBrickSize( VoxSize ) ).Min;
-				Material = SampleMaterial( WorldPosToAtlasUVW( Ray.GetPos(), GridMin, VoxSize ) );
 				bHit = true;
 				break;
 			}
@@ -172,10 +169,6 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out FSDFMaterial Material )
 			Ray.Advance( AABBHitT );
 			//Ray.AdvanceOrigin();
 			bHit = TracePtrGrid( Ray, Normal );
-			if (bHit)
-			{
-				Material = SampleMaterial( WorldPosToAtlasUVW( Ray.GetPos(), GridAABB.Min, VoxSize ) );
-			}
 	    }
     }
 	Ray.AdvanceOrigin();
@@ -203,12 +196,13 @@ void TraversePS(
 
 	// Trace
 	float3 Normal;
-	FSDFMaterial Material;
-	if ( !TraceScene( Ray, Normal, Material ) ) { discard; }
+	if ( !TraceScene( Ray, Normal ) ) { discard; }
 
 	// Convert unit size
 	float ViewZ = mul( float4( (Ray.GetPos() - Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
 	OutDepth = ConvertToDeviceZ( ViewZ );
+
+	FSDFMaterial Material = SampleMaterial( Ray.GetPos() );
 
 	FGBufferData GBuffer = (FGBufferData)0;
 	GBuffer.BaseColor = Material.Albedo;

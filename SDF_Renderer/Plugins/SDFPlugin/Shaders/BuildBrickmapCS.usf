@@ -41,8 +41,7 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 	uint AtlasIdx = PtrGrid[GridIdx];
 
 	// Find the closest SDF to the brick point
-	uint MatIdx;
-	float Closest = MapScene( WorldPos, MatIdx );
+	float Closest = MapScene( WorldPos );
 
 	// Indicate if any geometry is within allocation distance
 	// Sync so any thread gets the chance to indicate a surface within range
@@ -107,9 +106,7 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 
 	// Write the closest distance into this thread's brick point
 	uint3 AtlasPoint = BrickIdxToAtlasCell( AtlasIdxShared ) * BrickRes + GroupThreadID;
-	uint AtlasIndex = AtlasPointToAtlasIndex(AtlasPoint);
 	BrickAtlas[AtlasPoint] = EncodeDistance( Closest, 1.0 / Diagonal );
-	MaterialAtlas[AtlasIndex] = MatIdx;
 }
 
 [numthreads(64, 1, 1)]
