@@ -449,7 +449,7 @@ FSDFMaterial SampleMaterial( float3 Pos )
 		{
 			if (Smoothing > 0.0)
 			{
-				// Derivative of smooth union
+				// Function derived from derivative of the smoothing function
 				Blend = saturate(0.5 + 0.5 * ((ClosestDist - Dist) / (Smoothing * 4.0)));
 				ClosestDist = OpSmoothUnion(Dist, ClosestDist, Smoothing);
 			}
@@ -462,10 +462,9 @@ FSDFMaterial SampleMaterial( float3 Pos )
 		}
 		else if (Op == Subtract)
 		{
-			// Currently, the material is sampled from the subtractive edit
-			// TODO: Add boolean for sampling from the additive edit instead
 			if (bColorsSubtraction)
 			{
+				// Use the subtractive edit's material to shade the subtracted region
 				if (Smoothing > 0.0)
 				{
 					Blend = saturate(0.5 - 0.5 * (ClosestDist + Dist) / (Smoothing * 4.0));
@@ -473,17 +472,18 @@ FSDFMaterial SampleMaterial( float3 Pos )
 				}
 				else
 				{
-					// Unsmoothed edits either completely replace or keep the previous material
 					Blend = (-Dist > ClosestDist) ? 1.0 : 0.0;
 					ClosestDist = OpSubtract(Dist, ClosestDist);
 				}
 			}
 			else
 			{
+				// Don't use the subtractive edit's material for shading
 				Blend = 0.0;
 			}
 		}
 
+		// Update the blended material based on the blending factor
 		if (Blend > 0.0)
 		{
 			MatBlended = InterpolateMaterial(MatBlended, Materials[Edit.MatIdx], Blend);
