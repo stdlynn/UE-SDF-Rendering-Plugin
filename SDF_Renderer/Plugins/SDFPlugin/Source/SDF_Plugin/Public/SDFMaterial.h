@@ -18,9 +18,9 @@ struct FSDFMaterial
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (
 		ClampMin = "0.0", ClampMax = "1.0"))
-	FVector3f Emission{ 0.0f };
+	float Metalness{ 0.0f };
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (
-		ClampMin = "0.0", ClampMax = "1.0"))
-	float Metalness{ 0.0f };
+		ClampMin = "0.0"))
+	float Emission{ 0.0f };
 };

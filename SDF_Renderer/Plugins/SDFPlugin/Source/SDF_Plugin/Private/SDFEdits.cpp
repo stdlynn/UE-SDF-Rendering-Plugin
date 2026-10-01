@@ -18,9 +18,10 @@ FGPUSDF::FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
 	, ID{ ID }
 	, MatIdx{ RenderSDF.MatIdx }
 {
-	SetPrimitive(RenderSDF.Primitive);
-	SetOperation(RenderSDF.Operation);
-	EnableSmoothing(RenderSDF.bSmooths);
+	SetPrimitive( RenderSDF.Primitive );
+	SetOperation( RenderSDF.Operation );
+	SetColorsSubtraction( RenderSDF.bColorsSubtraction );
+	EnableSmoothing( RenderSDF.bSmooths );
 
 	switch (RenderSDF.Primitive)
 	{
@@ -71,10 +72,16 @@ void FGPUSDF::SetOperation( const EOperation NewOperation )
 	Flags = (Flags & ~Mask) | ((static_cast<uint32>(NewOperation) << 2) & Mask);
 }
 
-void FGPUSDF::EnableSmoothing( const bool Enabled )
+void FGPUSDF::SetColorsSubtraction( const bool bEnabled)
+{
+	static constexpr uint32 Mask = 0b10000;
+	Flags = (Flags & ~Mask) | (bEnabled ? Mask : 0u);
+}
+
+void FGPUSDF::EnableSmoothing( const bool bEnabled )
 {
 	static constexpr uint32 Mask = 0b1000;
-	Flags = (Flags & ~Mask) | (Enabled ? Mask : 0u);
+	Flags = (Flags & ~Mask) | (bEnabled ? Mask : 0u);
 }
 
 USDFComponent::USDFComponent()

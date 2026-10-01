@@ -28,6 +28,10 @@ struct FGameSDF
 	UPROPERTY( EditAnywhere, BlueprintReadOnly )
 	EOperation Operation{ EOperation::Add };
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (
+		EditCondition = "Operation == EOperation::Subtract", EditConditionHides))
+	bool bColorsSubtraction{ false };
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	EPrimitive Primitive{ EPrimitive::Sphere };
 
@@ -70,6 +74,7 @@ struct FRenderSDF
 		, Primitive{ GameSDF.Primitive }
 		, Quat{ Quat }
 		, Operation{ GameSDF.Operation }
+		, bColorsSubtraction{ GameSDF.bColorsSubtraction }
 		, bSmooths{ GameSDF.bSmooths }
 		, SmoothingStrength{ GameSDF.Smoothing }
 		, MatIdx{ static_cast<uint32>(GameSDF.MaterialIndex) }
@@ -87,7 +92,8 @@ struct FRenderSDF
 	EPrimitive Primitive;
 	FQuat Quat; // Data1 in FGPUSDF
 	EOperation Operation;
-	FVector4f Data;
+	bool bColorsSubtraction;
+	FVector4f Data; // Data0 in FGPUSDF
 	bool bSmooths;
 	float SmoothingStrength;
 	uint32 MatIdx;
@@ -104,7 +110,8 @@ struct alignas(16) FGPUSDF
 	void SetLineData( const FVector3f& B, const float Radius );
 	void SetBoxData( const FVector3f& HalfExtent, const FQuat& Quat, const float Rounding );
 	void SetOperation( const EOperation NewOperation );
-	void EnableSmoothing( const bool Enabled );
+	void SetColorsSubtraction( const bool bEnabled );
+	void EnableSmoothing( const bool bEnabled );
 	[[nodiscard]] EPrimitive GetPrimitive() const { return static_cast<EPrimitive>( Flags & 0b11 ); }
 	[[nodiscard]] float GetSphereRadius() const { return Data0.X; }
 	[[nodiscard]] FVector3f GetLinePosB() const { return FVector3f( Data0.X, Data0.Y, Data0.Z ); }
@@ -113,10 +120,11 @@ struct alignas(16) FGPUSDF
 	[[nodiscard]] float GetBoxRounding() const { return Data0.W; }
 	[[nodiscard]] FQuat GetBoxQuat() const { return FQuat(Data1.X, Data1.Y, Data1.Z, Data1.W); }
 	[[nodiscard]] EOperation GetSDFOperation() const { return static_cast<EOperation>((Flags >> 2) & 0b1); }
+	[[nodiscard]] bool GetColorsSubtraction() const { return Flags & 0b10000; }
 	[[nodiscard]] bool GetSDFSmooths() const { return Flags & 0b1000; }
 
 	FVector3f Pos;
-	uint32 Flags; // bits 0-1: primitive, 2: operation, 3: bSmooths
+	uint32 Flags; // bits 0-1: primitive, 2: operation, 3: bSmooths, 4: bColorsSubtraction
 	FVector4f Data0; // Per-primitive data (e.g. radius)
 	FVector4f Data1; // Per-primitive data
 	float SmoothingStrength;

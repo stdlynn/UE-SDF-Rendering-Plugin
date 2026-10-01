@@ -37,6 +37,7 @@ struct FSDFEdit
 	float4 GetBoxQuat() { return Data1.xyzw; }
 	float4 GetBoxRounding() { return Data0.w; }
  	EOperation GetSDFOperation() { return (EOperation)( (Flags >> 2) & 0b1 ); }
+ 	bool GetColorsSubtraction() {  return Flags & 0b10000; }
 	bool GetSDFSmooths() { return Flags & 0b1000; }
 };
 
@@ -44,8 +45,8 @@ struct FSDFMaterial
 {
 	float3 Albedo;
 	float Roughness;
-	float3 Emission;
 	float Metalness;
+	float Emission;
 };
 
 // Shader bindings
@@ -355,7 +356,6 @@ float MapScene( float3 Pos )
 	for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
 	{
 		const FSDFEdit Edit = SDFEdits[EditIdx];
-		EPrimitive Prim = Edit.GetPrimitive();
 		EOperation Op = Edit.GetSDFOperation();
 		bool bSmooth = Edit.GetSDFSmooths();
 		// Evaluate the distance to the SDF
@@ -386,4 +386,109 @@ float MapScene( float3 Pos )
 	}
 
 	return ClosestDist;
+}
+
+//By Inigo Quilez, under MIT license
+//https://www.shadertoy.com/view/ttcyRS
+float3 OklabMix(float3 ColA, float3 ColB, float a)
+{
+    // https://bottosson.github.io/posts/oklab
+    const float3x3 KCONEtoLMS = float3x3(                
+         0.4121656120,  0.5362752080,  0.0514575653,
+         0.2118591070,  0.6807189584,  0.1074065790,
+         0.0883097947,  0.2818474174,  0.6302613616);
+    const float3x3 KLMStoCONE = float3x3(
+         4.0767245293, -3.3072168827,  0.2307590544,
+        -1.2681437731,  2.6093323231, -0.3411344290,
+        -0.0041119885, -0.7034763098,  1.7068625689);
+                    
+    // rgb to cone (arg of pow can't be negative)
+	float3 LMS1 = pow( mul( KCONEtoLMS, ColA ), float3(1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0) );
+    float3 LMS2 = pow( mul( KCONEtoLMS, ColB ), float3(1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0) );
+    // lerp
+    float3 LMS = lerp( LMS1, LMS2, a );
+    // gain in the middle (no oklab anymore, but looks better?)
+    LMS *= 1.0+0.2*a*(1.0-a);
+    // cone to rgb
+    return mul( KLMStoCONE, LMS*LMS*LMS );
+}
+
+FSDFMaterial InterpolateMaterial(FSDFMaterial A, FSDFMaterial B, float T)
+{
+	// smoothstep looks more pleasing than lerp
+	const float S = smoothstep(0.0, 1.0, T);
+
+	FSDFMaterial R;
+	// Use Oklab color space
+	R.Albedo = OklabMix(A.Albedo, B.Albedo, S);
+	R.Roughness = lerp(A.Roughness, B.Roughness, S);
+	R.Metalness = lerp(A.Metalness, B.Metalness, S);
+	R.Emission = lerp(A.Emission, B.Emission, S);
+	return R;
+}
+
+FSDFMaterial SampleMaterial( float3 Pos )
+{
+	FSDFMaterial MatBlended = (FSDFMaterial)0;
+	float ClosestDist = 1e35;
+
+	for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
+	{
+		const FSDFEdit Edit = SDFEdits[EditIdx];
+		const EOperation Op = Edit.GetSDFOperation();
+		const bool bColorsSubtraction = Edit.GetColorsSubtraction();
+		const float Smoothing = Edit.GetSDFSmooths() ? Edit.Smoothing : 0.0;
+		// Evaluate the distance to the SDF
+		const float Dist = DistFn::DistOrigin(Edit, Pos - Edit.Pos);
+
+		// Blending factor to replace previous material with new one
+		// Depends on the difference between the previous and new distance (and operation)
+		float Blend = 0.0;
+
+		if (Op == Union)
+		{
+			if (Smoothing > 0.0)
+			{
+				// Derivative of smooth union
+				Blend = saturate(0.5 + 0.5 * ((ClosestDist - Dist) / (Smoothing * 4.0)));
+				ClosestDist = OpSmoothUnion(Dist, ClosestDist, Smoothing);
+			}
+			else
+			{
+				// Unsmoothed edits either completely replace or keep the previous material
+				Blend = (Dist < ClosestDist) ? 1.0 : 0.0;
+				ClosestDist = OpUnion(Dist, ClosestDist);
+			}
+		}
+		else if (Op == Subtract)
+		{
+			// Currently, the material is sampled from the subtractive edit
+			// TODO: Add boolean for sampling from the additive edit instead
+			if (bColorsSubtraction)
+			{
+				if (Smoothing > 0.0)
+				{
+					Blend = saturate(0.5 - 0.5 * (ClosestDist + Dist) / (Smoothing * 4.0));
+					ClosestDist = OpSmoothSubtract(Dist, ClosestDist, Smoothing);
+				}
+				else
+				{
+					// Unsmoothed edits either completely replace or keep the previous material
+					Blend = (-Dist > ClosestDist) ? 1.0 : 0.0;
+					ClosestDist = OpSubtract(Dist, ClosestDist);
+				}
+			}
+			else
+			{
+				Blend = 0.0;
+			}
+		}
+
+		if (Blend > 0.0)
+		{
+			MatBlended = InterpolateMaterial(MatBlended, Materials[Edit.MatIdx], Blend);
+		}
+	}
+
+	return MatBlended;
 }

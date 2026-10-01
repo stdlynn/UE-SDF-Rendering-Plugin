@@ -219,7 +219,7 @@ void TraversePS(
 	// Write to the packed GBuffer channels
 	float4 GA, GB, GC, GD, GE, GV;
 	EncodeGBuffer( GBuffer, GA, GB, GC, GD, GE, GV );
-	OutSceneColor = float4(Material.Emission, 0.0);
+	OutSceneColor = float4(Material.Emission * Material.Albedo, 0.0);
 	OutGBufferA = GA;
 	OutGBufferB = GB;
 	OutGBufferC = GC;

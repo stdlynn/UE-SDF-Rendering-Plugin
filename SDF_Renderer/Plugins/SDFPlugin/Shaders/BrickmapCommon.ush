@@ -126,16 +126,5 @@ float3 WorldPosToAtlasUVW( float3 WorldPos, float3 GridMin, float VoxSize )
 	return (AtlasPoint + 0.5) / AtlasSize;
 }
 
-FSDFMaterial SampleMaterial( float3 Pos )
-{
-	FSDFMaterial Material;
-	Material.Albedo = float3(0, 0, 0);
-	Material.Roughness = 0.0;
-	Material.Metalness = 0.0;
-	Material.Emission = float3(0, 0, 0);
-
-	return Material;
-}
-
 bool IsBrickAllocated( uint Idx ) { return (PtrGrid[Idx] != Empty); }
 bool IsBrickAllocated( uint3 GridCell ) { return IsBrickAllocated( GridCellToGridIdx( GridCell ) );}
