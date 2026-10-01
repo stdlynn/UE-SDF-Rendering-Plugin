@@ -87,20 +87,21 @@ float3 GetNormal( float3 Pos )
 
 bool SphereTraceFBM( inout FRay Ray, out float3 Normal )
 {
+	float DistTravelled = 0.0;
 	FTerrainParams Params = GetTerrainParams();
-	for (uint Step = 0; Step < 32; ++Step)
+	for (uint Step = 0; Step < 128; ++Step)
 	{
-		float ClosestDist = DistFn::FBM( Ray.GetPos(), Params );
-		if (ClosestDist > Ray.RelativeMaxT) { break; }
+		float ClosestDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), Params );
+		DistTravelled += ClosestDist;
+		if (DistTravelled > Ray.RelativeMaxT) { break; }
 		if (ClosestDist < SurfaceEpsilon)
 		{
-			Ray.SetHitT( ClosestDist );
+			Ray.SetHitT( DistTravelled );
 			Normal = GetTerrainNormal( Ray.GetHitPos(), Params );
-			break;
+			return true;
 		}
-		Ray.Advance( ClosestDist );
 	}
-	return Ray.bHit;
+	return false;
 
 	const float PlaneZ = 0.0;
 	const float HeightAbovePlane = Ray.GetPos().z - PlaneZ;
@@ -224,10 +225,12 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out float3 Albedo )
 	// Brute-force sphere tracing
 	if (bBruteForceSphereTracing > 0)
     {
+		float DistTravelled = 0.0;
 		for (uint Step = 0; Step < 256; ++Step)
 		{
-			float ClosestDist = MapScene( Ray.GetPos() );
-			if (ClosestDist > Ray.RelativeMaxT) { break; }
+			float ClosestDist = MapScene( Ray.GetPosAt( DistTravelled ) );
+			DistTravelled += ClosestDist;
+			if (DistTravelled > Ray.RelativeMaxT) { break; }
 			if (ClosestDist < SurfaceEpsilon)
 			{
 				Ray.SetHitT( ClosestDist );
@@ -235,7 +238,6 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out float3 Albedo )
 				Albedo = (0.4).xxx;
 				break;
 			}
-			Ray.Advance( ClosestDist );
 		}
     }
 	// Brickmap traversal

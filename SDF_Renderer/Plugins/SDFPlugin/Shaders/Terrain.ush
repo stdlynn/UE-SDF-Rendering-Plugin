@@ -32,9 +32,11 @@ float SimpleHash32V3( uint3 Seed )
 	return (float)m1 / (float)0xFFFFFFFFu;
 }
 
+// TODO: make sure this returns a distance such that amplitude corresponds to real max sphere height idkkk
+// TODO:
 // TODO: I think max amplitude can be 1.0, since otherwise it will go past the origin of other spheres
 // TODO: but then make amplitude the MAX (instead of average) (rename 'MaxRadiusVariance')
-float SampleHashSphere( int3 CellPos, float3 PosFract, uint3 CornerOffset, float AvgRadius )
+float SampleHashSphere( int3 CellPos, float3 PosFract, uint3 CornerOffset )
 {
 	// TODO: radius
 	// TODO: avg radius
@@ -43,56 +45,72 @@ float SampleHashSphere( int3 CellPos, float3 PosFract, uint3 CornerOffset, float
 	const int3 CornerCell = CellPos + CornerOffset;
 	const uint3 Seed = uint3( asuint( CornerCell.x ), asuint( CornerCell.y ), asuint( CornerCell.z ) );
 	const float RadiusModifier = SimpleHash32V3( Seed );
-	const float Radius = AvgRadius + (0.5 * SimpleHash32V3( Seed ));
+	const float Radius = 0.5 * SimpleHash32V3( Seed );
 
 	//
 	return length( PosFract - CornerOffset ) - Radius;
 }
 
 // [CREDITS] https://iquilezles.org/articles/fbmsdf/
-float SampleHashSphere8( float3 Pos, float AvgRadius )
+float SampleHashSphere8( float3 Pos )
 {
 	const int3 CellPos = floor( Pos );
 	const float3 PosFract = frac( Pos );
-	return min( min( min( SampleHashSphere( CellPos, PosFract, int3( 0, 0, 0), AvgRadius ),
-						  SampleHashSphere( CellPos, PosFract, int3( 0, 0, 1), AvgRadius ) ),
-					 min( SampleHashSphere( CellPos, PosFract, int3( 0, 1, 0), AvgRadius ),
-						  SampleHashSphere( CellPos, PosFract, int3( 0, 1, 1), AvgRadius ) ) ),
-				min( min( SampleHashSphere( CellPos, PosFract, int3( 1, 0, 0), AvgRadius ),
-						  SampleHashSphere( CellPos, PosFract, int3( 1, 0, 1), AvgRadius ) ),
-					 min( SampleHashSphere( CellPos, PosFract, int3( 1, 1, 0), AvgRadius ),
-						  SampleHashSphere( CellPos, PosFract, int3( 1, 1, 1), AvgRadius ) ) ) );
+	return min( min( min( SampleHashSphere( CellPos, PosFract, int3( 0, 0, 0) ),
+						  SampleHashSphere( CellPos, PosFract, int3( 0, 0, 1) ) ),
+					 min( SampleHashSphere( CellPos, PosFract, int3( 0, 1, 0) ),
+						  SampleHashSphere( CellPos, PosFract, int3( 0, 1, 1) ) ) ),
+				min( min( SampleHashSphere( CellPos, PosFract, int3( 1, 0, 0) ),
+						  SampleHashSphere( CellPos, PosFract, int3( 1, 0, 1) ) ),
+					 min( SampleHashSphere( CellPos, PosFract, int3( 1, 1, 0) ),
+						  SampleHashSphere( CellPos, PosFract, int3( 1, 1, 1) ) ) ) );
 }
 
 namespace DistFn
 {
 	float FBM( float3 Pos, FTerrainParams Params )
-	{
+    {
 		// Sample from a base SDF to get our initial field
 		// The octaves will subsequently add noise to said field
-	    float Dist = Pos.z - Params.PlaneZ;
+        float Dist = Pos.z - Params.PlaneZ;
+
+		float s = 1.0;
+        for (uint i = 0; i < Params.NumOctaves; ++i)
+        {
+	        float n = SampleHashSphere8( Pos * Params.Frequency );
+			n = OpSmoothIntersect(n,Dist-0.1*s,0.3*s);
+			Dist = OpSmoothUnion(n,Dist      ,0.3*s);
+			Params.Frequency *= Params.Lacunarity;
+			s = 0.5*s;
+        }
+		return Dist;
 
 		// Go over each octave
         for (uint i = 0; i < Params.NumOctaves; ++i)
         {
-			// TODO: does the math work out that we can just multiply the sample with Frequency
-			// SDF of an infinite grid of spheres
+			// TODO:
+			//
+        	const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
+			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
+			const float Inflation = Params.Inflation * Params.Amplitude;
+
+        	// SDF of an infinite grid of spheres
 			// Sample the closest 8 to determine the distance
-            const float SampleDist = Params.Frequency * SampleHashSphere8( Pos, Params.Amplitude );
+			const float3 SamplePos = (Pos * Params.Frequency);// + float3( 0, Params.ClippingSmoothing, 0 ); // TODO:
+            const float SampleDist = SampleHashSphere8( SamplePos ) * Params.Amplitude;
 
 			// Inflate the current terrain distance field (from the previous octaves/base SDF)
-            const float InflatedDist = Dist * Params.Inflation;
+            const float InflatedDist = Dist - Inflation;
 			// Calculate the distance field of the INTERSECTION between
 			// the sampled distance and the inflated SDF
 			// Effectively, we mask out any noise out of distance of out terrain
-            const float ClippedDist = OpSmoothIntersect( SampleDist, InflatedDist, Params.ClippingSmoothing );
+            const float ClippedDist = OpSmoothIntersect( SampleDist, InflatedDist, ClippingSmoothing );
     		// Add the noise on top of the current distance field (smoothed)
-            Dist = OpSmoothUnion( Dist, ClippedDist, Params.UnionSmoothing );
-
+            Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
 			// Set the next octave's parameters
-			Pos = mul( float3x3(  0.00,  1.60,  1.20,
-								 -1.60,  0.72, -0.96,
-								 -1.20, -0.96,  1.28 ), Pos );
+			//Pos = mul( float3x3(  0.00,  1.60,  1.20,
+			//					 -1.60,  0.72, -0.96,
+			//					 -1.20, -0.96,  1.28 ), Pos );
             Params.Frequency *= Params.Lacunarity;
             Params.Amplitude *= Params.Persistence;
 			Params.Inflation *= Params.InflationGain;
