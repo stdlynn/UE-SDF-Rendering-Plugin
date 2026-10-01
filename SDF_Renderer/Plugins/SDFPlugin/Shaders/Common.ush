@@ -396,7 +396,7 @@ float MapScene( float3 Pos, out uint MatIdx )
 	return ClosestDist;
 }
 
-float MapScene( float3 Pos, out FSDFMaterial Material )
+float MapScene( float3 Pos )
 {
 	float ClosestDist = 1e35;
 
@@ -430,11 +430,6 @@ float MapScene( float3 Pos, out FSDFMaterial Material )
 			{
 				ClosestDist = OpSubtract(Dist, ClosestDist);
 			}
-		}
-		if (ClosestDist != PrevDist)
-		{
-			// TODO: interpolate
-			Material = Materials[SDFEdits[EditIdx].MatIdx];
 		}
 	}
 

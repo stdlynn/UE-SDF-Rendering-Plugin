@@ -54,7 +54,7 @@ bool TraceBrick( inout FRay Ray )
 }
 
 // Pointer Grid DDA
-bool TracePtrGrid( inout FRay Ray, out float3 Normal, out FSDFMaterial Material )
+bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 {
 	// TODO:
 	const float BrickSize = GetBrickSize( VoxSize );
@@ -97,7 +97,6 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal, out FSDFMaterial Material 
 				{
 					Ray.Advance( TempT );
 					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
-					Material = SampleMaterial( UVW );
 					return true;
 				}
 				TempT += SampleDist;
@@ -119,7 +118,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal, out FSDFMaterial Material 
 
 			float TempT = DDA.T;
 			uint i = 0;
-			while (TempT < DistInsideBrick && i < 32)
+			while (TempT < DistInsideBrick)
 			{
 				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAtOffset( TempT ), GridAABB.Min, VoxSize );
 				const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
@@ -128,7 +127,6 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal, out FSDFMaterial Material 
 				{
 					Ray.Advance( TempT );
 					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
-					Material = SampleMaterial( UVW );
 					return true;
 				}
 				TempT += SampleDist;
@@ -146,10 +144,12 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out FSDFMaterial Material )
     {
 		for (uint Step = 0; Step < 256; ++Step)
 		{
-			float ClosestDist = MapScene( Ray.GetPos(), Material );
+			float ClosestDist = MapScene( Ray.GetPos() );
 			if (ClosestDist < SurfaceEpsilon)
 			{
 				Normal = GetNormal( Ray.GetPos() );
+				float3 GridMin = AABB::PtrGrid( PtrGridPos, GetBrickSize( VoxSize ) ).Min;
+				Material = SampleMaterial( WorldPosToAtlasUVW( Ray.GetPos(), GridMin, VoxSize ) );
 				bHit = true;
 				break;
 			}
@@ -171,7 +171,11 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out FSDFMaterial Material )
 			Ray.MaxT = AABBOutT;
 			Ray.Advance( AABBHitT );
 			//Ray.AdvanceOrigin();
-			bHit = TracePtrGrid( Ray, Normal, Material );
+			bHit = TracePtrGrid( Ray, Normal );
+			if (bHit)
+			{
+				Material = SampleMaterial( WorldPosToAtlasUVW( Ray.GetPos(), GridAABB.Min, VoxSize ) );
+			}
 	    }
     }
 	Ray.AdvanceOrigin();
