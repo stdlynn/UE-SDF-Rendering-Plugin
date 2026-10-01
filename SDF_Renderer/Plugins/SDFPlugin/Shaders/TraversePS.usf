@@ -1,5 +1,3 @@
-Buffer<uint> PtrGrid;
-
 #include "/Engine/Public/Platform.ush"
 #include "/Engine/Private/Common.ush"
 #include "/Engine/Private/DeferredShadingCommon.ush"
@@ -7,10 +5,7 @@ Buffer<uint> PtrGrid;
 #include "Common.ush"
 
 // Shader bindings
-StructuredBuffer<FSDFMaterial> Materials;
-Texture3D<float> BrickAtlas;
 SamplerState BrickSampler;
-Buffer<uint> MaterialAtlas;
 float3 PtrGridPos;
 uint bBruteForceSphereTracing;
 float VoxSize;
@@ -59,7 +54,7 @@ bool TraceBrick( inout FRay Ray )
 }
 
 // Pointer Grid DDA
-bool TracePtrGrid( inout FRay Ray, out float3 Normal, out uint MatIdx )
+bool TracePtrGrid( inout FRay Ray, out float3 Normal, out FSDFMaterial Material )
 {
 	// TODO:
 	const float BrickSize = GetBrickSize( VoxSize );
@@ -102,7 +97,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal, out uint MatIdx )
 				{
 					Ray.Advance( TempT );
 					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
-					MatIdx = MaterialAtlas[AtlasUVWToAtlasIndex( UVW )];
+					Material = SampleMaterial( UVW );
 					return true;
 				}
 				TempT += SampleDist;
@@ -133,7 +128,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal, out uint MatIdx )
 				{
 					Ray.Advance( TempT );
 					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
-					MatIdx = MaterialAtlas[AtlasUVWToAtlasIndex( UVW )];
+					Material = SampleMaterial( UVW );
 					return true;
 				}
 				TempT += SampleDist;
@@ -143,7 +138,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal, out uint MatIdx )
 	}
 }
 
-bool TraceScene( inout FRay Ray, out float3 Normal, out uint MatIdx )
+bool TraceScene( inout FRay Ray, out float3 Normal, out FSDFMaterial Material )
 {
 	bool bHit = false;
 	// Brute-force sphere tracing
@@ -151,7 +146,7 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out uint MatIdx )
     {
 		for (uint Step = 0; Step < 256; ++Step)
 		{
-			float ClosestDist = MapScene( Ray.GetPos(), MatIdx );
+			float ClosestDist = MapScene( Ray.GetPos(), Material );
 			if (ClosestDist < SurfaceEpsilon)
 			{
 				Normal = GetNormal( Ray.GetPos() );
@@ -176,7 +171,7 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out uint MatIdx )
 			Ray.MaxT = AABBOutT;
 			Ray.Advance( AABBHitT );
 			//Ray.AdvanceOrigin();
-			bHit = TracePtrGrid( Ray, Normal, MatIdx );
+			bHit = TracePtrGrid( Ray, Normal, Material );
 	    }
     }
 	Ray.AdvanceOrigin();
@@ -204,18 +199,12 @@ void TraversePS(
 
 	// Trace
 	float3 Normal;
-	uint MatIdx;
-	if ( !TraceScene( Ray, Normal, MatIdx ) ) { discard; }
+	FSDFMaterial Material;
+	if ( !TraceScene( Ray, Normal, Material ) ) { discard; }
 
 	// Convert unit size
 	float ViewZ = mul( float4( (Ray.GetPos() - Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
 	OutDepth = ConvertToDeviceZ( ViewZ );
-	
-	FSDFMaterial Material = Materials[MatIdx];
-	if (MatIdx == 0xFF)
-	{
-		Material.Emission = float3( 1.0, 0.0, 0.0 );
-	}
 
 	FGBufferData GBuffer = (FGBufferData)0;
 	GBuffer.BaseColor = Material.Albedo;

@@ -3,6 +3,16 @@
 #include "/Engine/Public/Platform.ush"
 #include "Common.ush"
 
+#ifdef BRICKMAP_WRITE
+RWBuffer<uint> MaterialAtlas;
+RWTexture3D<float> BrickAtlas;
+RWBuffer<uint> PtrGrid;
+#else
+Buffer<uint> MaterialAtlas;
+Texture3D<float> BrickAtlas;
+Buffer<uint> PtrGrid;
+#endif
+
 //_______________________________________________________________________
 // The numbers below are measured in voxels								|	
 //																		|
@@ -129,6 +139,38 @@ float3 WorldPosToAtlasUVW( float3 WorldPos, float3 GridMin, float VoxSize )
 	// Directly sampling texel N as 'u=N' results in interpolation between 'N-0.5' and 'N+0.5'
 	// While sampling 'u=N+0.5' gets you exactly the value stored in texel N
 	return (AtlasPoint + 0.5) / AtlasSize;
+}
+
+FSDFMaterial SampleMaterial( float3 AtlasUVW )
+{
+	FSDFMaterial Material;
+	Material.Albedo = float3(0, 0, 0);
+	Material.Roughness = 0.0;
+	Material.Metalness = 0.0;
+	Material.Emission = float3(0, 0, 0);
+
+	float3 BrickPoint = AtlasUVW * float3(AtlasSize) - 0.5;
+	float3 Fract = frac(BrickPoint);
+
+	for (int i = 0; i < 8; i++)
+	{
+		float3 Offset = float3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+
+		float3 Weight3 = lerp(1.0 - Fract, Fract, float3(Offset));
+		float Weight = Weight3.x * Weight3.y * Weight3.z;
+		
+		uint3 Cell = uint3(floor(BrickPoint)) + Offset;
+		uint Idx = Cell.x + Cell.y * AtlasSize.x + Cell.z * AtlasSize.x * AtlasSize.y;
+
+		uint MatIdx = MaterialAtlas[Idx];
+		FSDFMaterial Sample = Materials[MatIdx];
+		Material.Albedo += Sample.Albedo * Weight;
+		Material.Roughness += Sample.Roughness * Weight;
+		Material.Metalness += Sample.Metalness * Weight;
+		Material.Emission += Sample.Emission * Weight;
+	}
+
+	return Material;
 }
 
 bool IsBrickAllocated( uint Idx ) { return (PtrGrid[Idx] != Empty); }

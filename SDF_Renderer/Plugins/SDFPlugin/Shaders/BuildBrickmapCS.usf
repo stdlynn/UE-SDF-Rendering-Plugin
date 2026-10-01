@@ -1,12 +1,9 @@
-// TODO Probably not a good idea to keep these above the includes
-RWTexture3D<float> BrickAtlas;
-RWBuffer<uint> PtrGrid;
+#define BRICKMAP_WRITE
 
 #include "/Engine/Public/Platform.ush"
 #include "BrickmapCommon.ush"
 #include "Common.ush"
 
-RWBuffer<uint> MaterialAtlas;
 float3 PtrGridPos;
 float VoxSize;
 
