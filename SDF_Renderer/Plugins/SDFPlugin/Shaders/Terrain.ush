@@ -36,7 +36,7 @@ float SimpleHash32V3( uint3 Seed )
 // TODO:
 // TODO: I think max amplitude can be 1.0, since otherwise it will go past the origin of other spheres
 // TODO: but then make amplitude the MAX (instead of average) (rename 'MaxRadiusVariance')
-float SampleHashSphere( int3 CellPos, float3 PosFract, uint3 CornerOffset )
+float SampleHashSphere( int3 CellPos, float3 PosFract, int3 CornerOffset )
 {
 	// TODO: radius
 	// TODO: avg radius
@@ -53,8 +53,6 @@ float SampleHashSphere( int3 CellPos, float3 PosFract, uint3 CornerOffset )
 // [CREDITS] https://iquilezles.org/articles/fbmsdf/
 float SampleHashSphere8( float3 Pos )
 {	
-	return length( Pos - round( Pos )) - 0.5;
-
 	const int3 CellPos = floor( Pos );
 	const float3 PosFract = frac( Pos );
 	return min( min( min( SampleHashSphere( CellPos, PosFract, int3( 0, 0, 0) ),
@@ -71,12 +69,27 @@ namespace DistFn
 {
 	float FBM( float3 Pos, FTerrainParams Params, float UnitScale )
     {
-		// TODO: why does it scale with UnitScale
+#if 0
+		// Sample from a base SDF to get our initial field
+		// The octaves will subsequently add noise to said field
+        float Dist = Pos.z - Params.PlaneZ;
+
+		for (uint i = 0; i < Params.NumOctaves; ++i)
+		{
+			
+		}
+		return Dist;
+#endif
+
+		// TODO: The closer you get to a sphere, you will see layers being pulled off
+		// TODO: on newer spheres, you eventually can see through them if you're close enough
+		// TODO: doesn't seem to be related to the epsilon
 		float D = Pos.z - Params.PlaneZ;
 		float Radius = Params.Amplitude; // Amplitude
 		for (uint i = 0; i < Params.NumOctaves; ++i)
 		{
-			float SampleDist = length( Pos - RoundToUnit( Pos, 200.0, UnitScale )) - Radius;
+			//float SampleDist = length( Pos - RoundToUnit( Pos, 200.0, UnitScale )) - Radius;
+			float SampleDist = SampleHashSphere8( Pos ); // TODO: radiu
 			// TODO: The issue with the weird disappearing octave spheres is probably the inflation
 			// TODO: Something with us inflating too much? Thus, we must scale by some correct value based on the amplitude
 			// TODO: document this bug for ILOs
@@ -87,11 +100,21 @@ namespace DistFn
 			
 			Radius *= Params.Persistence;
 			//Params.Inflation *= Params.Persistence;
-			Pos *= 1.2;
-			//Pos -= 0.07;
+			// TODO: why aren't the layers being pulled off if this is commented out
+			// TODO: I think it breaks the field, subtracting from pos is fine
+			// TODO:
+			// TODO: also, at 29 octaves, why does a sphere appear high up
+			// TODO: Note: they only appear with union smoothing enabled
+			// TODO: from this I conclude the exterior distances are wrong because of the max()
+			// TODO: though I'm confused as to why it only happens with the smax()
+			// TODO: I'm researching how to fix exterior distance
+			// TODO: turns out you can't fix it for an unknown amount of spheres
+			//Pos *= 1.2;
+			Pos += float3(123.45, 543.21, 723.27);
 		}
 		return D;
 
+#if 0
 		// Sample from a base SDF to get our initial field
 		// The octaves will subsequently add noise to said field
         float Dist = Pos.z - Params.PlaneZ;
@@ -143,5 +166,6 @@ namespace DistFn
 			Params.Inflation *= Params.InflationGain;
         }
         return Dist;
+#endif
     }
 }
