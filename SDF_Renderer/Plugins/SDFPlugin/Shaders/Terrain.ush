@@ -44,7 +44,6 @@ float SampleHashSphere( int3 CellPos, float3 PosFract, uint3 CornerOffset )
 	// Decide the radius based on a hash
 	const int3 CornerCell = CellPos + CornerOffset;
 	const uint3 Seed = uint3( asuint( CornerCell.x ), asuint( CornerCell.y ), asuint( CornerCell.z ) );
-	const float RadiusModifier = SimpleHash32V3( Seed );
 	const float Radius = 0.5 * SimpleHash32V3( Seed );
 
 	//
@@ -53,7 +52,9 @@ float SampleHashSphere( int3 CellPos, float3 PosFract, uint3 CornerOffset )
 
 // [CREDITS] https://iquilezles.org/articles/fbmsdf/
 float SampleHashSphere8( float3 Pos )
-{
+{	
+	return length( Pos - round( Pos )) - 0.5;
+
 	const int3 CellPos = floor( Pos );
 	const float3 PosFract = frac( Pos );
 	return min( min( min( SampleHashSphere( CellPos, PosFract, int3( 0, 0, 0) ),
@@ -68,20 +69,49 @@ float SampleHashSphere8( float3 Pos )
 
 namespace DistFn
 {
-	float FBM( float3 Pos, FTerrainParams Params )
+	float FBM( float3 Pos, FTerrainParams Params, float UnitScale )
     {
+		//Params.Amplitude /= UnitScale;
+		//Params.Inflation *= UnitScale;
+
+		// TODO: why does it scale with UnitScale
+		float D = Pos.z - Params.PlaneZ;
+		float Radius = Params.Amplitude; // Amplitude
+		for (uint i = 0; i < Params.NumOctaves; ++i)
+		{
+			float SampleDist = length( Pos - RoundToUnit( Pos, 200.0, UnitScale )) - Radius;
+			// TODO: The issue with the weird disappearing octave spheres is probably the inflation
+			// TODO: Something with us inflating too much? Thus, we must scale by some correct value based on the amplitude
+			// TODO: document this bug for ILOs
+			// I think subtraction is necessary (multiplication breaks the gradient)
+			float InflatedDist = D - (Params.Inflation * Radius);
+			float ClippedDist = OpSmoothIntersect( InflatedDist, SampleDist, 0.005 );
+			D = OpSmoothUnion( D, ClippedDist, 0.005 );
+			
+			Radius *= Params.Persistence;
+			//Params.Inflation *= Params.Persistence;
+			Pos *= 1.2;
+			//Pos -= 0.07;
+		}
+		return D;
+
 		// Sample from a base SDF to get our initial field
 		// The octaves will subsequently add noise to said field
         float Dist = Pos.z - Params.PlaneZ;
 
-		float s = 1.0;
+		float s = Params.Amplitude;
         for (uint i = 0; i < Params.NumOctaves; ++i)
         {
-	        float n = SampleHashSphere8( Pos * Params.Frequency );
+	        float n = SampleHashSphere8( Pos * Params.Frequency ) / UnitScale;
 			n = OpSmoothIntersect(n,Dist-0.1*s,0.3*s);
 			Dist = OpSmoothUnion(n,Dist      ,0.3*s);
 			Params.Frequency *= Params.Lacunarity;
-			s = 0.5*s;
+
+
+			Pos = mul( float3x3(  0.00,  1.60,  1.20,
+								 -1.60,  0.72, -0.96,
+								 -1.20, -0.96,  1.28 ), Pos );
+			s = Params.Persistence*s;
         }
 		return Dist;
 

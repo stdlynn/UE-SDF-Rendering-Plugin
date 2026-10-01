@@ -70,11 +70,12 @@ float3 GetAtlasNormal( float3 Pos, float3 BoundsMin )
 }
 float3 GetTerrainNormal( float3 Pos, FTerrainParams Params )
 {
+	// TODO: wrong?
 	const float2 K = float2( 1, -1 );
-	return normalize( K.xyy * DistFn::FBM( Pos + (K.xyy * DerivativeH), Params ) +
-					  K.yyx * DistFn::FBM( Pos + (K.yyx * DerivativeH), Params ) +
-					  K.yxy * DistFn::FBM( Pos + (K.yxy * DerivativeH), Params ) +
-					  K.xxx * DistFn::FBM( Pos + (K.xxx * DerivativeH), Params ) );
+	return normalize( K.xyy * DistFn::FBM( Pos + (K.xyy * DerivativeH), Params, UnitScale ) +
+					  K.yyx * DistFn::FBM( Pos + (K.yyx * DerivativeH), Params, UnitScale ) +
+					  K.yxy * DistFn::FBM( Pos + (K.yxy * DerivativeH), Params, UnitScale ) +
+					  K.xxx * DistFn::FBM( Pos + (K.xxx * DerivativeH), Params, UnitScale ) );
 }
 float3 GetNormal( float3 Pos )
 {
@@ -91,7 +92,7 @@ bool SphereTraceFBM( inout FRay Ray, out float3 Normal )
 	FTerrainParams Params = GetTerrainParams();
 	for (uint Step = 0; Step < 128; ++Step)
 	{
-		float ClosestDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), Params );
+		float ClosestDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), Params, UnitScale );
 		DistTravelled += ClosestDist;
 		if (DistTravelled > Ray.RelativeMaxT) { break; }
 		if (ClosestDist < SurfaceEpsilon)
@@ -162,7 +163,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 			//return true;
 #if 1
 			DDA.FindNextAxis(); // TODO: make more efficient
-			const float DistInsideBrick = DDA.TMax[DDA.Axis];
+			const float DistInsideBrick = min( DDA.TMax[DDA.Axis], Ray.RelativeMaxT );
 
 			float TempT = DDA.T;
 			uint i = 0;
@@ -219,7 +220,11 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out float3 Albedo )
 	// Terrain
 	if (SphereTraceFBM( Ray, Normal ))
 	{
-		Albedo = float3(0.18, 0.5, 0.13);
+		const float Height = Ray.GetHitPos().z;
+		if (Height < 35.0 * UnitScale) { Albedo = float3(0.1, 0.1, 0.5); }
+		else if (Height < 37.0 * UnitScale) { Albedo = float3(0.8, 0.6, 0.2); }
+		else if (Height < 55.0 * UnitScale) { Albedo = float3(0.2, 0.5, 0.1); }
+		else { Albedo = float3(0.75, 0.75, 0.8); }
 	}
 
 	// Brute-force sphere tracing
@@ -233,7 +238,7 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out float3 Albedo )
 			if (DistTravelled > Ray.RelativeMaxT) { break; }
 			if (ClosestDist < SurfaceEpsilon)
 			{
-				Ray.SetHitT( ClosestDist );
+				Ray.SetHitT( DistTravelled );
 				Normal = GetNormal( Ray.GetHitPos() );
 				Albedo = (0.4).xxx;
 				break;
@@ -279,8 +284,8 @@ void TraversePS(
 	if (! TraceScene( Ray, Normal, Albedo )) { discard; }
 
 	// Convert unit size
-	float ViewZ = mul( float4( (Ray.GetHitPos() - Ray.Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
-	OutDepth = ConvertToDeviceZ( ViewZ );
+    const float ViewZ = (Ray.GetHitT() / UnitScale) * dot( Dir, View.ViewForward.xyz );
+    OutDepth = ConvertToDeviceZ( ViewZ );
 
 	FGBufferData GBuffer = (FGBufferData)0;
 	GBuffer.BaseColor = Albedo;
