@@ -71,9 +71,6 @@ namespace DistFn
 {
 	float FBM( float3 Pos, FTerrainParams Params, float UnitScale )
     {
-		//Params.Amplitude /= UnitScale;
-		//Params.Inflation *= UnitScale;
-
 		// TODO: why does it scale with UnitScale
 		float D = Pos.z - Params.PlaneZ;
 		float Radius = Params.Amplitude; // Amplitude
@@ -85,8 +82,8 @@ namespace DistFn
 			// TODO: document this bug for ILOs
 			// I think subtraction is necessary (multiplication breaks the gradient)
 			float InflatedDist = D - (Params.Inflation * Radius);
-			float ClippedDist = OpSmoothIntersect( InflatedDist, SampleDist, 0.005 );
-			D = OpSmoothUnion( D, ClippedDist, 0.005 );
+			float ClippedDist = OpSmoothIntersect( InflatedDist, SampleDist, Params.ClippingSmoothing );
+			D = OpSmoothUnion( D, ClippedDist, Params.UnionSmoothing );
 			
 			Radius *= Params.Persistence;
 			//Params.Inflation *= Params.Persistence;
