@@ -13,11 +13,6 @@ void FBrickmapBuilder::AllocateResources()
 																	  TexCreate_ShaderResource | TexCreate_UAV );
 	RT.BrickAtlas = AllocatePooledTexture( BrickAtlasDesc, TEXT( "SDF_BrickAtlas" ) );
 
-	const uint32 MaterialAtlasSize = AtlasSize.X * AtlasSize.Y * AtlasSize.Z;
-	RT.MaterialAtlas = AllocatePooledBuffer( FRDGBufferDesc::CreateBufferDesc( sizeof( uint32 ), 
-											 MaterialAtlasSize ),
-											 TEXT( "SDF_MaterialAtlas" ) );
-
 	const uint32 GridSize = PtrGridSize.X * PtrGridSize.Y * PtrGridSize.Z;
 	const FRDGBufferDesc PtrGridDesc = FRDGBufferDesc::CreateBufferDesc( sizeof( uint32 ), GridSize );
 	RT.PtrGrid = AllocatePooledBuffer( PtrGridDesc, TEXT( "SDF_BrickPtrBuffer" ) );
@@ -40,7 +35,6 @@ void FBrickmapBuilder::ReleaseResources()
 {
 	check( IsInRenderingThread() );
 	RT.BrickAtlas.SafeRelease();
-	RT.MaterialAtlas.SafeRelease();
 	RT.PtrGrid.SafeRelease();
 	RT.BrickAllocCounters.SafeRelease();
 	RT.UpdateListResource.SafeRelease();
@@ -51,7 +45,6 @@ void FBrickmapBuilder::ReleaseResources()
 bool FBrickmapBuilder::AreResourcesValid() const
 {
 	return RT.BrickAtlas.IsValid()
-		   && RT.MaterialAtlas.IsValid()
 		   && RT.PtrGrid.IsValid()
 		   && RT.BrickAllocCounters.IsValid()
 		   && RT.UpdateListResource.IsValid()

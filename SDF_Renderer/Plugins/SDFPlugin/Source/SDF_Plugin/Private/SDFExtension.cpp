@@ -214,7 +214,6 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 
 		const FRDGBufferRef BrickListRDG = RT.BrickmapBuilder.RegisterBrickListBuffer( GraphBuilder );
 		const FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture( RT.BrickmapBuilder.GetBrickAtlas(), ERDGTextureFlags::MultiFrame );
-		const FRDGBufferRef MaterialAtlasRDG = GraphBuilder.RegisterExternalBuffer(RT.BrickmapBuilder.GetMaterialAtlas(), ERDGBufferFlags::MultiFrame);
 		const FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer( RT.BrickmapBuilder.GetPtrGrid(), ERDGBufferFlags::MultiFrame );
 		const FRDGBufferRef AllocCountersRDG = GraphBuilder.RegisterExternalBuffer( RT.BrickmapBuilder.GetBrickAllocCounter(), ERDGBufferFlags::MultiFrame );
 		const FRDGBufferRef FreedListRDG = GraphBuilder.RegisterExternalBuffer( RT.BrickmapBuilder.GetFreedList(), ERDGBufferFlags::MultiFrame );
@@ -238,7 +237,6 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 		FBuildBrickmapShader::FParameters* ParametersBuild = GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
 		ParametersBuild->NumEdits = RT.SDFs.Num();
 		ParametersBuild->SDFEdits = GraphBuilder.CreateSRV( SDFBuffRDG );
-		ParametersBuild->MaterialAtlas = GraphBuilder.CreateUAV( MaterialAtlasRDG, PF_R8_UINT );
 		ParametersBuild->PtrGrid = GraphBuilder.CreateUAV( PtrBufferRDG, PF_R32_UINT );
 		ParametersBuild->BrickAtlas = GraphBuilder.CreateUAV( BrickAtlasRDG );
 		ParametersBuild->GridSize = FIntVector3( PtrGridSize );
@@ -418,7 +416,6 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 		const FRDGBufferRef MaterialBuffRDG{ RegisterMaterialBuffer( GraphBuilder ) };
 
 		const FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture( RT.BrickmapBuilder.GetBrickAtlas(), ERDGTextureFlags::MultiFrame );
-		const FRDGBufferRef MaterialAtlasRDG = GraphBuilder.RegisterExternalBuffer( RT.BrickmapBuilder.GetMaterialAtlas(), ERDGBufferFlags::MultiFrame );
 		const FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer( RT.BrickmapBuilder.GetPtrGrid(), ERDGBufferFlags::MultiFrame );
 		FRHISamplerState* BrickSampler = TStaticSamplerState<SF_Trilinear>::GetRHI();
 
@@ -430,7 +427,6 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 		PassParameters->NumEdits = RT.SDFs.Num();
 		PassParameters->BrickAtlas = GraphBuilder.CreateSRV( BrickAtlasRDG );
 		PassParameters->BrickSampler = BrickSampler;
-		PassParameters->MaterialAtlas = GraphBuilder.CreateSRV( MaterialAtlasRDG, PF_R8_UINT );
 		PassParameters->PtrGrid = GraphBuilder.CreateSRV( PtrBufferRDG, PF_R32_UINT );
 		PassParameters->bBruteForceSphereTracing = CVarBruteForceSphereTracing.GetValueOnRenderThread();
 		PassParameters->PtrGridPos = RT.Settings.PtrGridPos;

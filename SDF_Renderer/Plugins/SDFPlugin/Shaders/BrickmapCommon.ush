@@ -4,11 +4,9 @@
 #include "Common.ush"
 
 #ifdef BRICKMAP_WRITE
-RWBuffer<uint> MaterialAtlas;
 RWTexture3D<float> BrickAtlas;
 RWBuffer<uint> PtrGrid;
 #else
-Buffer<uint> MaterialAtlas;
 Texture3D<float> BrickAtlas;
 Buffer<uint> PtrGrid;
 #endif
