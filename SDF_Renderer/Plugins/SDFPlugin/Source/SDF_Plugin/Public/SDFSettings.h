@@ -17,32 +17,34 @@ public:
 			   meta = (DisplayName = "Plane Z Coord") )
 	float PlaneZ{ 0.0f };
 
-	// TODO: default
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
 			   meta = (DisplayName = "Num Octaves",
 						ClampMin = "0") )
-	uint32 NumOctaves{ 3 };
+	uint32 NumOctaves{ 11 };
 
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
 			   meta = (DisplayName = "Frequency",
-						ClampMin = "0.1") )
+						ClampMin = "0.0001",
+						UIMin = "0.1") )
 	float Frequency{ 1.0f };
 
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
 			   meta = (DisplayName = "Lacunarity",
-						ClampMin = "1.0") )
+						ClampMin = "0.0",
+						UIMin = "1.0") )
 	float Lacunarity{ 2.0f };
 
 	// TODO: default & min
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
 			   meta = (DisplayName = "Amplitude (sphere radius)",
-						ClampMin = "0.1") )
+						ClampMin = "0.0001",
+						UIMin = "0.1") )
 	float Amplitude{ 1.0f };
 
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
 			   meta = (DisplayName = "Persistence",
 						ClampMin = "0.0",
-						ClampMax = "1.0") )
+						UIMax = "1.0") )
 	float Persistence{ 0.5f };
 
 	// TODO: default
@@ -62,29 +64,31 @@ public:
 	// TODO: default
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Inflation Percentage",
-						ClampMin = "0.1") )
+						ClampMin = "0.0") )
 	float Inflation{ 1.0f };
 
 	// TODO: default
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Inflation Gain",
 						ClampMin = "0.0",
-						ClampMax = "1.0") )
+						UIMax = "1.0") )
 	float InflationGain{ 1.0f };
 
 	// TODO: default
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Clipped Sphere Smoothing",
-						ClampMin = "0.1") )
+						ClampMin = "0.0001",
+						UIMin = "0.1") )
 	float ClippingSmoothing{ 0.1f };
 
 	// TODO: default
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Terrain Smoothing",
-						ClampMin = "0.1") )
+						ClampMin = "0.0001",
+						UIMin = "0.1") )
 	float UnionSmoothing{ 0.1f };
 
-	// TODO: default
+	// TODO: default & clamps
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Max. Radius Variance (%)",
 						ClampMin = "0.0",
@@ -126,12 +130,14 @@ public:
 
 	UPROPERTY( EditAnywhere, Config, Category = "Rendering",
 			   meta = (DisplayName = "Derivative H",
+						ClampMin = "0.0",
 						UIMin = "0.1",
 						UIMax = "1.0") )
 	float DerivativeH{ 4e-2f };
 	
 	UPROPERTY( EditAnywhere, Config, Category = "Rendering",
 		meta = (DisplayName = "GPU Unit Scale",
+			ClampMin = "0.0",
 			UIMin = "0.001",
 			UIMax = "0.1") )
 	float GPUUnitScale{ 1e-2f };
