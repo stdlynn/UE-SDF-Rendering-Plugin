@@ -35,6 +35,7 @@ public:
 	float Lacunarity{ 2.0f };
 
 	// TODO: default & min
+	// The maximum radius of a sample sphere
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
 			   meta = (DisplayName = "Amplitude (sphere radius)",
 						ClampMin = "0.0001",
@@ -62,9 +63,11 @@ public:
 	float RotAngle{ 90.0f };
 
 	// TODO: default
+	// A value of 1 corresponds to the diameter of a sphere
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Inflation Percentage",
-						ClampMin = "0.0") )
+						ClampMin = "0.0",
+						UIMax = "1.0") )
 	float Inflation{ 1.0f };
 
 	// TODO: default

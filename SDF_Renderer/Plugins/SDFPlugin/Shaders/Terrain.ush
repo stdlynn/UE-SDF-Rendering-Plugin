@@ -55,6 +55,8 @@ float SampleHashSphere( int3 CellPos, float3 PosFract, int3 CornerOffset )
 // [CREDITS] https://iquilezles.org/articles/fbmsdf/
 float SampleHashSphere8( float3 Pos )
 {	
+	// TODO: can the repetition somehow not have the spheres on an exact grid?
+
 	const int3 CellPos = floor( Pos );
 	const float3 PosFract = frac( Pos );
 	return min( min( min( SampleHashSphere( CellPos, PosFract, int3( 0, 0, 0) ),
@@ -83,10 +85,9 @@ float3x3 GetRowRotMatrix( float3 RotAxis, float RotAngle )
 
 namespace DistFn
 {
-	// TODO: see LOD and ray differential parts of the article
 	float FBM( float3 Pos, FTerrainParams Params, float UnitScale )
     {
-		// TODO: UnitScale changes result
+		// TODO: UnitScale changes result (frequency?)
 
 		// TODO: I would like for the Frequency to not change any other parts of the result
 		// TODO: e.g. the amplitude 
@@ -96,6 +97,14 @@ namespace DistFn
 		// Sample from a base (plane) SDF to get our initial distance field
 		// The octaves will subsequently add noise to said field
 		float Dist = Pos.z - Params.PlaneZ;
+
+		// TODO: try to make it so that regardless of PlaneZ and Amplitude,
+		// TODO: - Octave 1 spheres are sliced exactly in half by the plane
+		// TODO: - inflation = 0.5 results in EXACTLY 1 sphere fully showing
+		// TODO: currently it only works for (e.g.) Freq=1 & Amp=500
+		// Move the sample position into the coordinate space of the plane
+		// We do this so the noise is stable when moving the plane
+		Pos.z -= Params.PlaneZ;;
 
 		// The sample position is scaled by 'Frequency * Lacunarity^i'
 		// Apply the frequency scaling, as it doesn't depend on the octave
@@ -116,7 +125,13 @@ namespace DistFn
 			// TODO: are these being double multiplied by UnitScale?
 			const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
 			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
-			const float Inflation = Params.Inflation * Params.Amplitude;
+			// TODO: make inflation distance relative to amplitude in settings?
+			// We sample from an infinite grid of spheres, but only want those closest to the terrain to add to it
+			// Our inflation distance should therefore not be any higher than the maximum diameter of a sphere
+			// The base inflation ranges [0, 1], where 1 corresponds to the diameter of a sphere
+			// Therefore we multiply said base by this octave's maximum sphere diameter
+			const float Inflation = Params.Inflation * Params.Amplitude * 2.0;
+			//const float Inflation = Params.Inflation * Params.Amplitude;
 
 			// Simulate a distance field of an infinite grid of spheres (through domain repetition)
 			// Sample the closest 8 spheres to determine the distance
