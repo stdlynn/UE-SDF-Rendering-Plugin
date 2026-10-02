@@ -106,7 +106,7 @@ public:
 
 	UPROPERTY( EditAnywhere, Config, Category = "Rendering",
 			   meta = (DisplayName = "Surface Epsilon",
-						UIMin = "0.0",
+						UIMin = "0.01",
 						UIMax = "1.0") )
 	float SurfaceEpsilon{ 5e-1f };
 

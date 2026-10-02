@@ -116,7 +116,7 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	// Terrain
 	GT.Settings.Terrain.PlaneZ = SDFSettings->PlaneZ * SDFSettings->GPUUnitScale;
 	GT.Settings.Terrain.NumOctaves = SDFSettings->NumOctaves;
-	GT.Settings.Terrain.Frequency = SDFSettings->Frequency; // TODO: * UnitScale?
+	GT.Settings.Terrain.Frequency = SDFSettings->Frequency * SDFSettings->GPUUnitScale; // TODO:
 	GT.Settings.Terrain.Lacunarity = SDFSettings->Lacunarity;
 	GT.Settings.Terrain.Amplitude = SDFSettings->Amplitude * SDFSettings->GPUUnitScale;
 	GT.Settings.Terrain.Persistence = SDFSettings->Persistence;

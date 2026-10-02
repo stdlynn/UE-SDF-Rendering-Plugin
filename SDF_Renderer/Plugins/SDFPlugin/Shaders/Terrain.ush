@@ -65,9 +65,24 @@ float SampleHashSphere8( float3 Pos )
 						  SampleHashSphere( CellPos, PosFract, int3( 1, 1, 1) ) ) ) );
 }
 
-float SampleSphereRepetition( float3 Pos, float UnitScale )
+float3x3 GetRowMatrix( float3 RotAxis, float RotAngle, float Scale )
 {
-	return length( Pos - RoundToUnit( Pos, 200.0, UnitScale ) );
+	const float3 A = RotAxis;
+	const float C = cos( RotAngle );
+	const float CC = 1 - C; // Cosine complement
+	const float S = sin( RotAngle );
+	const float3 AA = A * A;
+	const float3 CCAAC3 = (CC * AA) + C;
+	const float I12 = CC * A.x * A.y;
+	const float I13 = CC * A.x * A.z;
+	const float I23 = CC * A.y * A.z;
+	const float SX = S * A.x;
+	const float SY = S * A.y;
+	const float SZ = S * A.z;
+	const float3x3 M = float3x3( CCAAC3.x, I12 + SZ, I13 - SY,
+								 I12 - SZ, CCAAC3.y, I23 + SX,
+								 I13 + SY, I23 - SX, CCAAC3.z );
+	return M * Scale;
 }
 
 namespace DistFn
@@ -79,43 +94,40 @@ namespace DistFn
 
 		// Scale x2, 90-degree rotation
 		// TODO: how to change the scale (which is essentially lacunarity, right?)
-		//static const float3x3 M = float3x3( 0.00, 1.60, 1.20,
-		//									-1.60, 0.72, -0.96,
-		//									-1.20, -0.96, 1.28 );
-		const float3 Axis = normalize( float3( 0.0, 0.6, -0.8 ) );
+		const float3 RotAxis = normalize( float3( 0.0, 0.6, -0.8 ) );
 		const float RotAngle = PI / 2.0;
-
-		const float3 A = Axis;
-		const float C = cos( RotAngle );
-		const float CC = 1 - C; // Cosine complement
-		const float S = sin( RotAngle );
-		float3x3 M = float3x3( C + CC * A.x * A.x, CC * A.x * A.y + S * A.z, CC * A.x * A.z - S * A.y,
-							   CC * A.x * A.y - S * A.z, C + CC * A.y * A.y, CC * A.y * A.z + S * A.x,
-							   CC * A.x * A.z + S * A.y, CC * A.y * A.z - S * A.x, C + CC * A.z * A.z );
-		M *= Params.Lacunarity;
+		// TODO: rename to something with "octave"
+		const float3x3 M = GetRowMatrix( RotAxis, RotAngle, Params.Lacunarity );
 
 		float Dist = Pos.z - Params.PlaneZ;
-		float LocalToWorldScale = 1.0; // 0.5^i (to balance out the matrix 2^i world scaling)
+		// TODO: use Params.Frequency instead? And comment its logic for converting dist
+		float WorldToLocalScale = Params.Frequency; // 0.5^i (to balance out the matrix 2^i world scaling)
+		Pos *= Params.Frequency;
 
 		for (uint i = 0; i < Params.NumOctaves; ++i)
 		{
+			// TODO: are these being double multiplied by UnitScale?
 			const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
 			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
 			const float Inflation = Params.Inflation * Params.Amplitude;
-			
-			const float LocalRadius = Params.Amplitude / LocalToWorldScale;
-			const float LocalSample = length( Pos - RoundToUnit( Pos, 200.0, 0.05 ) ) - LocalRadius;
-			const float SampleDist = LocalSample * LocalToWorldScale;
-			//const float SampleDist = length( Pos - RoundToUnit( Pos, 200.0, UnitScale ) ) * LocalToWorldScale - Params.Amplitude;
+
+			const float LocalPointDist = length( Pos - RoundToUnit( Pos, UnitScale ) );
+			const float PointDist = LocalPointDist / WorldToLocalScale;
+			const float SphereDist = PointDist - Params.Amplitude;
 
 			const float InflatedDist = Dist - Inflation;
-			const float ClippedDist = OpSmoothIntersect( InflatedDist, SampleDist, ClippingSmoothing );
+			const float ClippedDist = OpSmoothIntersect( InflatedDist, SphereDist, ClippingSmoothing );
 			Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
 
-			Pos = mul( M, Pos );
-			LocalToWorldScale /= Params.Lacunarity;
+			Pos = mul( Pos, M );
+			WorldToLocalScale *= Params.Lacunarity;
 
 			Params.Amplitude *= Params.Persistence;
+			
+			continue;
+			if (i == Params.NumOctaves - 1) { return SphereDist; } // Visualize the newest set of spheres
+			if (i == Params.NumOctaves - 1) { return ClippedDist; } // Visualize the newest layer of noise
+			if (i == Params.NumOctaves - 1) { return InflatedDist; } // Visualize the second to last layer inflated
 		}
 		return Dist;
 
