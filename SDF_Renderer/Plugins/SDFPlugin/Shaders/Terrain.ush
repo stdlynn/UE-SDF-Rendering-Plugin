@@ -109,6 +109,7 @@ namespace DistFn
 		const float3x3 RotMatrix = GetRowRotMatrix( Params.RotAxis, Params.RotAngle );
 		const float3x3 LacunarityMatrix = RotMatrix * Params.Lacunarity;
 
+		// Apply a layer of noise for each octave
 		for (uint i = 0; i < Params.NumOctaves; ++i)
 		{
 			// TODO: are these being double multiplied by UnitScale?
@@ -126,6 +127,9 @@ namespace DistFn
 			const float InflatedDist = Dist - Inflation;
 			const float ClippedDist = OpSmoothIntersect( InflatedDist, SphereDist, ClippingSmoothing );
 			Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
+
+			//
+			// TODO: if (Dist < TerrainDerivativeH) { break; }
 
 			// The position is scaled by 'Frequency * Lacunarity^i'
 			Pos = mul( Pos, LacunarityMatrix );

@@ -74,7 +74,6 @@ float3 GetAtlasNormal( float3 Pos, float3 BoundsMin )
 }
 float3 GetTerrainNormal( float3 Pos, FTerrainParams Params )
 {
-	// TODO: wrong?
 	const float2 K = float2( 1, -1 );
 	return normalize( K.xyy * DistFn::FBM( Pos + (K.xyy * DerivativeH), Params, UnitScale ) +
 					  K.yyx * DistFn::FBM( Pos + (K.yyx * DerivativeH), Params, UnitScale ) +
@@ -99,7 +98,10 @@ bool SphereTraceFBM( inout FRay Ray, out float3 Normal )
 		float ClosestDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), Params, UnitScale );
 		DistTravelled += ClosestDist;
 		if (DistTravelled > Ray.RelativeMaxT) { break; }
-		if (ClosestDist < SurfaceEpsilon)
+		// TODO: at a separate DerivativeH and Epsilon to the Terrain|BruteForceRendering settings
+		// TODO: rename DerivativeH to NormalSmoothing (only for the setting display names)
+		// A lot of detail is lost at a higher epsilon
+		if (ClosestDist < 1e-4 * UnitScale)//SurfaceEpsilon)
 		{
 			Ray.SetHitT( DistTravelled );
 			Normal = GetTerrainNormal( Ray.GetHitPos(), Params );
