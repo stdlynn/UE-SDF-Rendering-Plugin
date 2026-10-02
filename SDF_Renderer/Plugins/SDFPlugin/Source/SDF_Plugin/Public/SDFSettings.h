@@ -60,15 +60,15 @@ public:
 
 	// TODO: default
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
-			   meta = (DisplayName = "Terrain Smoothing",
-						ClampMin = "0.1") )
-	float UnionSmoothing{ 0.1f };
-
-	// TODO: default
-	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Clipped Sphere Smoothing",
 						ClampMin = "0.1") )
 	float ClippingSmoothing{ 0.1f };
+
+	// TODO: default
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
+			   meta = (DisplayName = "Terrain Smoothing",
+						ClampMin = "0.1") )
+	float UnionSmoothing{ 0.1f };
 
 	// TODO: default
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",

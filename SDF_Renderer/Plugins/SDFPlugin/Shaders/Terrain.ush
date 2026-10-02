@@ -65,24 +65,18 @@ float SampleHashSphere8( float3 Pos )
 						  SampleHashSphere( CellPos, PosFract, int3( 1, 1, 1) ) ) ) );
 }
 
-float3x3 GetRowMatrix( float3 RotAxis, float RotAngle, float Scale )
+float3x3 GetRowRotMatrix( float3 RotAxis, float RotAngle )
 {
-	const float3 A = RotAxis;
-	const float C = cos( RotAngle );
-	const float CC = 1 - C; // Cosine complement
-	const float S = sin( RotAngle );
-	const float3 AA = A * A;
-	const float3 CCAAC3 = (CC * AA) + C;
-	const float I12 = CC * A.x * A.y;
-	const float I13 = CC * A.x * A.z;
-	const float I23 = CC * A.y * A.z;
-	const float SX = S * A.x;
-	const float SY = S * A.y;
-	const float SZ = S * A.z;
-	const float3x3 M = float3x3( CCAAC3.x, I12 + SZ, I13 - SY,
-								 I12 - SZ, CCAAC3.y, I23 + SX,
-								 I13 + SY, I23 - SX, CCAAC3.z );
-	return M * Scale;
+	const float Cos = cos( RotAngle );
+	const float CosComp = 1 - Cos;
+	const float3 RotationDiagonal = (CosComp * RotAxis * RotAxis) + Cos;
+	const float CosCompXY = CosComp * RotAxis.x * RotAxis.y;
+	const float CosCompXZ = CosComp * RotAxis.x * RotAxis.z;
+	const float CosCompYZ = CosComp * RotAxis.y * RotAxis.z;
+	const float3 Sins = sin( RotAngle ) * RotAxis;
+	return float3x3( RotationDiagonal.x, CosCompXY + Sins.z, CosCompXZ - Sins.y,
+					 CosCompXY - Sins.z, RotationDiagonal.y, CosCompYZ + Sins.x,
+					 CosCompXZ + Sins.y, CosCompYZ - Sins.x, RotationDiagonal.z );
 }
 
 namespace DistFn
@@ -90,19 +84,32 @@ namespace DistFn
 	// TODO: see LOD and ray differential parts of the article
 	float FBM( float3 Pos, FTerrainParams Params, float UnitScale )
     {
-		// TODO: UnitScale changes result
-
-		// Scale x2, 90-degree rotation
-		// TODO: how to change the scale (which is essentially lacunarity, right?)
+		// TODO: make settings
 		const float3 RotAxis = normalize( float3( 0.0, 0.6, -0.8 ) );
 		const float RotAngle = PI / 2.0;
-		// TODO: rename to something with "octave"
-		const float3x3 M = GetRowMatrix( RotAxis, RotAngle, Params.Lacunarity );
 
+		// TODO: UnitScale changes result
+
+		// TODO: I would like for the Frequency to not change any other parts of the result
+		// TODO: e.g. the amplitude 
+		//Params.Amplitude /= Params.Frequency;
+		// TODO: that seems to work, but only for the first octave
+		
+		// Sample from a base (plane) SDF to get our initial distance field
+		// The octaves will subsequently add noise to said field
 		float Dist = Pos.z - Params.PlaneZ;
-		// TODO: use Params.Frequency instead? And comment its logic for converting dist
-		float WorldToLocalScale = Params.Frequency; // 0.5^i (to balance out the matrix 2^i world scaling)
+
+		// The sample position is scaled by 'Frequency * Lacunarity^i'
+		// Apply the frequency scaling, as it doesn't depend on the octave
 		Pos *= Params.Frequency;
+		// Our sampled distance fields won't be true SDFs, as scaling affects the gradient
+		// We keep track of the current scaling, so we can undo it after sampling
+		float LocalScale = Params.Frequency;
+		// Instead of directly applying the lacunarity,
+		// we integrate it into a matrix that also has rotation,
+		// to avoid patterns in our noise
+		const float3x3 RotMatrix = GetRowRotMatrix( RotAxis, RotAngle );
+		const float3x3 LacunarityMatrix = RotMatrix * Params.Lacunarity;
 
 		for (uint i = 0; i < Params.NumOctaves; ++i)
 		{
@@ -111,16 +118,20 @@ namespace DistFn
 			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
 			const float Inflation = Params.Inflation * Params.Amplitude;
 
+			// Sample
 			const float LocalPointDist = length( Pos - RoundToUnit( Pos, UnitScale ) );
-			const float PointDist = LocalPointDist / WorldToLocalScale;
+			// The local distance is scaled by 'Frequency * Lacunarity^i'
+			// Convert back to world-space distance
+			const float PointDist = LocalPointDist / LocalScale;
 			const float SphereDist = PointDist - Params.Amplitude;
 
 			const float InflatedDist = Dist - Inflation;
 			const float ClippedDist = OpSmoothIntersect( InflatedDist, SphereDist, ClippingSmoothing );
 			Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
 
-			Pos = mul( Pos, M );
-			WorldToLocalScale *= Params.Lacunarity;
+			// The position is scaled by 'Frequency * Lacunarity^i'
+			Pos = mul( Pos, LacunarityMatrix );
+			LocalScale *= Params.Lacunarity;
 
 			Params.Amplitude *= Params.Persistence;
 			
