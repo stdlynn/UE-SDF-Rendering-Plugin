@@ -65,10 +65,79 @@ float SampleHashSphere8( float3 Pos )
 						  SampleHashSphere( CellPos, PosFract, int3( 1, 1, 1) ) ) ) );
 }
 
+float SampleSphereRepetition( float3 Pos, float UnitScale )
+{
+	return length( Pos - RoundToUnit( Pos, 200.0, UnitScale ) );
+}
+
 namespace DistFn
 {
+	// TODO: see LOD and ray differential parts of the article
 	float FBM( float3 Pos, FTerrainParams Params, float UnitScale )
     {
+		// TODO: UnitScale changes result
+
+		// Scale x2, 90-degree rotation
+		// TODO: how to change the scale (which is essentially lacunarity, right?)
+		//static const float3x3 M = float3x3( 0.00, 1.60, 1.20,
+		//									-1.60, 0.72, -0.96,
+		//									-1.20, -0.96, 1.28 );
+		const float3 Axis = normalize( float3( 0.0, 0.6, -0.8 ) );
+		const float RotAngle = PI / 2.0;
+
+		const float3 A = Axis;
+		const float C = cos( RotAngle );
+		const float CC = 1 - C; // Cosine complement
+		const float S = sin( RotAngle );
+		float3x3 M = float3x3( C + CC * A.x * A.x, CC * A.x * A.y + S * A.z, CC * A.x * A.z - S * A.y,
+							   CC * A.x * A.y - S * A.z, C + CC * A.y * A.y, CC * A.y * A.z + S * A.x,
+							   CC * A.x * A.z + S * A.y, CC * A.y * A.z - S * A.x, C + CC * A.z * A.z );
+		M *= Params.Lacunarity;
+
+		float Dist = Pos.z - Params.PlaneZ;
+		float LocalToWorldScale = 1.0; // 0.5^i (to balance out the matrix 2^i world scaling)
+
+		for (uint i = 0; i < Params.NumOctaves; ++i)
+		{
+			const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
+			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
+			const float Inflation = Params.Inflation * Params.Amplitude;
+			
+			const float LocalRadius = Params.Amplitude / LocalToWorldScale;
+			const float LocalSample = length( Pos - RoundToUnit( Pos, 200.0, 0.05 ) ) - LocalRadius;
+			const float SampleDist = LocalSample * LocalToWorldScale;
+			//const float SampleDist = length( Pos - RoundToUnit( Pos, 200.0, UnitScale ) ) * LocalToWorldScale - Params.Amplitude;
+
+			const float InflatedDist = Dist - Inflation;
+			const float ClippedDist = OpSmoothIntersect( InflatedDist, SampleDist, ClippingSmoothing );
+			Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
+
+			Pos = mul( M, Pos );
+			LocalToWorldScale /= Params.Lacunarity;
+
+			Params.Amplitude *= Params.Persistence;
+		}
+		return Dist;
+
+		//float Dist = Pos.z - Params.PlaneZ;
+		//for (uint i = 0; i < Params.NumOctaves; ++i)
+		//{
+		//	const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
+		//	const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
+		//	const float Inflation = Params.Inflation * Params.Amplitude;
+		//
+		//	float SampleDist = length( Pos - RoundToUnit( Pos, 200.0, UnitScale )) - Params.Amplitude;
+		//
+		//	float InflatedDist = Dist - Inflation;
+		//	float ClippedDist = OpSmoothIntersect( InflatedDist, SampleDist, ClippingSmoothing );
+		//	Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
+		//
+		//	Pos = mul( float3x3(  0.00,  1.60,  1.20,
+		//						 -1.60,  0.72, -0.96,
+		//						 -1.20, -0.96,  1.28 ), Pos );
+		//	Params.Amplitude *= Params.Persistence;
+		//}
+		//return Dist;
 #if 0
 		// Sample from a base SDF to get our initial field
 		// The octaves will subsequently add noise to said field
@@ -79,17 +148,18 @@ namespace DistFn
 			
 		}
 		return Dist;
-#endif
+#elif 0
 
 		// TODO: The closer you get to a sphere, you will see layers being pulled off
 		// TODO: on newer spheres, you eventually can see through them if you're close enough
-		// TODO: doesn't seem to be related to the epsilon
+		// TODO: THIS IS BECAUSE OF THE EPSILON
+		// TODO: not fully, it seems
 		float D = Pos.z - Params.PlaneZ;
 		float Radius = Params.Amplitude; // Amplitude
 		for (uint i = 0; i < Params.NumOctaves; ++i)
 		{
-			//float SampleDist = length( Pos - RoundToUnit( Pos, 200.0, UnitScale )) - Radius;
-			float SampleDist = SampleHashSphere8( Pos ); // TODO: radiu
+			float SampleDist = length( Pos - RoundToUnit( Pos, 200.0, UnitScale )) - Radius;
+			//float SampleDist = SampleHashSphere8( Pos / UnitScale ) * UnitScale; // TODO: radiu
 			// TODO: The issue with the weird disappearing octave spheres is probably the inflation
 			// TODO: Something with us inflating too much? Thus, we must scale by some correct value based on the amplitude
 			// TODO: document this bug for ILOs
@@ -97,7 +167,9 @@ namespace DistFn
 			float InflatedDist = D - (Params.Inflation * Radius);
 			float ClippedDist = OpSmoothIntersect( InflatedDist, SampleDist, Params.ClippingSmoothing );
 			D = OpSmoothUnion( D, ClippedDist, Params.UnionSmoothing );
-			
+			// Shouldn't break the terrain, since we only apply additive edits
+			//if (D < SurfaceEpsilon) { break; }
+
 			Radius *= Params.Persistence;
 			//Params.Inflation *= Params.Persistence;
 			// TODO: why aren't the layers being pulled off if this is commented out
@@ -110,11 +182,13 @@ namespace DistFn
 			// TODO: I'm researching how to fix exterior distance
 			// TODO: turns out you can't fix it for an unknown amount of spheres
 			//Pos *= 1.2;
-			Pos += float3(123.45, 543.21, 723.27);
+			//Pos += float3(123.45, 543.21, 723.27) * UnitScale;
+			Pos = mul( float3x3(  0.00,  1.60,  1.20,
+								 -1.60,  0.72, -0.96,
+								 -1.20, -0.96,  1.28 ), Pos );
 		}
 		return D;
-
-#if 0
+#elif 0
 		// Sample from a base SDF to get our initial field
 		// The octaves will subsequently add noise to said field
         float Dist = Pos.z - Params.PlaneZ;

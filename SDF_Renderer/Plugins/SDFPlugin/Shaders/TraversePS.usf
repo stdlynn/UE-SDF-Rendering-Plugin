@@ -90,7 +90,7 @@ bool SphereTraceFBM( inout FRay Ray, out float3 Normal )
 {
 	float DistTravelled = 0.0;
 	FTerrainParams Params = GetTerrainParams();
-	for (uint Step = 0; Step < 128; ++Step)
+	for (uint Step = 0; Step < 256; ++Step)
 	{
 		float ClosestDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), Params, UnitScale );
 		DistTravelled += ClosestDist;

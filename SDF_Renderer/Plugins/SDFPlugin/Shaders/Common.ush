@@ -418,9 +418,3 @@ float3 RoundToUnit( float3 P, float Unit, float UnitScale )
 	Unit *= UnitScale;
 	return round( P / Unit ) * Unit;
 }
-
-float3 FloorToUnit( float3 P, float Unit, float UnitScale )
-{
-	Unit *= UnitScale;
-	return floor( P / Unit ) * Unit;
-}
