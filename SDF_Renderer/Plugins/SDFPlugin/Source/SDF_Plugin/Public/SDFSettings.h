@@ -46,6 +46,20 @@ public:
 	float Persistence{ 0.5f };
 
 	// TODO: default
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Noise",
+			   meta = (DisplayName = "Rotation Axis",
+						ClampMin = "0.0",
+						ClampMax = "1.0") )
+	FVector3f RotAxis{ 0.0f, 0.6f, -0.8f };
+
+	// TODO: default
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Noise",
+			   meta = (DisplayName = "Rotation Angle",
+						ClampMin = "0.0",
+						ClampMax = "360.0") )
+	float RotAngle{ 90.0f };
+
+	// TODO: default
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Inflation Percentage",
 						ClampMin = "0.1") )

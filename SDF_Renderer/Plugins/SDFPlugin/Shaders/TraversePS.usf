@@ -17,6 +17,8 @@ float SurfaceEpsilon;
 float DerivativeH;
 float UnitScale;
 // Terrain
+float3 RotAxis;
+float RotAngle;
 float PlaneZ;
 uint NumOctaves;
 float Frequency;
@@ -32,6 +34,8 @@ float MaxRadiusVariance;
 FTerrainParams GetTerrainParams()
 {
     FTerrainParams Params;
+	Params.RotAxis			  = RotAxis;
+	Params.RotAngle			  = RotAngle;
     Params.PlaneZ             = PlaneZ;
     Params.NumOctaves         = NumOctaves;
     Params.Frequency          = Frequency;

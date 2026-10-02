@@ -114,6 +114,8 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	GT.Settings.DerivativeH = SDFSettings->DerivativeH * SDFSettings->GPUUnitScale;
 	GT.Settings.GPUUnitScale = SDFSettings->GPUUnitScale;
 	// Terrain
+	GT.Settings.Terrain.RotAxis = SDFSettings->RotAxis.GetUnsafeNormal();
+	GT.Settings.Terrain.RotAngle = FMath::DegreesToRadians( SDFSettings->RotAngle );
 	GT.Settings.Terrain.PlaneZ = SDFSettings->PlaneZ * SDFSettings->GPUUnitScale;
 	GT.Settings.Terrain.NumOctaves = SDFSettings->NumOctaves;
 	GT.Settings.Terrain.Frequency = SDFSettings->Frequency * SDFSettings->GPUUnitScale; // TODO:
@@ -374,6 +376,8 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 		PassParameters->DerivativeH = RT.Settings.DerivativeH;
 		PassParameters->UnitScale = RT.Settings.GPUUnitScale;
 		// Terrain
+		PassParameters->RotAxis = RT.Settings.Terrain.RotAxis;
+		PassParameters->RotAngle = RT.Settings.Terrain.RotAngle;
 		PassParameters->PlaneZ = RT.Settings.Terrain.PlaneZ;
 		PassParameters->NumOctaves = RT.Settings.Terrain.NumOctaves;
 		PassParameters->Frequency = RT.Settings.Terrain.Frequency;

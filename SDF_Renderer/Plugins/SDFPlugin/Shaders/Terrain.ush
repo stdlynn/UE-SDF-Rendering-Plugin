@@ -2,6 +2,8 @@
 
 struct FTerrainParams
 {
+	float3 RotAxis;
+	float RotAngle;
     float PlaneZ;
     uint NumOctaves;
     float Frequency;
@@ -84,10 +86,6 @@ namespace DistFn
 	// TODO: see LOD and ray differential parts of the article
 	float FBM( float3 Pos, FTerrainParams Params, float UnitScale )
     {
-		// TODO: make settings
-		const float3 RotAxis = normalize( float3( 0.0, 0.6, -0.8 ) );
-		const float RotAngle = PI / 2.0;
-
 		// TODO: UnitScale changes result
 
 		// TODO: I would like for the Frequency to not change any other parts of the result
@@ -108,7 +106,7 @@ namespace DistFn
 		// Instead of directly applying the lacunarity,
 		// we integrate it into a matrix that also has rotation,
 		// to avoid patterns in our noise
-		const float3x3 RotMatrix = GetRowRotMatrix( RotAxis, RotAngle );
+		const float3x3 RotMatrix = GetRowRotMatrix( Params.RotAxis, Params.RotAngle );
 		const float3x3 LacunarityMatrix = RotMatrix * Params.Lacunarity;
 
 		for (uint i = 0; i < Params.NumOctaves; ++i)
@@ -141,37 +139,7 @@ namespace DistFn
 			if (i == Params.NumOctaves - 1) { return InflatedDist; } // Visualize the second to last layer inflated
 		}
 		return Dist;
-
-		//float Dist = Pos.z - Params.PlaneZ;
-		//for (uint i = 0; i < Params.NumOctaves; ++i)
-		//{
-		//	const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
-		//	const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
-		//	const float Inflation = Params.Inflation * Params.Amplitude;
-		//
-		//	float SampleDist = length( Pos - RoundToUnit( Pos, 200.0, UnitScale )) - Params.Amplitude;
-		//
-		//	float InflatedDist = Dist - Inflation;
-		//	float ClippedDist = OpSmoothIntersect( InflatedDist, SampleDist, ClippingSmoothing );
-		//	Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
-		//
-		//	Pos = mul( float3x3(  0.00,  1.60,  1.20,
-		//						 -1.60,  0.72, -0.96,
-		//						 -1.20, -0.96,  1.28 ), Pos );
-		//	Params.Amplitude *= Params.Persistence;
-		//}
-		//return Dist;
 #if 0
-		// Sample from a base SDF to get our initial field
-		// The octaves will subsequently add noise to said field
-        float Dist = Pos.z - Params.PlaneZ;
-
-		for (uint i = 0; i < Params.NumOctaves; ++i)
-		{
-			
-		}
-		return Dist;
-#elif 0
 
 		// TODO: The closer you get to a sphere, you will see layers being pulled off
 		// TODO: on newer spheres, you eventually can see through them if you're close enough

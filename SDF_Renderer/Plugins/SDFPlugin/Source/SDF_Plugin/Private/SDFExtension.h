@@ -24,6 +24,8 @@ public:
 	{
 		struct TerrainParams
 		{
+			FVector3f RotAxis;
+			float RotAngle;
 			float PlaneZ;
 			uint32 NumOctaves;
 			float Frequency;
@@ -125,6 +127,8 @@ public:
 		SHADER_PARAMETER( float, DerivativeH )
 		SHADER_PARAMETER( float, UnitScale )
 		// Terrain
+		SHADER_PARAMETER(FVector3f, RotAxis)
+		SHADER_PARAMETER(float, RotAngle)
 		SHADER_PARAMETER(float, PlaneZ)
 		SHADER_PARAMETER(uint32, NumOctaves)
 		SHADER_PARAMETER(float, Frequency)
