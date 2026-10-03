@@ -142,6 +142,11 @@ namespace DistFn
 		// Apply a layer of noise for each octave
 		for (uint i = 0; i < Params.NumOctaves; ++i)
 		{
+			// Band-pass filter
+			// If this octave has a maximum contribution (to the distance) smaller than the world-space size of a pixel,
+			// we can early out to avoid noise from sub-pixel detail
+			// TODO: also do the 'th' break from the article (break when radius < PixelSize)
+
 			// We sample from an infinite grid of spheres, but only want those closest to the terrain to add to it
 			// Our inflation distance should therefore not be any higher than the maximum diameter of a sample sphere
 			// The base inflation ranges [0, 1], where 1 corresponds to the diameter of a sphere
@@ -187,7 +192,6 @@ namespace DistFn
 			Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
 
 			// TODO: if (Dist < TerrainDerivativeH) { break; }
-			// TODO: also do the 'th' break from the article (break when radius < PixelSize)
 
 			// Set up the next octave
 			Pos = mul( Pos, LacunarityMatrix ); // The sample position is scaled by 'Frequency * Lacunarity^i'
