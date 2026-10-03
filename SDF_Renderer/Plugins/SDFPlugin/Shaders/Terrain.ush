@@ -38,18 +38,19 @@ float SimpleHash32V3( uint3 Seed )
 // TODO:
 // TODO: I think max amplitude can be 1.0, since otherwise it will go past the origin of other spheres
 // TODO: but then make amplitude the MAX (instead of average) (rename 'MaxRadiusVariance')
-float SampleHashSphere( int3 CellPos, float3 PosFract, int3 CornerOffset )
+float SampleHashSphere( int3 CellMin, float3 CellSpacePos, uint3 CornerOffset )
 {
 	// TODO: radius
 	// TODO: avg radius
 	// TODO: but also the range (e.g. [0.8xAvg, 1.2xAvg]
-	// Decide the radius based on a hash
-	const int3 CornerCell = CellPos + CornerOffset;
-	const uint3 Seed = uint3( asuint( CornerCell.x ), asuint( CornerCell.y ), asuint( CornerCell.z ) );
+	// Pick the radius based on a hash
+	const int3 CellCorner = CellMin + CornerOffset;
+	const uint3 Seed = uint3( asuint( CellCorner.x ), asuint( CellCorner.y ), asuint( CellCorner.z ) );
 	const float Radius = 0.5 * SimpleHash32V3( Seed );
 
-	//
-	return length( PosFract - CornerOffset ) - Radius;
+	// Evaluate the sphere's SDF
+	const float SphereOriginDist = length( CellSpacePos - CornerOffset );
+	return SphereOriginDist - Radius;
 }
 
 // [CREDITS] https://iquilezles.org/articles/fbmsdf/
@@ -57,16 +58,23 @@ float SampleHashSphere8( float3 Pos )
 {	
 	// TODO: can the repetition somehow not have the spheres on an exact grid?
 
-	const int3 CellPos = floor( Pos );
-	const float3 PosFract = frac( Pos );
-	return min( min( min( SampleHashSphere( CellPos, PosFract, int3( 0, 0, 0) ),
-						  SampleHashSphere( CellPos, PosFract, int3( 0, 0, 1) ) ),
-					 min( SampleHashSphere( CellPos, PosFract, int3( 0, 1, 0) ),
-						  SampleHashSphere( CellPos, PosFract, int3( 0, 1, 1) ) ) ),
-				min( min( SampleHashSphere( CellPos, PosFract, int3( 1, 0, 0) ),
-						  SampleHashSphere( CellPos, PosFract, int3( 1, 0, 1) ) ),
-					 min( SampleHashSphere( CellPos, PosFract, int3( 1, 1, 0) ),
-						  SampleHashSphere( CellPos, PosFract, int3( 1, 1, 1) ) ) ) );
+	// Find the lowest bound of the "cell" (of local unit scale) we reside in
+	const int3 CellMin = floor( Pos );
+
+	// The sphere SDFs will be evaluated in local space (using the '(x, y, z)' offset below)
+	// To calculate the distance to the origin of the sample spheres,
+	// we need to calculate the position in the space local to the cell
+	const float3 CellSpacePos = frac( Pos );
+
+	// Sample the 8 corners of our cell
+	float Dist = Infinity;
+	for (uint z = 0; z < 2; ++z) {
+	for (uint y = 0; y < 2; ++y) {
+	for (uint x = 0; x < 2; ++x) {
+		// Find the closest surface
+		Dist = OpUnion( Dist, SampleHashSphere( CellMin, CellSpacePos, uint3( x, y, z ) ) );
+	}}}
+	return Dist;
 }
 
 float3x3 GetRowRotMatrix( float3 RotAxis, float RotAngle )
@@ -101,8 +109,8 @@ namespace DistFn
 		// TODO: - inflation = 0.5 results in EXACTLY 1 sphere fully showing
 		// TODO: currently it only works for (e.g.) Freq=1 & Amp=500
 		// TODO: do note that creases appear if 'Persistence > 1/Lacunarity' (because radius > half cell size)
-		// TODO: I don't think this would happen if we sampled 8 spheres smoothly, maybe?
 		// TODO: or maybe amplitude could be relative to the cell size (maybe that also solves the second TODO in this fn)
+		// TODO: - Amplitude would range [0, 0.5]
 		// Move the sample position into the coordinate space of the plane
 		// We do this so the noise is stable when moving the plane
 		Pos -= Params.PlanePos;
@@ -134,21 +142,26 @@ namespace DistFn
 			// TODO: why do high values result in a crease? (try just octave 1)
 			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
 
-#if 1
-			// Simulate a distance field of an infinite grid of spheres (through domain repetition)
-			// Sample the closest 8 spheres to determine the distance
-			const float LocalPointDist = SampleHashSphere8( Pos );
+#if 0
+			// We simulate an infinite grid of spheres (through domain repetition)
+			// There is a sphere on every unit boundary in local space
 			// The local distance is scaled by 'Frequency * Lacunarity^i'
-			// Convert back to world-space distance
+			// The local unit scale has an inverse relationship with the frequency
+			// The higher the frequency, the smaller the local unit scale, resulting in more spheres per world-space unit
+			const float LocalPointDist = SampleHashSphere8( Pos );
+			// Convert the distance to world space
 			const float PointDist = LocalPointDist / LocalScale;
 			const float SphereDist = PointDist - Params.Amplitude; // TODO: still correct?
 #else
-			// Sample
-			const float LocalPointDist = length( Pos - round( Pos ) );
+			// We simulate an infinite grid of spheres (through domain repetition)
+			// There is a sphere on every unit boundary in local space
 			// The local distance is scaled by 'Frequency * Lacunarity^i'
-			// Convert back to world-space distance
+			// The local unit scale has an inverse relationship with the frequency
+			// The higher the frequency, the smaller the local unit scale, resulting in more spheres per world-space unit
+			const float LocalPointDist = length( Pos - round( Pos ) );
+			// Convert the distance to world space
 			const float PointDist = LocalPointDist / LocalScale;
-			const float SphereDist = PointDist - Params.Amplitude;
+			const float SphereDist = PointDist - Params.Amplitude; // TODO: amplitude should be relative to cell size
 #endif
 
 			// We cannot inflate the current distance field by a factor/through multiplication,
