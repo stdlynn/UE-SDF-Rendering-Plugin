@@ -116,16 +116,16 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	// Terrain
 	GT.Settings.Terrain.RotAxis = SDFSettings->RotAxis.GetUnsafeNormal();
 	GT.Settings.Terrain.RotAngle = FMath::DegreesToRadians( SDFSettings->RotAngle );
-	GT.Settings.Terrain.PlaneZ = SDFSettings->PlaneZ * SDFSettings->GPUUnitScale;
+	GT.Settings.Terrain.PlanePos = SDFSettings->PlanePos * SDFSettings->GPUUnitScale;
 	GT.Settings.Terrain.NumOctaves = SDFSettings->NumOctaves;
-	GT.Settings.Terrain.Frequency = SDFSettings->Frequency * SDFSettings->GPUUnitScale; // TODO:
+	GT.Settings.Terrain.Frequency = SDFSettings->Frequency;
 	GT.Settings.Terrain.Lacunarity = SDFSettings->Lacunarity;
 	GT.Settings.Terrain.Amplitude = SDFSettings->Amplitude * SDFSettings->GPUUnitScale;
 	GT.Settings.Terrain.Persistence = SDFSettings->Persistence;
-	GT.Settings.Terrain.Inflation = SDFSettings->Inflation; // TODO:
-	GT.Settings.Terrain.InflationGain = SDFSettings->InflationGain; // TODO:
-	GT.Settings.Terrain.UnionSmoothing = SDFSettings->UnionSmoothing * SDFSettings->GPUUnitScale;
-	GT.Settings.Terrain.ClippingSmoothing = SDFSettings->ClippingSmoothing * SDFSettings->GPUUnitScale;
+	GT.Settings.Terrain.Inflation = SDFSettings->Inflation;
+	GT.Settings.Terrain.InflationGain = SDFSettings->InflationGain;
+	GT.Settings.Terrain.UnionSmoothing = SDFSettings->UnionSmoothing;
+	GT.Settings.Terrain.ClippingSmoothing = SDFSettings->ClippingSmoothing;
 	GT.Settings.Terrain.MaxRadiusVariance = SDFSettings->MaxRadiusVariance;
 	GT.Settings.bUnitScaleDirty = true;
 
@@ -378,7 +378,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 		// Terrain
 		PassParameters->RotAxis = RT.Settings.Terrain.RotAxis;
 		PassParameters->RotAngle = RT.Settings.Terrain.RotAngle;
-		PassParameters->PlaneZ = RT.Settings.Terrain.PlaneZ;
+		PassParameters->PlanePos = RT.Settings.Terrain.PlanePos;
 		PassParameters->NumOctaves = RT.Settings.Terrain.NumOctaves;
 		PassParameters->Frequency = RT.Settings.Terrain.Frequency;
 		PassParameters->Lacunarity = RT.Settings.Terrain.Lacunarity;

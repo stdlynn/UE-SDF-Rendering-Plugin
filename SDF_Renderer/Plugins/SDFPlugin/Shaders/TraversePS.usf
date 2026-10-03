@@ -19,7 +19,7 @@ float UnitScale;
 // Terrain
 float3 RotAxis;
 float RotAngle;
-float PlaneZ;
+float3 PlanePos;
 uint NumOctaves;
 float Frequency;
 float Lacunarity;
@@ -36,7 +36,7 @@ FTerrainParams GetTerrainParams()
     FTerrainParams Params;
 	Params.RotAxis			  = RotAxis;
 	Params.RotAngle			  = RotAngle;
-    Params.PlaneZ             = PlaneZ;
+    Params.PlanePos           = PlanePos;
     Params.NumOctaves         = NumOctaves;
     Params.Frequency          = Frequency;
     Params.Lacunarity         = Lacunarity;
@@ -227,9 +227,10 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out float3 Albedo )
 	if (SphereTraceFBM( Ray, Normal ))
 	{
 		const float Height = Ray.GetHitPos().z;
-		if (Height < 35.0 * UnitScale) { Albedo = float3(0.1, 0.1, 0.5); }
-		else if (Height < 37.0 * UnitScale) { Albedo = float3(0.8, 0.6, 0.2); }
-		else if (Height < 55.0 * UnitScale) { Albedo = float3(0.2, 0.5, 0.1); }
+		if (Height < 20.0 * UnitScale) { Albedo = float3(0.1, 0.1, 0.5); }
+		else if (Height < 45.0 * UnitScale) { Albedo = float3(0.8, 0.6, 0.2); }
+		else if (Height < 200.0 * UnitScale) { Albedo = float3(0.2, 0.5, 0.1); }
+		else if (Height < 600.0 * UnitScale) { Albedo = float3(0.25, 0.25, 0.3); }
 		else { Albedo = float3(0.75, 0.75, 0.8); }
 	}
 

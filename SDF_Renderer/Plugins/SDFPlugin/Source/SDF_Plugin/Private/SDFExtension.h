@@ -26,7 +26,7 @@ public:
 		{
 			FVector3f RotAxis;
 			float RotAngle;
-			float PlaneZ;
+			FVector3f PlanePos;
 			uint32 NumOctaves;
 			float Frequency;
 			float Lacunarity;
@@ -129,7 +129,7 @@ public:
 		// Terrain
 		SHADER_PARAMETER(FVector3f, RotAxis)
 		SHADER_PARAMETER(float, RotAngle)
-		SHADER_PARAMETER(float, PlaneZ)
+		SHADER_PARAMETER(FVector3f, PlanePos)
 		SHADER_PARAMETER(uint32, NumOctaves)
 		SHADER_PARAMETER(float, Frequency)
 		SHADER_PARAMETER(float, Lacunarity)

@@ -4,7 +4,7 @@ struct FTerrainParams
 {
 	float3 RotAxis;
 	float RotAngle;
-    float PlaneZ;
+    float3 PlanePos;
     uint NumOctaves;
     float Frequency;
     float Lacunarity;
@@ -87,7 +87,12 @@ namespace DistFn
 {
 	float FBM( float3 Pos, FTerrainParams Params, float UnitScale )
     {
+		Params.Frequency /= 100.0;
+		Params.Amplitude *= 100.0;
+
 		// TODO: UnitScale changes result (frequency?)
+		// TODO: we need to do F/U because 'grid units per GPU unit'
+		Params.Frequency /= UnitScale;
 
 		// TODO: I would like for the Frequency to not change any other parts of the result
 		// TODO: e.g. the amplitude 
@@ -96,15 +101,18 @@ namespace DistFn
 
 		// Sample from a base (plane) SDF to get our initial distance field
 		// The octaves will subsequently add noise to said field
-		float Dist = Pos.z - Params.PlaneZ;
+		float Dist = Pos.z - Params.PlanePos.z;
 
 		// TODO: try to make it so that regardless of PlaneZ and Amplitude,
 		// TODO: - Octave 1 spheres are sliced exactly in half by the plane
 		// TODO: - inflation = 0.5 results in EXACTLY 1 sphere fully showing
 		// TODO: currently it only works for (e.g.) Freq=1 & Amp=500
+		// TODO: do note that creases appear if 'Persistence > 1/Lacunarity' (because radius > half cell size)
+		// TODO: I don't think this would happen if we sampled 8 spheres smoothly, maybe?
+		// TODO: or maybe amplitude could be relative to the cell size (maybe that also solves the second TODO in this fn)
 		// Move the sample position into the coordinate space of the plane
 		// We do this so the noise is stable when moving the plane
-		Pos.z -= Params.PlaneZ;;
+		Pos -= Params.PlanePos;
 
 		// The sample position is scaled by 'Frequency * Lacunarity^i'
 		// Apply the frequency scaling, as it doesn't depend on the octave
@@ -122,22 +130,23 @@ namespace DistFn
 		// Apply a layer of noise for each octave
 		for (uint i = 0; i < Params.NumOctaves; ++i)
 		{
-			// TODO: are these being double multiplied by UnitScale?
-			const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
-			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
-			// TODO: make inflation distance relative to amplitude in settings?
 			// We sample from an infinite grid of spheres, but only want those closest to the terrain to add to it
-			// Our inflation distance should therefore not be any higher than the maximum diameter of a sphere
+			// Our inflation distance should therefore not be any higher than the maximum diameter of a sample sphere
 			// The base inflation ranges [0, 1], where 1 corresponds to the diameter of a sphere
 			// Therefore we multiply said base by this octave's maximum sphere diameter
 			const float Inflation = Params.Inflation * Params.Amplitude * 2.0;
-			//const float Inflation = Params.Inflation * Params.Amplitude;
+			// We want the smoothing factors/distances to apply similar smoothing regardless of the sphere radius
+			// Therefore we multiply a base value by this octave's maximum sphere radius
+			const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
+			// TODO: why do high values result in a crease? (try just octave 1)
+			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
+			
 
 			// Simulate a distance field of an infinite grid of spheres (through domain repetition)
 			// Sample the closest 8 spheres to determine the distance
 			// TODO: const float LocalPointDist;
 			// Sample
-			const float LocalPointDist = length( Pos - RoundToUnit( Pos, UnitScale ) );
+			const float LocalPointDist = length( Pos - RoundToUnit( Pos, 1.0 ) );
 			// The local distance is scaled by 'Frequency * Lacunarity^i'
 			// Convert back to world-space distance
 			const float PointDist = LocalPointDist / LocalScale;
@@ -154,14 +163,13 @@ namespace DistFn
 			// We do this through by taking the minimum, as to not disturb the gradient's magnitude
 			Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
 
-			//
 			// TODO: if (Dist < TerrainDerivativeH) { break; }
+			// TODO: also do the 'th' break from the article (break when radius < PixelSize)
 
-			// The position is scaled by 'Frequency * Lacunarity^i'
-			Pos = mul( Pos, LacunarityMatrix );
+			// Set up the next octave
+			Pos = mul( Pos, LacunarityMatrix ); // The sample position is scaled by 'Frequency * Lacunarity^i'
 			LocalScale *= Params.Lacunarity;
-			// TODO: explain that it's radius
-			Params.Amplitude *= Params.Persistence;
+			Params.Amplitude *= Params.Persistence; // The amplitude is the maximum radius of a sample sphere
 			Params.Inflation *= Params.InflationGain;
 			
 			continue;
