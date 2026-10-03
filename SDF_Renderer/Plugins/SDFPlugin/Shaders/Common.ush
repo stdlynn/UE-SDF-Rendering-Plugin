@@ -412,8 +412,3 @@ float MapScene( float3 Pos )
 
 	return ClosestDist;
 }
-
-float3 RoundToUnit( float3 P, float UnitScale )
-{
-	return round( P / UnitScale ) * UnitScale;
-}

@@ -75,10 +75,10 @@ float3 GetAtlasNormal( float3 Pos, float3 BoundsMin )
 float3 GetTerrainNormal( float3 Pos, FTerrainParams Params )
 {
 	const float2 K = float2( 1, -1 );
-	return normalize( K.xyy * DistFn::FBM( Pos + (K.xyy * DerivativeH), Params, UnitScale ) +
-					  K.yyx * DistFn::FBM( Pos + (K.yyx * DerivativeH), Params, UnitScale ) +
-					  K.yxy * DistFn::FBM( Pos + (K.yxy * DerivativeH), Params, UnitScale ) +
-					  K.xxx * DistFn::FBM( Pos + (K.xxx * DerivativeH), Params, UnitScale ) );
+	return normalize( K.xyy * DistFn::FBM( Pos + (K.xyy * DerivativeH), Params ) +
+					  K.yyx * DistFn::FBM( Pos + (K.yyx * DerivativeH), Params ) +
+					  K.yxy * DistFn::FBM( Pos + (K.yxy * DerivativeH), Params ) +
+					  K.xxx * DistFn::FBM( Pos + (K.xxx * DerivativeH), Params ) );
 }
 float3 GetNormal( float3 Pos )
 {
@@ -95,7 +95,7 @@ bool SphereTraceFBM( inout FRay Ray, out float3 Normal )
 	FTerrainParams Params = GetTerrainParams();
 	for (uint Step = 0; Step < 256; ++Step)
 	{
-		float ClosestDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), Params, UnitScale );
+		float ClosestDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), Params );
 		DistTravelled += ClosestDist;
 		if (DistTravelled > Ray.RelativeMaxT) { break; }
 		// TODO: at a separate DerivativeH and Epsilon to the Terrain|BruteForceRendering settings

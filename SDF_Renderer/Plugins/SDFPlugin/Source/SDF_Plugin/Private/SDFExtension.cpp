@@ -118,9 +118,9 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	GT.Settings.Terrain.RotAngle = FMath::DegreesToRadians( SDFSettings->RotAngle );
 	GT.Settings.Terrain.PlanePos = SDFSettings->PlanePos * SDFSettings->GPUUnitScale;
 	GT.Settings.Terrain.NumOctaves = SDFSettings->NumOctaves;
-	GT.Settings.Terrain.Frequency = SDFSettings->Frequency;
+	GT.Settings.Terrain.Frequency = SDFSettings->Frequency / (SDFSettings->GPUUnitScale * 100.0f); // Frequency is a "per-length"
+	GT.Settings.Terrain.Amplitude = SDFSettings->Amplitude * (SDFSettings->GPUUnitScale * 100.0f); // Amplitude is a length
 	GT.Settings.Terrain.Lacunarity = SDFSettings->Lacunarity;
-	GT.Settings.Terrain.Amplitude = SDFSettings->Amplitude * SDFSettings->GPUUnitScale;
 	GT.Settings.Terrain.Persistence = SDFSettings->Persistence;
 	GT.Settings.Terrain.Inflation = SDFSettings->Inflation;
 	GT.Settings.Terrain.InflationGain = SDFSettings->InflationGain;

@@ -85,15 +85,8 @@ float3x3 GetRowRotMatrix( float3 RotAxis, float RotAngle )
 
 namespace DistFn
 {
-	float FBM( float3 Pos, FTerrainParams Params, float UnitScale )
+	float FBM( float3 Pos, FTerrainParams Params )
     {
-		Params.Frequency /= 100.0;
-		Params.Amplitude *= 100.0;
-
-		// TODO: UnitScale changes result (frequency?)
-		// TODO: we need to do F/U because 'grid units per GPU unit'
-		Params.Frequency /= UnitScale;
-
 		// TODO: I would like for the Frequency to not change any other parts of the result
 		// TODO: e.g. the amplitude 
 		//Params.Amplitude /= Params.Frequency;
@@ -140,17 +133,23 @@ namespace DistFn
 			const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
 			// TODO: why do high values result in a crease? (try just octave 1)
 			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
-			
 
+#if 1
 			// Simulate a distance field of an infinite grid of spheres (through domain repetition)
 			// Sample the closest 8 spheres to determine the distance
-			// TODO: const float LocalPointDist;
+			const float LocalPointDist = SampleHashSphere8( Pos );
+			// The local distance is scaled by 'Frequency * Lacunarity^i'
+			// Convert back to world-space distance
+			const float PointDist = LocalPointDist / LocalScale;
+			const float SphereDist = PointDist - Params.Amplitude; // TODO: still correct?
+#else
 			// Sample
-			const float LocalPointDist = length( Pos - RoundToUnit( Pos, 1.0 ) );
+			const float LocalPointDist = length( Pos - round( Pos ) );
 			// The local distance is scaled by 'Frequency * Lacunarity^i'
 			// Convert back to world-space distance
 			const float PointDist = LocalPointDist / LocalScale;
 			const float SphereDist = PointDist - Params.Amplitude;
+#endif
 
 			// We cannot inflate the current distance field by a factor/through multiplication,
 			// since the result wouldn't be a true SDF, as the gradient's magnitude wouldn't be 1 at all points
@@ -178,32 +177,5 @@ namespace DistFn
 			if (i == Params.NumOctaves - 1) { return InflatedDist; } // Visualize the second to last layer inflated
 		}
 		return Dist;
-#if 0
-		for (uint i = 0; i < Params.NumOctaves; ++i)
-		{
-			//float SampleDist = SampleHashSphere8( Pos / UnitScale ) * UnitScale; // TODO: radiu
-
-			// TODO: why aren't the layers being pulled off if this is commented out
-			// TODO: I think it breaks the field, subtracting from pos is fine
-			// TODO:
-			// TODO: also, at 29 octaves, why does a sphere appear high up
-			// TODO: Note: they only appear with union smoothing enabled
-			// TODO: from this I conclude the exterior distances are wrong because of the max()
-			// TODO: though I'm confused as to why it only happens with the smax()
-			// TODO: I'm researching how to fix exterior distance
-			// TODO: turns out you can't fix it for an unknown amount of spheres
-		}
-		return D;
-#elif 0
-		// Go over each octave
-        for (uint i = 0; i < Params.NumOctaves; ++i)
-        {
-        	// Simulate a distance field of an infinite grid of spheres (through domain repetition)
-			// Sample the closest 8 spheres to determine the distance
-			const float3 SamplePos = (Pos * Params.Frequency);// + float3( 0, Params.ClippingSmoothing, 0 ); // TODO:
-            const float SampleDist = SampleHashSphere8( SamplePos ) * Params.Amplitude;
-        }
-        return Dist;
-#endif
     }
 }
