@@ -57,6 +57,7 @@ float SampleHashSphere( int3 CellMin, float3 CellSpacePos, uint3 CornerOffset )
 float SampleHashSphere8( float3 Pos )
 {	
 	// TODO: can the repetition somehow not have the spheres on an exact grid?
+	// TODO: eh you would be using the same seed as for the radius, bad idea
 
 	// Find the lowest bound of the "cell" (of local unit scale) we reside in
 	const int3 CellMin = floor( Pos );
@@ -66,12 +67,22 @@ float SampleHashSphere8( float3 Pos )
 	// we need to calculate the position in the space local to the cell
 	const float3 CellSpacePos = frac( Pos );
 
+	// TODO: test simplex (tetrahedral) noise, so we only need to check 4 spheres
+	// TODO: - take into account distance between corners wouldn't be 1 (but ~0.87?), scale radius accordingly
+	// TODO: - OpenSimplex2F (test both ImproveXY and Conventional)
+	// TODO: but how do we convert to distance? Instead, we must modify the code to sample spheres on the tetrahedron vertices
+	// TODO: - from openSimplex2Base, keep the first 2 blocks gathering the vertices, and the hashes part
+	// TODO: - use the hashes [0, 47] to select random sphere radii
+	// TODO: - aren't the vertices (v1, etc.) integers?
+	// TODO: - d1 and such represent the vector from the vertex to the sample point, take its length to get the distance
+	// TODO: - add credits "adapted from"
+
 	// Sample the 8 corners of our cell
 	float Dist = Infinity;
 	for (uint z = 0; z < 2; ++z) {
 	for (uint y = 0; y < 2; ++y) {
 	for (uint x = 0; x < 2; ++x) {
-		// Find the closest surface
+		// TODO: test smin
 		Dist = OpUnion( Dist, SampleHashSphere( CellMin, CellSpacePos, uint3( x, y, z ) ) );
 	}}}
 	return Dist;
