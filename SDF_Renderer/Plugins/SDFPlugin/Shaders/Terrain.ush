@@ -104,7 +104,8 @@ float3x3 GetRowRotMatrix( float3 RotAxis, float RotAngle )
 
 namespace DistFn
 {
-	float FBM( float3 Pos, FTerrainParams Params, float PixelSize = 0.0 )
+	// TODO: add a height offset for the noise relative to the terrain/amplitude [0,1]
+	float FBM( float3 Pos, FTerrainParams Params, float PixelSize = 0.0, float TotalDist = 0.0 )
     {
 		// TODO: I would like for the Frequency to not change any other parts of the result
 		// TODO: e.g. the amplitude 
@@ -145,7 +146,7 @@ namespace DistFn
 			// Band-limit the samples
 			// Attempting to render detail smaller than a pixel introduces aliasing,
 			// so stop adding octaves once the sphere diameter is smaller than a pixel to avoid artefacts
-			if (Params.Amplitude < PixelSize) { break; } // TODO: change amplitude to be diameter for this
+			if (Params.Amplitude * 2.0 < PixelSize) { break; } // TODO: change amplitude to be diameter for this
 			
 			// TODO: change amplitude to be diameter, change comments accordingly and remove this *2.0
 			// We sample from an infinite grid of spheres, but only want those closest to the terrain to add to it
@@ -191,7 +192,7 @@ namespace DistFn
 			// Add the (masked-out) layer of noise onto our current terrain distance field
 			// We do this through by taking the minimum, as to not disturb the gradient's magnitude
 			Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
-
+			
 			// TODO: if (Dist < TerrainDerivativeH) { break; }
 
 			// Set up the next octave
@@ -200,10 +201,14 @@ namespace DistFn
 			Params.Amplitude *= Params.Persistence; // The amplitude is the maximum radius of a sample sphere
 			Params.Inflation *= Params.InflationGain;
 			
+			// Visualizations (move above octave setup)
 			continue;
 			if (i == Params.NumOctaves - 1) { return SphereDist; } // Visualize the newest set of spheres
 			if (i == Params.NumOctaves - 1) { return ClippedDist; } // Visualize the newest layer of noise
 			if (i == Params.NumOctaves - 1) { return InflatedDist; } // Visualize the second to last layer inflated
+			// To make the band-limiting visualization work:
+			// - The viewport and render resolutions need to be the same
+			if (Params.Amplitude < PixelSize * 100.0) { return ClippedDist; } // Visualize the band-limiting
 		}
 		return Dist;
     }

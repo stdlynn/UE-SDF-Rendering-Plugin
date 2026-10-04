@@ -257,7 +257,7 @@ float GetPixelFootprint()
 	//               \|
 	// Return the pixel size at unit distance (scales linearly)
 	const float TanHalfFOV = 1.0 / ResolvedView.ViewToClip[0][0]; // [1][1] for vertical
-	const float InvPixelResolution = ResolvedView.ViewSizeAndInvSize.z; // .w for vertical // TODO: * UnitScale ?
+	const float InvPixelResolution = ResolvedView.ViewSizeAndInvSize.z; // .w for vertical
 	return 2 * TanHalfFOV * InvPixelResolution;
 }
 
