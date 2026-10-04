@@ -30,6 +30,10 @@ float InflationGain;
 float UnionSmoothing;
 float ClippingSmoothing;
 float MaxRadiusVariance;
+// Brute-force terrain rendering
+uint bBandLimiting;
+float TerrainEpsilon;
+float TerrainDerivativeH;
 
 FTerrainParams GetTerrainParams()
 {
@@ -75,10 +79,10 @@ float3 GetAtlasNormal( float3 Pos, float3 BoundsMin )
 float3 GetTerrainNormal( float3 Pos, FTerrainParams Params )
 {
 	const float2 K = float2( 1, -1 );
-	return normalize( K.xyy * DistFn::FBM( Pos + (K.xyy * DerivativeH), Params ) +
-					  K.yyx * DistFn::FBM( Pos + (K.yyx * DerivativeH), Params ) +
-					  K.yxy * DistFn::FBM( Pos + (K.yxy * DerivativeH), Params ) +
-					  K.xxx * DistFn::FBM( Pos + (K.xxx * DerivativeH), Params ) );
+	return normalize( K.xyy * DistFn::FBM( Pos + (K.xyy * TerrainDerivativeH), Params ) +
+					  K.yyx * DistFn::FBM( Pos + (K.yyx * TerrainDerivativeH), Params ) +
+					  K.yxy * DistFn::FBM( Pos + (K.yxy * TerrainDerivativeH), Params ) +
+					  K.xxx * DistFn::FBM( Pos + (K.xxx * TerrainDerivativeH), Params ) );
 }
 float3 GetNormal( float3 Pos )
 {
@@ -89,19 +93,18 @@ float3 GetNormal( float3 Pos )
 					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH) ) );
 }
 
-bool SphereTraceFBM( inout FRay Ray, out float3 Normal )
+bool SphereTraceFBM( inout FRay Ray, out float3 Normal, float PixelFootprint )
 {
 	float DistTravelled = 0.0;
 	FTerrainParams Params = GetTerrainParams();
 	for (uint Step = 0; Step < 256; ++Step)
 	{
-		float ClosestDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), Params );
+		const float PixelSize = (bBandLimiting == 0) ? 0.0 : PixelFootprint * (DistTravelled + Ray.T);
+		float ClosestDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), Params, PixelSize );
 		DistTravelled += ClosestDist;
 		if (DistTravelled > Ray.RelativeMaxT) { break; }
-		// TODO: at a separate DerivativeH and Epsilon to the Terrain|BruteForceRendering settings
-		// TODO: rename DerivativeH to NormalSmoothing (only for the setting display names)
 		// A lot of detail is lost at a higher epsilon
-		if (ClosestDist < 1e-4 * UnitScale)//SurfaceEpsilon)
+		if (ClosestDist < TerrainEpsilon)
 		{
 			Ray.SetHitT( DistTravelled );
 			Normal = GetTerrainNormal( Ray.GetHitPos(), Params );
@@ -109,33 +112,6 @@ bool SphereTraceFBM( inout FRay Ray, out float3 Normal )
 		}
 	}
 	return false;
-
-	const float PlaneZ = 0.0;
-	const float HeightAbovePlane = Ray.GetPos().z - PlaneZ;
-	const bool AbovePlane = HeightAbovePlane >= 0.0;
-	if ((AbovePlane && Ray.Dir.z >= 0.0) || (!AbovePlane && Ray.Dir.z <= 0.0)) { return false; }
-	
-	const float ClosingRateT = -Ray.Dir.z;
-	const float IntersectT = HeightAbovePlane / ClosingRateT;
-
-	if (IntersectT <= Ray.RelativeMaxT) { Ray.SetHitT( IntersectT ); }
-	return Ray.bHit;
-
-	// TODO: also have a parameter that is multiplied with the 'k' every octave
-
-	// for loop (stepping)
-		// set initial distance based on plane (aka y value in grid space)
-		// for loop (octaves)
-			// find distance to closest sphere (use SDF repetition)
-			// clip layer through intersection using max() or smax()
-}
-
-// Brick Sphere Tracing
-bool TraceBrick( inout FRay Ray )
-{
-	// Compute position local to brick (probably as VoxSize=1.0, yes definitely)
-	// Compute MaxT
-	// Sphere trace
 }
 
 // Pointer Grid DDA
@@ -148,21 +124,10 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 
 	// Setup
 	FDDA DDA = FDDA::Init( Ray, GridAABB.Min, BrickSize );
-
-	// TODO: idkkk
-	// Step in brick space
-	// DDA.ScaleUnitSize( 1.0 / BrickSize );
-
+	
 	// Initial sample
 	if (DDA.IsValidCell( PtrGridSize, Ray.RelativeMaxT ))
 	{
-		// TODO:
-		// TODO: DEPTH IS WRONG WHEN OUTSIDE OF THE GRID
-		// TODO: you can tell when moving the sphere partially outside the grid
-		// TODO: while the below code is enabled
-		// TODO:
-		// TODO: Depth in general is wrong, enable the debug visualization and see
-		// TODO:
 		if (IsBrickAllocated( DDA.CellCoord ))
 		{
 			// Edge case, might start inside any point within a brick
@@ -221,10 +186,10 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 	}
 }
 
-bool TraceScene( inout FRay Ray, out float3 Normal, out float3 Albedo )
+bool TraceScene( inout FRay Ray, out float3 Normal, out float3 Albedo, float PixelFootprint )
 {
 	// Terrain
-	if (SphereTraceFBM( Ray, Normal ))
+	if (SphereTraceFBM( Ray, Normal, PixelFootprint ))
 	{
 		const float Height = Ray.GetHitPos().z;
 		if (Height < 20.0 * UnitScale) { Albedo = float3(0.1, 0.1, 0.5); }
@@ -237,6 +202,7 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out float3 Albedo )
 	// Brute-force sphere tracing
 	if (bBruteForceSphereTracing > 0)
     {
+		// TODO: move brute-force terrain here
 		float DistTravelled = 0.0;
 		for (uint Step = 0; Step < 256; ++Step)
 		{
@@ -268,6 +234,33 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out float3 Albedo )
 	return Ray.bHit;
 }
 
+// The world-space pixel size at unit distance
+float GetPixelFootprint()
+{
+	// 2D visualization of the camera's view into the scene at arbitrary distance:
+	//                  ___
+	//               /|  |
+	//             /  |  |
+	//           /    |  |
+	//         /      |  | (Opposite)
+	//       /        |  | PixelSize * Resolution / 2
+	//     /          |  |
+	//   /        90°_|  |
+	// /____________|_| _|_
+	// \   (Adjacent) |
+	//   \  Distance  | tan( fov / 2 ) = opposite / adjacent
+	//     \          | tan( fov / 2 ) = (size * res) / (dist * 2)
+	//       \        |
+	//         \      |        dist * 2 * tan( fov / 2 )
+	//           \    | size = -------------------------
+	//             \  |                  res
+	//               \|
+	// Return the pixel size at unit distance (scales linearly)
+	const float TanHalfFOV = 1.0 / ResolvedView.ViewToClip[0][0]; // [1][1] for vertical
+	const float InvPixelResolution = ResolvedView.ViewSizeAndInvSize.z; // .w for vertical // TODO: * UnitScale ?
+	return 2 * TanHalfFOV * InvPixelResolution;
+}
+
 void TraversePS(
 	float4 InPosition : SV_POSITION,
 	out float4 OutSceneColor : SV_Target0, // SceneColor (emissive)
@@ -277,21 +270,24 @@ void TraversePS(
 	out float4 OutGBufferD : SV_Target4, // Custom data
 	out float OutDepth : SV_DEPTH ) // Depth
 {
+	// ...
+	ResolvedView = ResolveView();
+
 	// Screen UV
-	const float2 ViewportUV = (InPosition.xy - View.ViewRectMin.xy) * View.ViewSizeAndInvSize.zw;
+	const float2 ViewportUV = (InPosition.xy - ResolvedView.ViewRectMin.xy) * ResolvedView.ViewSizeAndInvSize.zw;
 	const float2 NDC = ViewportUV * float2( 2, -2 ) + float2( -1, 1 );
 
 	// Ray setup
-	const float4 TranslatedWorldPosH = mul( float4( NDC, 0.5, 1 ), View.ClipToTranslatedWorld );
+	const float4 TranslatedWorldPosH = mul( float4( NDC, 0.5, 1 ), ResolvedView.ClipToTranslatedWorld );
 	const float3 Dir = normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w );
-	FRay Ray = FRay::Create( View.ViewOriginHigh * UnitScale, Dir ); // Convert unit size
-	
+	FRay Ray = FRay::Create( ResolvedView.ViewOriginHigh * UnitScale, Dir ); // Convert unit size
+
 	// Trace
 	float3 Normal, Albedo;
-	if (! TraceScene( Ray, Normal, Albedo )) { discard; }
+	if (! TraceScene( Ray, Normal, Albedo, GetPixelFootprint() )) { discard; }
 
 	// Convert unit size
-    const float ViewZ = (Ray.GetHitT() / UnitScale) * dot( Dir, View.ViewForward.xyz );
+    const float ViewZ = (Ray.GetHitT() / UnitScale) * dot( Dir, ResolvedView.ViewForward.xyz );
     OutDepth = ConvertToDeviceZ( ViewZ );
 
 	FGBufferData GBuffer = (FGBufferData)0;

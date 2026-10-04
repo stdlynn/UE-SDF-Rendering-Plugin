@@ -102,6 +102,24 @@ public:
 						ClampMax = "1.0") )
 	float MaxRadiusVariance{ 0.15f };
 
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|BruteForceRendering",
+			   meta = (DisplayName = "Band-limiting") )
+	bool bBandLimiting{ true };
+
+	// TODO: default & clamps
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|BruteForceRendering",
+			   meta = (DisplayName = "Surface Epsilon",
+						UIMin = "0.0001",
+						UIMax = "0.01") )
+	float TerrainEpsilon{ 1e-4 };
+
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|BruteForceRendering",
+			   meta = (DisplayName = "Normals' Smoothing",
+						ClampMin = "0.0",
+						UIMin = "0.01",
+						UIMax = "1.0") )
+	float TerrainDerivativeH{ 4e-2f };
+
 	// TODO: radius randomness thing (e.g. if 1.2, use '1-(1.2-1)' to find lower range, clamp [1,2])
 	// actually clamp it [0,1] and do +1 in shader)
 
@@ -136,7 +154,7 @@ public:
 	float SurfaceEpsilon{ 5e-1f };
 
 	UPROPERTY( EditAnywhere, Config, Category = "Rendering",
-			   meta = (DisplayName = "Derivative H",
+			   meta = (DisplayName = "Normals' Smoothing",
 						ClampMin = "0.0",
 						UIMin = "0.1",
 						UIMax = "1.0") )

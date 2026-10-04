@@ -43,6 +43,7 @@ struct FSDFEdit
 StructuredBuffer<FSDFEdit> SDFEdits;
 uint NumEdits;
 
+// TODO: the whole ray T is still kinda bad
 struct FRay
 {
 	static FRay Create( float3 Pos, float3 Dir, float MaxT = Infinity )
