@@ -38,7 +38,7 @@ float SimpleHash32V3( uint3 Seed )
 }
 
 // [CREDITS] https://iquilezles.org/articles/fbmsdf/
-float SampleGridSpheres( float3 Pos, float MinNoiseScale, float SampleSmoothing )
+float SampleGridSpheres( float3 Pos, float MaxDiameter, float MinNoiseScale, float SampleSmoothing )
 {
 	// Find the lowest bound of the "cell" (of local unit scale) we reside in
 	const int3 CellMin = floor( Pos );
@@ -58,7 +58,8 @@ float SampleGridSpheres( float3 Pos, float MinNoiseScale, float SampleSmoothing 
 		const int3 CornerOffset = int3( x, y, z );
 		const int3 CellCorner = CellMin + CornerOffset;
 		const uint3 Seed = uint3( asuint( CellCorner.x ), asuint( CellCorner.y ), asuint( CellCorner.z ) );
-		const float4 Diameter = (SimpleHash32V3( Seed ) * (1.0 - MinNoiseScale)) + MinNoiseScale;
+		const float4 NoiseScale = (SimpleHash32V3( Seed ) * (1.0 - MinNoiseScale)) + MinNoiseScale; // [MinNoiseScale, 1]
+		const float4 Diameter = MaxDiameter * NoiseScale;
 		const float4 Radius = Diameter / 2.0;
 
 		// Evaluate the sphere's SDF
@@ -74,7 +75,7 @@ float SampleGridSpheres( float3 Pos, float MinNoiseScale, float SampleSmoothing 
 // [CREDITS] Adapted from https://github.com/KdotJPG/OpenSimplex2/blob/master/hlsl/OpenSimplex2.hlsl
 float4 Permute( float4 t ) { return t * (t * 34.0 + 133.0); }
 float4 Mod( float4 x, float4 y ) { return x - y * floor( x / y ); }
-float SampleSimplexSpheres( float3 Pos, float MinNoiseScale, float SampleSmoothing )
+float SampleSimplexSpheres( float3 Pos, float MaxDiameter, float MinNoiseScale, float SampleSmoothing )
 {	
 	// TODO: can the repetition somehow not have the spheres on an exact grid?
 	// TODO: eh you would be using the same seed as for the radius, bad idea
@@ -101,8 +102,8 @@ float SampleSimplexSpheres( float3 Pos, float MinNoiseScale, float SampleSmoothi
 
 	// TODO: integrate amplitude
 	// TODO: adjust for vertex-to-vertex distance
-	// [MinNoiseScale, 1]
-	const float4 Diameters = ((Hashes / 47.0) * (1.0 - MinNoiseScale)) + MinNoiseScale;
+	const float4 NoiseScale = ((Hashes / 47.0) * (1.0 - MinNoiseScale)) + MinNoiseScale; // [MinNoiseScale, 1]
+	const float4 Diameters = MaxDiameter * NoiseScale;
 	const float4 Radii = Diameters / 2.0;
 	
 	// Combine sphere SDFs
@@ -128,15 +129,15 @@ float3x3 GetRowRotMatrix( float3 RotAxis, float RotAngle )
 
 namespace DistFn
 {
+	// TODO: const params
 	float FBM( float3 Pos, FTerrainParams Params, float PixelSize = 0.0 )
     {
 		// Sample from a base (plane) SDF to get our initial distance field
 		// The octaves will subsequently add noise to said field
 		float Dist = Pos.z - Params.PlanePos.z;
 		
-		// TODO: uuuh only works when multiplied with 100*UnitScale
 		// Changing the frequency should only scale the noise, not modify it
-		// Thus, we must make the amplitude relative to the frequency
+		// Thus, we must make the amplitude relative to the frequency (and move it into world space)
 		// For (e.g.) half the frequency (double the space for a sphere), we have twice the diameter
 		Params.Amplitude /= Params.Frequency;
 		// 'SampleSmoothing' is only used in local sample space (which is scaled by the frequency),
@@ -171,7 +172,10 @@ namespace DistFn
 			// Attempting to render detail smaller than a pixel introduces aliasing,
 			// so stop adding octaves once the sphere diameter is smaller than a pixel to avoid artefacts
 			if (Params.Amplitude < PixelSize) { break; }
-			
+
+			// The local-space (maximum) sample diameter for this octave
+			const float LocalDiameter = Params.Amplitude * Params.Frequency;
+
 			// We sample from an infinite grid of spheres, but only want those closest to the terrain to add to it
 			// Our inflation distance should therefore not be any higher than the maximum diameter of a sample sphere
 			// The base inflation ranges [0, 1], relative to the sphere diameter
@@ -179,9 +183,10 @@ namespace DistFn
 			const float Inflation = Params.Inflation * Params.Amplitude;
 			// We want the smoothing factors/distances to apply similar smoothing regardless of the sphere diameter
 			// Therefore we multiply a base value by this octave's maximum sphere 
-			const float SampleSmoothing = Params.SampleSmoothing * Params.Amplitude;
 			const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
 			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
+			// 'SampleSmoothing' is in local space, so multiply it by the local diameter instead
+			const float SampleSmoothing = Params.SampleSmoothing * LocalDiameter;
 			
             // We simulate an infinite grid of spheres (through domain repetition)
 			// For the cub
@@ -190,8 +195,8 @@ namespace DistFn
 			// The local unit scale has an inverse relationship with the frequency
 			// The higher the frequency, the smaller the local unit scale, resulting in more spheres per world-space unit
 			const float LocalSampleDist = Params.bSimplex
-											  ? SampleSimplexSpheres( Pos, Params.MinNoiseScale, SampleSmoothing )
-											  : SampleGridSpheres( Pos, Params.MinNoiseScale, SampleSmoothing );
+											  ? SampleSimplexSpheres( Pos, LocalDiameter, Params.MinNoiseScale, SampleSmoothing )
+											  : SampleGridSpheres( Pos, LocalDiameter, Params.MinNoiseScale, SampleSmoothing );
 			// Convert the distance to world space
 			const float SampleDist = LocalSampleDist / Params.Frequency;
 
@@ -205,7 +210,9 @@ namespace DistFn
 			// Add the (masked-out) layer of noise onto our current terrain distance field
 			// We do this through by taking the minimum, as to not disturb the gradient's magnitude
 			Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
-			
+
+			if (i == Params.NumOctaves - 1) { return ClippedDist; }
+
 			// The sample position is scaled by 'Frequency * Lacunarity^i'
 			Pos = mul( Pos, LacunarityMatrix );
 			// Our sampled distance fields won't be true SDFs, 
@@ -223,7 +230,7 @@ namespace DistFn
 			if (i == Params.NumOctaves - 1) { return ClippedDist; } // Visualize the last layer of noise
 			if (i == Params.NumOctaves - 1) { return InflatedDist; } // Visualize the second to last layer inflated
 			// The viewport and render resolutions need to be the same to make the band-limiting visualization work
-			if (Params.Amplitude < PixelSize * 100.0) { return ClippedDist; } // Visualize the band-limiting
+			if (Params.Amplitude < PixelSize * 200.0) { return ClippedDist; } // Visualize the band-limiting
 		}
 		return Dist;
     }

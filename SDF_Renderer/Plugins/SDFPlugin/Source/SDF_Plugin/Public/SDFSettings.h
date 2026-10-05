@@ -79,7 +79,7 @@ public:
 	// Amplitude gain (per octave)
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
 			   meta = (DisplayName = "Persistence",
-						ClampMin = "0.0",
+						ClampMin = "0.0001",
 						UIMax = "1.0") )
 	float Persistence{ 0.5f };
 
