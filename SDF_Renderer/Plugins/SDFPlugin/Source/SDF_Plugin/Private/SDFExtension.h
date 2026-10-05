@@ -38,9 +38,10 @@ public:
 			float InflationGain;
 			float UnionSmoothing;
 			float ClippingSmoothing;
-			bool bBandLimiting;
 			float Epsilon;
 			float DerivativeH;
+			bool bSimplex;
+			bool bBandLimiting;
 		} Terrain;
 		FVector3f PtrGridPos;
 		float VoxSize;
@@ -145,9 +146,10 @@ public:
 		SHADER_PARAMETER(float, InflationGain)
 		SHADER_PARAMETER(float, UnionSmoothing)
 		SHADER_PARAMETER(float, ClippingSmoothing)
-		SHADER_PARAMETER(uint32, bBandLimiting)
 		SHADER_PARAMETER(float, TerrainEpsilon)
 		SHADER_PARAMETER(float, TerrainDerivativeH)
+		SHADER_PARAMETER(uint32, bSimplex)
+		SHADER_PARAMETER(uint32, bBandLimiting)
 		RENDER_TARGET_BINDING_SLOTS() // GBuffer Textures
 	END_SHADER_PARAMETER_STRUCT()
 

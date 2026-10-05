@@ -16,6 +16,7 @@ struct FTerrainParams
     float InflationGain;
     float UnionSmoothing;
     float ClippingSmoothing;
+	bool bSimplex;
 };
 
 // [CREDITS] https://www.shadertoy.com/view/sfXXzX
@@ -35,25 +36,9 @@ float SimpleHash32V3( uint3 Seed )
 	return (float)m1 / (float)0xFFFFFFFFu;
 }
 
-float SampleHashSphere( int3 CellMin, float3 CellSpacePos, uint3 CornerOffset )
-{
-	// TODO: use MinNoiseScale
-	// Pick the radius based on a hash
-	const int3 CellCorner = CellMin + CornerOffset;
-	const uint3 Seed = uint3( asuint( CellCorner.x ), asuint( CellCorner.y ), asuint( CellCorner.z ) );
-	const float Radius = 0.5 * SimpleHash32V3( Seed );
-
-	// Evaluate the sphere's SDF
-	const float SphereOriginDist = length( CellSpacePos - CornerOffset );
-	return SphereOriginDist - Radius;
-}
-
 // [CREDITS] https://iquilezles.org/articles/fbmsdf/
-float SampleHashSphere8( float3 Pos )
-{	
-	// TODO: can the repetition somehow not have the spheres on an exact grid?
-	// TODO: eh you would be using the same seed as for the radius, bad idea
-
+float SampleGridSpheres( float3 Pos, float MinNoiseScale )
+{
 	// Find the lowest bound of the "cell" (of local unit scale) we reside in
 	const int3 CellMin = floor( Pos );
 
@@ -62,42 +47,70 @@ float SampleHashSphere8( float3 Pos )
 	// we need to calculate the position in the space local to the cell
 	const float3 CellSpacePos = frac( Pos );
 
-	// TODO: test simplex (tetrahedral) noise, so we only need to check 4 spheres
-	// TODO: - take into account distance between corners wouldn't be 1 (but ~0.87?), scale radius accordingly
-	// TODO: - OpenSimplex2F (test both ImproveXY and Conventional)
-	// TODO: but how do we convert to distance? Instead, we must modify the code to sample spheres on the tetrahedron vertices
-	// TODO: - from openSimplex2Base, keep the first 2 blocks gathering the vertices, and the hashes part
-	// TODO: - use the hashes [0, 47] to select random sphere radii
-	// TODO: - aren't the vertices (v1, etc.) integers?
-	// TODO: - d1 and such represent the vector from the vertex to the sample point, take its length to get the distance
-	// TODO: - add credits "adapted from"
+	// Sample the 8 corners of our cell
+	float Dist = Infinity;
+	for (uint z = 0; z < 2; ++z) {
+	for (uint y = 0; y < 2; ++y) {
+	for (uint x = 0; x < 2; ++x) 
+	{
+		// Pick the radius based on a hash
+		const int3 CornerOffset = int3( x, y, z );
+		const int3 CellCorner = CellMin + CornerOffset;
+		const uint3 Seed = uint3( asuint( CellCorner.x ), asuint( CellCorner.y ), asuint( CellCorner.z ) );
+		const float4 Diameter = (SimpleHash32V3( Seed ) * (1.0 - MinNoiseScale)) + MinNoiseScale;
+		const float4 Radius = Diameter / 2.0;
 
-	// TODO: [CREDITS] Adapted from
+		// Evaluate the sphere's SDF
+		const float SphereOriginDist = length( CellSpacePos - CornerOffset );
+		const float SphereDist = SphereOriginDist - Radius;
+
+		// TODO: test smin
+		// Combine sphere SDFs
+		Dist = OpUnion( Dist, SphereDist );
+	}}}
+	return Dist;
+}
+
+// [CREDITS] Adapted from https://github.com/KdotJPG/OpenSimplex2/blob/master/hlsl/OpenSimplex2.hlsl
+float4 Permute( float4 t ) { return t * (t * 34.0 + 133.0); }
+float4 Mod( float4 x, float4 y ) { return x - y * floor( x / y ); }
+float SampleSimplexSpheres( float3 Pos, float MinNoiseScale )
+{	
+	// TODO: can the repetition somehow not have the spheres on an exact grid?
+	// TODO: eh you would be using the same seed as for the radius, bad idea
+
 	// Calculate the vertices and the distances to them
 	const float3 Vert1 = round( Pos );
 	const float3 Dist1 = Pos - Vert1;
-	const float3 Score1 = abs( Dist1 ); // TODO: Rename
-	const float3 Dir1 = step( max( Score1.yzx, Score1.zxy ), Score1 );
-	const float3 Vert2 = Vert1 + (Dir1 * sign( Dir1 ));
+	const float3 AbsDist1 = abs( Dist1 );
+	const float3 Dir1 = step( max( AbsDist1.yzx, AbsDist1.zxy ), AbsDist1 );
+	const float3 Vert2 = Vert1 + (Dir1 * sign( Dist1 ));
 	const float3 Dist2 = Pos - Vert2;
 	// Second half-lattice
 	const float3 Pos2 = Pos + 144.5;
 	const float3 Vert3 = round( Pos2 );
 	const float3 Dist3 = Pos2 - Vert3;
-	const float3 Score2 = abs( Dist3 );
-	const float3 Dir2 = step( max( Score2.yzx, Score2.zxy ), Score2 );
+	const float3 AbsDist2 = abs( Dist3 );
+	const float3 Dir2 = step( max( AbsDist2.yzx, AbsDist2.zxy ), AbsDist2 );
 	const float3 Vert4 = Vert3 + (Dir2 * sign( Dist3 ));
 	const float3 Dist4 = Pos2 - Vert4;
+	// [0, 47]
+	float4 Hashes = Permute( Mod( float4( Vert1.x, Vert2.x, Vert3.x, Vert4.x ), 289.0 ) );
+	Hashes = Permute( Mod( Hashes + float4( Vert1.y, Vert2.y, Vert3.y, Vert4.y ), 289.0 ) );
+	Hashes = Mod( Permute( Mod( Hashes + float4( Vert1.z, Vert2.z, Vert3.z, Vert4.z ), 289.0 ) ), 48.0 );
 
-	// Sample the 8 corners of our cell
-	float Dist = Infinity;
-	for (uint z = 0; z < 2; ++z) {
-	for (uint y = 0; y < 2; ++y) {
-	for (uint x = 0; x < 2; ++x) {
-		// TODO: test smin
-		Dist = OpUnion( Dist, SampleHashSphere( CellMin, CellSpacePos, uint3( x, y, z ) ) );
-	}}}
-	return Dist;
+	// TODO: integrate amplitude
+	// TODO: adjust for vertex-to-vertex distance
+	// [MinNoiseScale, 1]
+	const float4 Diameters = ((Hashes / 47.0) * (1.0 - MinNoiseScale)) + MinNoiseScale;
+	const float4 Radii = Diameters / 2.0;
+
+	// TODO: try smin
+	//
+	return OpUnion( OpUnion( OpUnion( length( Dist1 ) - Radii.x,
+									  length( Dist2 ) - Radii.y ),
+									  length( Dist3 ) - Radii.z ),
+									  length( Dist4 ) - Radii.w );
 }
 
 float3x3 GetRowRotMatrix( float3 RotAxis, float RotAngle )
@@ -166,28 +179,18 @@ namespace DistFn
 			const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
 			// TODO: TODO: there is a crease for high values (obviously because there is no smin)
 			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
-
-#if 0
-			// We simulate an infinite grid of spheres (through domain repetition)
-			// There is a sphere on every unit boundary in local space
+			
+            // We simulate an infinite grid of spheres (through domain repetition)
+			// For the cub
+			// There is a sphere on every unit boundary in local space (
 			// The local distance is scaled by 'Frequency * Lacunarity^i'
 			// The local unit scale has an inverse relationship with the frequency
 			// The higher the frequency, the smaller the local unit scale, resulting in more spheres per world-space unit
-			const float LocalPointDist = SampleHashSphere8( Pos );
+			const float LocalSampleDist = Params.bSimplex
+											  ? SampleSimplexSpheres( Pos, Params.MinNoiseScale )
+											  : SampleGridSpheres( Pos, Params.MinNoiseScale );
 			// Convert the distance to world space
-			const float PointDist = LocalPointDist / Params.Frequency;
-			const float SphereDist = PointDist - (Params.Amplitude / 2.0); // TODO: still correct?
-#else
-			// We simulate an infinite grid of spheres (through domain repetition)
-			// There is a sphere on every unit boundary in local space
-			// The local distance is scaled by 'Frequency * Lacunarity^i'
-			// The local unit scale has an inverse relationship with the frequency
-			// The higher the frequency, the smaller the local unit scale, resulting in more spheres per world-space unit
-			const float LocalPointDist = length( Pos - round( Pos ) );
-			// Convert the distance to world space
-			const float PointDist = LocalPointDist / Params.Frequency;
-			const float SphereDist = PointDist - (Params.Amplitude / 2.0); // TODO: amplitude should be relative to cell size
-#endif
+			const float SampleDist = LocalSampleDist / Params.Frequency;
 
 			// We cannot inflate the current distance field by a factor/through multiplication,
 			// since the result wouldn't be a true SDF, as the gradient's magnitude wouldn't be 1 at all points
@@ -195,7 +198,7 @@ namespace DistFn
 			const float InflatedDist = Dist - Inflation;
 			// Calculate the distance field of the intersection between the sampled distance and the inflated terrain
 			// We use this to mask out any noise not within distance of the terrain (as per the previous octaves)
-			const float ClippedDist = OpSmoothIntersect( InflatedDist, SphereDist, ClippingSmoothing );
+			const float ClippedDist = OpSmoothIntersect( InflatedDist, SampleDist, ClippingSmoothing );
 			// Add the (masked-out) layer of noise onto our current terrain distance field
 			// We do this through by taking the minimum, as to not disturb the gradient's magnitude
 			Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
@@ -213,7 +216,7 @@ namespace DistFn
 			
 			// Visualizations (move above octave setup)
 			continue;
-			if (i == Params.NumOctaves - 1) { return SphereDist; } // Visualize the last set of spheres
+			if (i == Params.NumOctaves - 1) { return SampleDist; } // Visualize the last set of spheres
 			if (i == Params.NumOctaves - 1) { return ClippedDist; } // Visualize the last layer of noise
 			if (i == Params.NumOctaves - 1) { return InflatedDist; } // Visualize the second to last layer inflated
 			// The viewport and render resolutions need to be the same to make the band-limiting visualization work

@@ -13,6 +13,11 @@ class SDFPLUGIN_API USDFSettings : public UDeveloperSettings
 
 public:
 
+	// Sample 4 tetrahedron corners instead of 8 grid corners
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Noise",
+			   meta = (DisplayName = "Use Simplex Noise") )
+	bool bSimplex{ false };
+
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Noise",
 			   meta = (DisplayName = "Plane Position") )
 	FVector3f PlanePos{ 0.0f, 0.0f, 0.0f };
@@ -26,7 +31,7 @@ public:
 
 	// TODO: implement & default
 	// Relative to the diameter of a sample sphere
-	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Noise",
 			   meta = (DisplayName = "Min. Noise Scale (%)",
 						ClampMin = "0.0",
 						UIMax = "1.0") )
