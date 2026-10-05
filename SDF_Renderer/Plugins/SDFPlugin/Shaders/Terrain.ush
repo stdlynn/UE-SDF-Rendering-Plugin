@@ -98,10 +98,8 @@ float SampleSimplexSpheres( float3 Pos, float MaxDiameter, float MinNoiseScale, 
 	Hashes = Mod( Permute( Mod( Hashes + float4( Vert1.z, Vert2.z, Vert3.z, Vert4.z ), 289.0 ) ), 48.0 );
 	
 	// Calculate the radii
-	// Scale the maximum diameter by the distance between vertices (which is less than 1, unlike for grid samples)
-	static const float DistBetweenVertices = sqrt( 3 ) / 2.0;
 	const float4 NoiseScale = ((Hashes / 47.0) * (1.0 - MinNoiseScale)) + MinNoiseScale; // [MinNoiseScale, 1]
-	const float4 Diameters = MaxDiameter * DistBetweenVertices * NoiseScale;
+	const float4 Diameters = MaxDiameter * NoiseScale;
 	const float4 Radii = Diameters / 2.0;
 	
 	// Combine sphere SDFs
@@ -137,6 +135,9 @@ namespace DistFn
 		// Thus, we must make the amplitude relative to the frequency (and move it into world space)
 		// For (e.g.) half the frequency (double the space for a sphere), we have twice the diameter
 		Params.Amplitude /= Params.Frequency;
+		// The distance between grid points is 1, but for Simplex noise the distance between the vertices is smaller,
+		// so we have to scale the amplitude by said distance to compensate, if we're using Simplex noise
+		if (Params.bSimplex) { Params.Amplitude *= sqrt( 3 ) / 2.0; }
 
 		// Move the sample position into the coordinate space of the plane
 		// We do this so the noise is stable when moving the plane
@@ -203,8 +204,6 @@ namespace DistFn
 			// Add the (masked-out) layer of noise onto our current terrain distance field
 			// We do this through by taking the minimum, as to not disturb the gradient's magnitude
 			Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
-
-			if (i == Params.NumOctaves - 1) { return ClippedDist; }
 
 			// The sample position is scaled by 'Frequency * Lacunarity^i'
 			Pos = mul( Pos, LacunarityMatrix );
