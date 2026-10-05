@@ -97,10 +97,11 @@ float SampleSimplexSpheres( float3 Pos, float MaxDiameter, float MinNoiseScale, 
 	Hashes = Permute( Mod( Hashes + float4( Vert1.y, Vert2.y, Vert3.y, Vert4.y ), 289.0 ) );
 	Hashes = Mod( Permute( Mod( Hashes + float4( Vert1.z, Vert2.z, Vert3.z, Vert4.z ), 289.0 ) ), 48.0 );
 	
-	// TODO: adjust for vertex-to-vertex distance (when calculating the diameter)
 	// Calculate the radii
+	// Scale the maximum diameter by the distance between vertices (which is less than 1, unlike for grid samples)
+	static const float DistBetweenVertices = sqrt( 3 ) / 2.0;
 	const float4 NoiseScale = ((Hashes / 47.0) * (1.0 - MinNoiseScale)) + MinNoiseScale; // [MinNoiseScale, 1]
-	const float4 Diameters = MaxDiameter * NoiseScale;
+	const float4 Diameters = MaxDiameter * DistBetweenVertices * NoiseScale;
 	const float4 Radii = Diameters / 2.0;
 	
 	// Combine sphere SDFs
@@ -126,20 +127,16 @@ float3x3 GetRowRotMatrix( float3 RotAxis, float RotAngle )
 
 namespace DistFn
 {
-	// TODO: const params
 	float FBM( float3 Pos, FTerrainParams Params, float PixelSize = 0.0 )
     {
 		// Sample from a base (plane) SDF to get our initial distance field
 		// The octaves will subsequently add noise to said field
 		float Dist = Pos.z - Params.PlanePos.z;
-		
+
 		// Changing the frequency should only scale the noise, not modify it
 		// Thus, we must make the amplitude relative to the frequency (and move it into world space)
 		// For (e.g.) half the frequency (double the space for a sphere), we have twice the diameter
 		Params.Amplitude /= Params.Frequency;
-		// 'SampleSmoothing' is only used in local sample space (which is scaled by the frequency),
-		// so we must first transform it into said space
-		Params.SampleSmoothing *= Params.Frequency;
 
 		// Move the sample position into the coordinate space of the plane
 		// We do this so the noise is stable when moving the plane
@@ -161,8 +158,7 @@ namespace DistFn
 		// to avoid patterns in our noise
 		const float3x3 RotMatrix = GetRowRotMatrix( Params.RotAxis, Params.RotAngle );
 		const float3x3 LacunarityMatrix = RotMatrix * Params.Lacunarity;
-
-		// TODO: integrate 'i' into the seeds
+		
 		// Apply a layer of noise for each octave
 		[loop] for (uint i = 0; i < Params.NumOctaves; ++i)
 		{
@@ -183,7 +179,7 @@ namespace DistFn
 			// Therefore we multiply a base value by this octave's maximum sphere diameter
 			const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
 			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
-			// 'SampleSmoothing' is in local space, so multiply it by the local diameter instead
+			// 'SampleSmoothing' is used in local space, so multiply it by the local diameter instead
 			const float SampleSmoothing = Params.SampleSmoothing * LocalDiameter;
 			
             // We simulate an infinite grid of spheres (through domain repetition)
@@ -207,6 +203,8 @@ namespace DistFn
 			// Add the (masked-out) layer of noise onto our current terrain distance field
 			// We do this through by taking the minimum, as to not disturb the gradient's magnitude
 			Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
+
+			if (i == Params.NumOctaves - 1) { return ClippedDist; }
 
 			// The sample position is scaled by 'Frequency * Lacunarity^i'
 			Pos = mul( Pos, LacunarityMatrix );
