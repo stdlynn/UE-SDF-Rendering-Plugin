@@ -131,7 +131,7 @@ namespace DistFn
 		// Offset the noise vertically (the only axis on which it is not possible through 'PlanePos')
 		// The offset ranges [-0.5, 0.5], relative to the diameter for the first octave of noise
 		Pos.z -= Params.VerticalNoiseOffset * Params.Amplitude;
-		// The inflation ranges [0, 1] and should map to the minimum and maximum height of the terrain
+		// The inflation ranges [0, 1] and should map to the minimum and maximum height of the first octave
 		// Adjust for/multiply by the percentage of the sphere above the terrain
 		Params.Inflation *= max( Params.VerticalNoiseOffset + 0.5, 0.0 );
 

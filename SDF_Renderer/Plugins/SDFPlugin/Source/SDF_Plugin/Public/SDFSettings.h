@@ -13,8 +13,6 @@ class SDFPLUGIN_API USDFSettings : public UDeveloperSettings
 
 public:
 
-	// TODO: comment parameters where necessary
-
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Noise",
 			   meta = (DisplayName = "Plane Position") )
 	FVector3f PlanePos{ 0.0f, 0.0f, 0.0f };
@@ -26,7 +24,7 @@ public:
 						ClampMax = "0.5") )
 	float VerticalNoiseOffset{ 0.0f };
 
-	// Normalized
+	// Normalized before use
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Noise",
 			   meta = (DisplayName = "Rotation Axis",
 						ClampMin = "0.0",
@@ -72,8 +70,7 @@ public:
 	float Persistence{ 0.5f };
 
 	// TODO: default
-	// TODO: update comment if changed
-	// Inflation distance relative to the sphere diameter
+	// Inflation distance relative to the maximum height of the first octave
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Inflation (%)",
 						ClampMin = "0.0",
@@ -88,7 +85,7 @@ public:
 	float InflationGain{ 1.0f };
 
 	// TODO: default
-	// Relative to the radius of a sample sphere
+	// Relative to the diameter of a sample sphere
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Clipped Sphere Smoothing (%)",
 						ClampMin = "0.0",
@@ -97,7 +94,7 @@ public:
 	float ClippingSmoothing{ 0.1f };
 
 	// TODO: default
-	// Relative to the radius of a sample sphere
+	// Relative to the diameter of a sample sphere
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Terrain Smoothing (%)",
 						ClampMin = "0.0",
@@ -118,12 +115,14 @@ public:
 			   meta = (DisplayName = "Band-limiting") )
 	bool bBandLimiting{ true };
 
+	// The maximum distance from a surface to still count as a hit
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|BruteForceRendering",
 			   meta = (DisplayName = "Surface Epsilon",
 						UIMin = "0.0001",
 						UIMax = "0.01") )
 	float TerrainEpsilon{ 1e-4 };
 
+	// The 'h' in L'Hôpital's rule
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|BruteForceRendering",
 			   meta = (DisplayName = "Normals' Smoothing",
 						ClampMin = "0.0",
@@ -144,23 +143,27 @@ public:
 				 ClampMin = "0.01") )
 	float VoxSize{ 100.0f / 7.0f };
 
+	// The amount of brick hits necessary for a pixel to render white
 	UPROPERTY( EditAnywhere, Config, Category = "Debug Visualizations",
 		meta = (DisplayName = "Max. Bricks in Trace",
 			ClampMin = "1") )
 	uint32 DbgVisMaxBricks{ 50 };
 
+	// Blending between the rendered scene and the debug visualization
 	UPROPERTY( EditAnywhere, Config, Category = "Debug Visualizations",
 			   meta = (DisplayName = "Blend Factor",
 						ClampMin = "0",
 						ClampMax = "1" ) )
 	float DbgVisBlendFactor{ 0.6f };
 
+	// The maximum distance from a surface to still count as a hit
 	UPROPERTY( EditAnywhere, Config, Category = "Rendering",
 			   meta = (DisplayName = "Surface Epsilon",
 						UIMin = "0.01",
 						UIMax = "1.0") )
 	float SurfaceEpsilon{ 5e-1f };
 
+	// The 'h' in L'Hôpital's rule
 	UPROPERTY( EditAnywhere, Config, Category = "Rendering",
 			   meta = (DisplayName = "Normals' Smoothing",
 						ClampMin = "0.0",
@@ -168,6 +171,7 @@ public:
 						UIMax = "1.0") )
 	float DerivativeH{ 4e-2f };
 	
+	// Positions and scales will be multiplied by this when doing calculations on the GPU
 	UPROPERTY( EditAnywhere, Config, Category = "Rendering",
 		meta = (DisplayName = "GPU Unit Scale",
 			ClampMin = "0.0",
