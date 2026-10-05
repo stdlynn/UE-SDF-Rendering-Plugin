@@ -35,15 +35,9 @@ float SimpleHash32V3( uint3 Seed )
 	return (float)m1 / (float)0xFFFFFFFFu;
 }
 
-// TODO: make sure this returns a distance such that amplitude corresponds to real max sphere height idkkk
-// TODO:
-// TODO: I think max amplitude can be 1.0, since otherwise it will go past the origin of other spheres
-// TODO: but then make amplitude the MAX (instead of average) (rename 'MaxRadiusVariance')
 float SampleHashSphere( int3 CellMin, float3 CellSpacePos, uint3 CornerOffset )
 {
-	// TODO: radius
-	// TODO: avg radius
-	// TODO: but also the range (e.g. [0.8xAvg, 1.2xAvg]
+	// TODO: use MinNoiseScale
 	// Pick the radius based on a hash
 	const int3 CellCorner = CellMin + CornerOffset;
 	const uint3 Seed = uint3( asuint( CellCorner.x ), asuint( CellCorner.y ), asuint( CellCorner.z ) );
@@ -77,6 +71,23 @@ float SampleHashSphere8( float3 Pos )
 	// TODO: - aren't the vertices (v1, etc.) integers?
 	// TODO: - d1 and such represent the vector from the vertex to the sample point, take its length to get the distance
 	// TODO: - add credits "adapted from"
+
+	// TODO: [CREDITS] Adapted from
+	// Calculate the vertices and the distances to them
+	const float3 Vert1 = round( Pos );
+	const float3 Dist1 = Pos - Vert1;
+	const float3 Score1 = abs( Dist1 ); // TODO: Rename
+	const float3 Dir1 = step( max( Score1.yzx, Score1.zxy ), Score1 );
+	const float3 Vert2 = Vert1 + (Dir1 * sign( Dir1 ));
+	const float3 Dist2 = Pos - Vert2;
+	// Second half-lattice
+	const float3 Pos2 = Pos + 144.5;
+	const float3 Vert3 = round( Pos2 );
+	const float3 Dist3 = Pos2 - Vert3;
+	const float3 Score2 = abs( Dist3 );
+	const float3 Dir2 = step( max( Score2.yzx, Score2.zxy ), Score2 );
+	const float3 Vert4 = Vert3 + (Dir2 * sign( Dist3 ));
+	const float3 Dist4 = Pos2 - Vert4;
 
 	// Sample the 8 corners of our cell
 	float Dist = Infinity;
