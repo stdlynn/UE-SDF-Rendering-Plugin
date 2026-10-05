@@ -84,6 +84,11 @@ float3 GetAtlasNormal( float3 Pos, float3 BoundsMin )
 }
 float3 GetTerrainNormal( float3 Pos, FTerrainParams Params )
 {
+	// TODO: this calculates the world-space diameter of the noise (for simplex it would be slightly smaller)
+	// TODO: use this to calculate H automatically
+	// TODO: I have no clue why the UnitScale x100 has to be here
+	const float NoiseSize = Params.Amplitude * pow( Params.Persistence, max( Params.NumOctaves, 1 ) - 1 ) / Params.Frequency / 100.;
+	
 	const float2 K = float2( 1, -1 );
 	return normalize( K.xyy * DistFn::FBM( Pos + (K.xyy * TerrainDerivativeH), Params ) +
 					  K.yyx * DistFn::FBM( Pos + (K.yyx * TerrainDerivativeH), Params ) +

@@ -29,13 +29,12 @@ public:
 						ClampMax = "0.5") )
 	float VerticalNoiseOffset{ 0.0f };
 
-	// TODO: implement & default
 	// Relative to the diameter of a sample sphere
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Noise",
 			   meta = (DisplayName = "Min. Noise Scale (%)",
 						ClampMin = "0.0",
 						UIMax = "1.0") )
-	float MinNoiseScale{ 0.5f };
+	float MinNoiseScale{ 0.25f };
 
 	// Normalized before use
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Noise",
@@ -83,47 +82,42 @@ public:
 						UIMax = "1.0") )
 	float Persistence{ 0.5f };
 
-	// TODO: default
 	// Inflation distance relative to the maximum height of the first octave
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Inflation (%)",
 						ClampMin = "0.0",
 						UIMax = "1.0") )
-	float Inflation{ 0.06f };
+	float Inflation{ 0.1f };
 
-	// TODO: default
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Inflation Gain",
 						ClampMin = "0.0",
 						UIMax = "1.0") )
-	float InflationGain{ 1.0f };
+	float InflationGain{ 0.5f };
 
-	// TODO: default
 	// Relative to the diameter of a sample sphere
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Sample Smoothing (%)",
 						ClampMin = "0.0",
 						UIMin = "0.0001",
-						UIMax = "1.0") )
-	float SampleSmoothing{ 0.1f };
+						UIMax = "0.1") )
+	float SampleSmoothing{ 0.01f };
 
-	// TODO: default
 	// Relative to the diameter of a sample sphere
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Clipped Sphere Smoothing (%)",
 						ClampMin = "0.0",
 						UIMin = "0.0001",
-						UIMax = "1.0") )
-	float ClippingSmoothing{ 0.1f };
+						UIMax = "0.1") )
+	float ClippingSmoothing{ 0.01f };
 
-	// TODO: default
 	// Relative to the diameter of a sample sphere
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Terrain Smoothing (%)",
 						ClampMin = "0.0",
 						UIMin = "0.0001",
-						UIMax = "1.0") )
-	float UnionSmoothing{ 0.1f };
+						UIMax = "0.1") )
+	float UnionSmoothing{ 0.06f };
 
 	// Eliminate aliasing artefacts by not rendering sub-pixel details
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|BruteForceRendering",
@@ -135,7 +129,7 @@ public:
 			   meta = (DisplayName = "Surface Epsilon",
 						UIMin = "0.0001",
 						UIMax = "0.01") )
-	float TerrainEpsilon{ 1e-4 };
+	float TerrainEpsilon{ 1e-4f };
 
 	// The 'h' in L'Hôpital's rule
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|BruteForceRendering",
@@ -143,7 +137,7 @@ public:
 						ClampMin = "0.0",
 						UIMin = "0.01",
 						UIMax = "1.0") )
-	float TerrainDerivativeH{ 4e-2f };
+	float TerrainDerivativeH{ 0.01f };
 
 	// ========================
 	// fBM above, other beneath
