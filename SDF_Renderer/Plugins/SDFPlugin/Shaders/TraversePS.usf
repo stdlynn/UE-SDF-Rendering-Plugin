@@ -101,6 +101,9 @@ bool SphereTraceFBM( inout FRay Ray, out float3 Normal, float PixelFootprint )
 	FTerrainParams Params = GetTerrainParams();
 	for (uint Step = 0; Step < 256; ++Step)
 	{
+		// TODO: (see word doc) if we hit the max step count and never went under the epsilon,
+		// TODO: keep track of the smallest distance value and use that instead
+		// TODO: though tbh who cares about the brute-force rendering
 		const float PixelSize = (bBandLimiting == 0) ? 0.0 : PixelFootprint * (DistTravelled + Ray.T);
 		float ClosestDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), Params, PixelSize );
 		DistTravelled += ClosestDist;
@@ -193,7 +196,7 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out float3 Albedo, float Pix
 	// Terrain
 	if (SphereTraceFBM( Ray, Normal, PixelFootprint ))
 	{
-		const float Height = Ray.GetHitPos().z - PlanePos.z;
+		const float Height = Ray.GetHitPos().z;
 		if (Height < 7.0 * UnitScale) { Albedo = float3(0.1, 0.1, 0.5); }
 		else if (Height < 7.5 * UnitScale) { Albedo = float3(0.8, 0.6, 0.2); }
 		else if (Height < 11.0 * UnitScale) { Albedo = float3(0.2, 0.5, 0.1); }

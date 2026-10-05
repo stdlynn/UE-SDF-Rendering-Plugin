@@ -151,7 +151,6 @@ namespace DistFn
 		// Apply a layer of noise for each octave
 		for (uint i = 0; i < Params.NumOctaves; ++i)
 		{
-			// TODO: why does it look worse with band-limiting
 			// Band-limit the samples
 			// Attempting to render detail smaller than a pixel introduces aliasing,
 			// so stop adding octaves once the sphere diameter is smaller than a pixel to avoid artefacts

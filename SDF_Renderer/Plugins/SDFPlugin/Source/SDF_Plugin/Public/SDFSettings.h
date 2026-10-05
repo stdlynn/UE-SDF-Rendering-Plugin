@@ -78,7 +78,7 @@ public:
 			   meta = (DisplayName = "Inflation (%)",
 						ClampMin = "0.0",
 						UIMax = "1.0") )
-	float Inflation{ 0.5f };
+	float Inflation{ 0.06f };
 
 	// TODO: default
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
@@ -113,6 +113,7 @@ public:
 						ClampMax = "1.0") )
 	float MaxRadiusVariance{ 0.15f };
 
+	// Eliminate aliasing artefacts by not rendering sub-pixel details
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|BruteForceRendering",
 			   meta = (DisplayName = "Band-limiting") )
 	bool bBandLimiting{ true };
