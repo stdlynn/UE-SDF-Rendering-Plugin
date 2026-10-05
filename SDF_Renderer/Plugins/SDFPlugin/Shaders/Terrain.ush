@@ -6,6 +6,7 @@ struct FTerrainParams
 	float RotAngle;
     float3 PlanePos;
 	float VerticalNoiseOffset;
+    float MinNoiseScale;
     uint NumOctaves;
     float Frequency;
     float Lacunarity;
@@ -15,7 +16,6 @@ struct FTerrainParams
     float InflationGain;
     float UnionSmoothing;
     float ClippingSmoothing;
-    float MaxRadiusVariance;
 };
 
 // [CREDITS] https://www.shadertoy.com/view/sfXXzX

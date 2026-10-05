@@ -28,6 +28,7 @@ public:
 			float RotAngle;
 			FVector3f PlanePos;
 			float VerticalNoiseOffset;
+			float MinNoiseScale;
 			uint32 NumOctaves;
 			float Frequency;
 			float Lacunarity;
@@ -37,7 +38,6 @@ public:
 			float InflationGain;
 			float UnionSmoothing;
 			float ClippingSmoothing;
-			float MaxRadiusVariance;
 			bool bBandLimiting;
 			float Epsilon;
 			float DerivativeH;
@@ -135,6 +135,7 @@ public:
 		SHADER_PARAMETER(float, RotAngle)
 		SHADER_PARAMETER(FVector3f, PlanePos)
 		SHADER_PARAMETER(float, VerticalNoiseOffset)
+		SHADER_PARAMETER(float, MinNoiseScale)
 		SHADER_PARAMETER(uint32, NumOctaves)
 		SHADER_PARAMETER(float, Frequency)
 		SHADER_PARAMETER(float, Lacunarity)
@@ -144,7 +145,6 @@ public:
 		SHADER_PARAMETER(float, InflationGain)
 		SHADER_PARAMETER(float, UnionSmoothing)
 		SHADER_PARAMETER(float, ClippingSmoothing)
-		SHADER_PARAMETER(float, MaxRadiusVariance)
 		SHADER_PARAMETER(uint32, bBandLimiting)
 		SHADER_PARAMETER(float, TerrainEpsilon)
 		SHADER_PARAMETER(float, TerrainDerivativeH)

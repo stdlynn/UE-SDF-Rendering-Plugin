@@ -118,6 +118,7 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	GT.Settings.Terrain.RotAngle = FMath::DegreesToRadians( SDFSettings->RotAngle );
 	GT.Settings.Terrain.PlanePos = SDFSettings->PlanePos * SDFSettings->GPUUnitScale;
 	GT.Settings.Terrain.VerticalNoiseOffset = SDFSettings->VerticalNoiseOffset;
+	GT.Settings.Terrain.MinNoiseScale = SDFSettings->MinNoiseScale;
 	GT.Settings.Terrain.NumOctaves = SDFSettings->NumOctaves;
 	GT.Settings.Terrain.Frequency = SDFSettings->Frequency / (SDFSettings->GPUUnitScale * 100.0f); // Frequency is a "per-length"
 	GT.Settings.Terrain.Amplitude = SDFSettings->Amplitude * (SDFSettings->GPUUnitScale * 100.0f); // Amplitude is a length
@@ -127,7 +128,6 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	GT.Settings.Terrain.InflationGain = SDFSettings->InflationGain;
 	GT.Settings.Terrain.UnionSmoothing = SDFSettings->UnionSmoothing;
 	GT.Settings.Terrain.ClippingSmoothing = SDFSettings->ClippingSmoothing;
-	GT.Settings.Terrain.MaxRadiusVariance = SDFSettings->MaxRadiusVariance;
 	GT.Settings.Terrain.bBandLimiting = SDFSettings->bBandLimiting;
 	GT.Settings.Terrain.Epsilon = SDFSettings->TerrainEpsilon * SDFSettings->GPUUnitScale;
 	GT.Settings.Terrain.DerivativeH = SDFSettings->TerrainDerivativeH * SDFSettings->GPUUnitScale;
@@ -384,6 +384,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 		PassParameters->RotAngle = RT.Settings.Terrain.RotAngle;
 		PassParameters->PlanePos = RT.Settings.Terrain.PlanePos;
 		PassParameters->VerticalNoiseOffset = RT.Settings.Terrain.VerticalNoiseOffset;
+		PassParameters->MinNoiseScale = RT.Settings.Terrain.MinNoiseScale;
 		PassParameters->NumOctaves = RT.Settings.Terrain.NumOctaves;
 		PassParameters->Frequency = RT.Settings.Terrain.Frequency;
 		PassParameters->Lacunarity = RT.Settings.Terrain.Lacunarity;
@@ -393,7 +394,6 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 		PassParameters->InflationGain = RT.Settings.Terrain.InflationGain;
 		PassParameters->UnionSmoothing = RT.Settings.Terrain.UnionSmoothing;
 		PassParameters->ClippingSmoothing = RT.Settings.Terrain.ClippingSmoothing;
-		PassParameters->MaxRadiusVariance = RT.Settings.Terrain.MaxRadiusVariance;
 		PassParameters->bBandLimiting = RT.Settings.Terrain.bBandLimiting;
 		PassParameters->TerrainEpsilon = RT.Settings.Terrain.Epsilon;
 		PassParameters->TerrainDerivativeH = RT.Settings.Terrain.DerivativeH;

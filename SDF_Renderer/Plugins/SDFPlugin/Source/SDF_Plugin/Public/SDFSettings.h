@@ -24,6 +24,14 @@ public:
 						ClampMax = "0.5") )
 	float VerticalNoiseOffset{ 0.0f };
 
+	// TODO: implement & default
+	// Relative to the diameter of a sample sphere
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
+			   meta = (DisplayName = "Min. Noise Scale (%)",
+						ClampMin = "0.0",
+						UIMax = "1.0") )
+	float MinNoiseScale{ 0.5f };
+
 	// Normalized before use
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Noise",
 			   meta = (DisplayName = "Rotation Axis",
@@ -102,14 +110,6 @@ public:
 						UIMin = "0.0001",
 						UIMax = "1.0") )
 	float UnionSmoothing{ 0.1f };
-
-	// TODO:
-	// TODO: default & clamps & comment
-	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
-			   meta = (DisplayName = "Max. Radius Variance (%)",
-						ClampMin = "0.0",
-						ClampMax = "1.0") )
-	float MaxRadiusVariance{ 0.15f };
 
 	// Eliminate aliasing artefacts by not rendering sub-pixel details
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|BruteForceRendering",
