@@ -49,18 +49,18 @@ float SampleGridSpheres( float3 Pos, float MaxDiameter, float MinNoiseScale, flo
 	const float3 CellSpacePos = frac( Pos );
 
 	// Sample the 8 corners of our cell
-	float Dist = Infinity;
-	for (uint z = 0; z < 2; ++z) {
-	for (uint y = 0; y < 2; ++y) {
-	for (uint x = 0; x < 2; ++x) 
+	float Dist = 1e30;
+	[unroll] for (uint z = 0; z < 2; ++z) {
+	[unroll] for (uint y = 0; y < 2; ++y) {
+	[unroll] for (uint x = 0; x < 2; ++x) 
 	{
 		// Pick the radius based on a hash
 		const int3 CornerOffset = int3( x, y, z );
 		const int3 CellCorner = CellMin + CornerOffset;
 		const uint3 Seed = uint3( asuint( CellCorner.x ), asuint( CellCorner.y ), asuint( CellCorner.z ) );
-		const float4 NoiseScale = (SimpleHash32V3( Seed ) * (1.0 - MinNoiseScale)) + MinNoiseScale; // [MinNoiseScale, 1]
-		const float4 Diameter = MaxDiameter * NoiseScale;
-		const float4 Radius = Diameter / 2.0;
+		const float NoiseScale = (SimpleHash32V3( Seed ) * (1.0 - MinNoiseScale)) + MinNoiseScale; // [MinNoiseScale, 1]
+		const float Diameter = MaxDiameter * NoiseScale;
+		const float Radius = Diameter / 2.0;
 
 		// Evaluate the sphere's SDF
 		const float SphereOriginDist = length( CellSpacePos - CornerOffset );
@@ -77,9 +77,6 @@ float4 Permute( float4 t ) { return t * (t * 34.0 + 133.0); }
 float4 Mod( float4 x, float4 y ) { return x - y * floor( x / y ); }
 float SampleSimplexSpheres( float3 Pos, float MaxDiameter, float MinNoiseScale, float SampleSmoothing )
 {	
-	// TODO: can the repetition somehow not have the spheres on an exact grid?
-	// TODO: eh you would be using the same seed as for the radius, bad idea
-
 	// Calculate the vertices and the distances to them
 	const float3 Vert1 = round( Pos );
 	const float3 Dist1 = Pos - Vert1;
@@ -99,9 +96,9 @@ float SampleSimplexSpheres( float3 Pos, float MaxDiameter, float MinNoiseScale, 
 	float4 Hashes = Permute( Mod( float4( Vert1.x, Vert2.x, Vert3.x, Vert4.x ), 289.0 ) );
 	Hashes = Permute( Mod( Hashes + float4( Vert1.y, Vert2.y, Vert3.y, Vert4.y ), 289.0 ) );
 	Hashes = Mod( Permute( Mod( Hashes + float4( Vert1.z, Vert2.z, Vert3.z, Vert4.z ), 289.0 ) ), 48.0 );
-
-	// TODO: integrate amplitude
-	// TODO: adjust for vertex-to-vertex distance
+	
+	// TODO: adjust for vertex-to-vertex distance (when calculating the diameter)
+	// Calculate the radii
 	const float4 NoiseScale = ((Hashes / 47.0) * (1.0 - MinNoiseScale)) + MinNoiseScale; // [MinNoiseScale, 1]
 	const float4 Diameters = MaxDiameter * NoiseScale;
 	const float4 Radii = Diameters / 2.0;
@@ -165,8 +162,9 @@ namespace DistFn
 		const float3x3 RotMatrix = GetRowRotMatrix( Params.RotAxis, Params.RotAngle );
 		const float3x3 LacunarityMatrix = RotMatrix * Params.Lacunarity;
 
+		// TODO: integrate 'i' into the seeds
 		// Apply a layer of noise for each octave
-		for (uint i = 0; i < Params.NumOctaves; ++i)
+		[loop] for (uint i = 0; i < Params.NumOctaves; ++i)
 		{
 			// Band-limit the samples
 			// Attempting to render detail smaller than a pixel introduces aliasing,
@@ -182,15 +180,14 @@ namespace DistFn
 			// Therefore we multiply said base by this octave's (maximum) sphere diameter
 			const float Inflation = Params.Inflation * Params.Amplitude;
 			// We want the smoothing factors/distances to apply similar smoothing regardless of the sphere diameter
-			// Therefore we multiply a base value by this octave's maximum sphere 
+			// Therefore we multiply a base value by this octave's maximum sphere diameter
 			const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
 			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
 			// 'SampleSmoothing' is in local space, so multiply it by the local diameter instead
 			const float SampleSmoothing = Params.SampleSmoothing * LocalDiameter;
 			
             // We simulate an infinite grid of spheres (through domain repetition)
-			// For the cub
-			// There is a sphere on every unit boundary in local space (
+			// There is a sphere on every unit boundary in local space
 			// The local distance is scaled by 'Frequency * Lacunarity^i'
 			// The local unit scale has an inverse relationship with the frequency
 			// The higher the frequency, the smaller the local unit scale, resulting in more spheres per world-space unit
@@ -210,8 +207,6 @@ namespace DistFn
 			// Add the (masked-out) layer of noise onto our current terrain distance field
 			// We do this through by taking the minimum, as to not disturb the gradient's magnitude
 			Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
-
-			if (i == Params.NumOctaves - 1) { return ClippedDist; }
 
 			// The sample position is scaled by 'Frequency * Lacunarity^i'
 			Pos = mul( Pos, LacunarityMatrix );
