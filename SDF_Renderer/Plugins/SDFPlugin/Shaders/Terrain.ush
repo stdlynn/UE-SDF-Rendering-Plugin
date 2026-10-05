@@ -14,6 +14,7 @@ struct FTerrainParams
     float Persistence;
     float Inflation;
     float InflationGain;
+	float SampleSmoothing;
     float UnionSmoothing;
     float ClippingSmoothing;
 	bool bSimplex;
@@ -37,7 +38,7 @@ float SimpleHash32V3( uint3 Seed )
 }
 
 // [CREDITS] https://iquilezles.org/articles/fbmsdf/
-float SampleGridSpheres( float3 Pos, float MinNoiseScale )
+float SampleGridSpheres( float3 Pos, float MinNoiseScale, float SampleSmoothing )
 {
 	// Find the lowest bound of the "cell" (of local unit scale) we reside in
 	const int3 CellMin = floor( Pos );
@@ -63,10 +64,9 @@ float SampleGridSpheres( float3 Pos, float MinNoiseScale )
 		// Evaluate the sphere's SDF
 		const float SphereOriginDist = length( CellSpacePos - CornerOffset );
 		const float SphereDist = SphereOriginDist - Radius;
-
-		// TODO: test smin
+				
 		// Combine sphere SDFs
-		Dist = OpUnion( Dist, SphereDist );
+		Dist = OpSmoothUnion( Dist, SphereDist, SampleSmoothing );
 	}}}
 	return Dist;
 }
@@ -74,7 +74,7 @@ float SampleGridSpheres( float3 Pos, float MinNoiseScale )
 // [CREDITS] Adapted from https://github.com/KdotJPG/OpenSimplex2/blob/master/hlsl/OpenSimplex2.hlsl
 float4 Permute( float4 t ) { return t * (t * 34.0 + 133.0); }
 float4 Mod( float4 x, float4 y ) { return x - y * floor( x / y ); }
-float SampleSimplexSpheres( float3 Pos, float MinNoiseScale )
+float SampleSimplexSpheres( float3 Pos, float MinNoiseScale, float SampleSmoothing )
 {	
 	// TODO: can the repetition somehow not have the spheres on an exact grid?
 	// TODO: eh you would be using the same seed as for the radius, bad idea
@@ -104,13 +104,12 @@ float SampleSimplexSpheres( float3 Pos, float MinNoiseScale )
 	// [MinNoiseScale, 1]
 	const float4 Diameters = ((Hashes / 47.0) * (1.0 - MinNoiseScale)) + MinNoiseScale;
 	const float4 Radii = Diameters / 2.0;
-
-	// TODO: try smin
-	//
-	return OpUnion( OpUnion( OpUnion( length( Dist1 ) - Radii.x,
-									  length( Dist2 ) - Radii.y ),
-									  length( Dist3 ) - Radii.z ),
-									  length( Dist4 ) - Radii.w );
+	
+	// Combine sphere SDFs
+	return OpSmoothUnion( OpSmoothUnion( OpSmoothUnion( length( Dist1 ) - Radii.x,
+														length( Dist2 ) - Radii.y, SampleSmoothing ),
+														length( Dist3 ) - Radii.z, SampleSmoothing ),
+														length( Dist4 ) - Radii.w, SampleSmoothing );
 }
 
 float3x3 GetRowRotMatrix( float3 RotAxis, float RotAngle )
@@ -139,6 +138,9 @@ namespace DistFn
 		// Thus, we must make the amplitude relative to the frequency
 		// For (e.g.) half the frequency (double the space for a sphere), we have twice the diameter
 		Params.Amplitude /= Params.Frequency;
+		// 'SampleSmoothing' is only used in local sample space (which is scaled by the frequency),
+		// so we must first transform it into said space
+		Params.SampleSmoothing *= Params.Frequency;
 
 		// Move the sample position into the coordinate space of the plane
 		// We do this so the noise is stable when moving the plane
@@ -175,9 +177,9 @@ namespace DistFn
 			// Therefore we multiply said base by this octave's (maximum) sphere diameter
 			const float Inflation = Params.Inflation * Params.Amplitude;
 			// We want the smoothing factors/distances to apply similar smoothing regardless of the sphere diameter
-			// Therefore we multiply a base value by this octave's maximum sphere diameter
+			// Therefore we multiply a base value by this octave's maximum sphere 
+			const float SampleSmoothing = Params.SampleSmoothing * Params.Amplitude;
 			const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
-			// TODO: TODO: there is a crease for high values (obviously because there is no smin)
 			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
 			
             // We simulate an infinite grid of spheres (through domain repetition)
@@ -187,8 +189,8 @@ namespace DistFn
 			// The local unit scale has an inverse relationship with the frequency
 			// The higher the frequency, the smaller the local unit scale, resulting in more spheres per world-space unit
 			const float LocalSampleDist = Params.bSimplex
-											  ? SampleSimplexSpheres( Pos, Params.MinNoiseScale )
-											  : SampleGridSpheres( Pos, Params.MinNoiseScale );
+											  ? SampleSimplexSpheres( Pos, Params.MinNoiseScale, SampleSmoothing )
+											  : SampleGridSpheres( Pos, Params.MinNoiseScale, SampleSmoothing );
 			// Convert the distance to world space
 			const float SampleDist = LocalSampleDist / Params.Frequency;
 

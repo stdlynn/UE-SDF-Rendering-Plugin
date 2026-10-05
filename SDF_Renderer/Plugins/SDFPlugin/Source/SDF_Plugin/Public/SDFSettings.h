@@ -101,6 +101,15 @@ public:
 	// TODO: default
 	// Relative to the diameter of a sample sphere
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
+			   meta = (DisplayName = "Sample Smoothing (%)",
+						ClampMin = "0.0",
+						UIMin = "0.0001",
+						UIMax = "1.0") )
+	float SampleSmoothing{ 0.1f };
+
+	// TODO: default
+	// Relative to the diameter of a sample sphere
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Clipped Sphere Smoothing (%)",
 						ClampMin = "0.0",
 						UIMin = "0.0001",

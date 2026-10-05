@@ -29,6 +29,7 @@ float Amplitude;
 float Persistence;
 float Inflation;
 float InflationGain;
+float SampleSmoothing;
 float UnionSmoothing;
 float ClippingSmoothing;
 // Brute-force terrain rendering
@@ -51,6 +52,7 @@ FTerrainParams GetTerrainParams()
 	Params.Persistence = Persistence;
 	Params.Inflation = Inflation;
 	Params.InflationGain = InflationGain;
+	Params.SampleSmoothing = SampleSmoothing;
 	Params.UnionSmoothing = UnionSmoothing;
 	Params.ClippingSmoothing = ClippingSmoothing;
 	Params.MinNoiseScale = MinNoiseScale;

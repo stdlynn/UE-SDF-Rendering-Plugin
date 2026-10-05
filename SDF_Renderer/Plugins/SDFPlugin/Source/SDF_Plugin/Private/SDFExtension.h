@@ -36,6 +36,7 @@ public:
 			float Persistence;
 			float Inflation;
 			float InflationGain;
+			float SampleSmoothing;
 			float UnionSmoothing;
 			float ClippingSmoothing;
 			float Epsilon;
@@ -144,6 +145,7 @@ public:
 		SHADER_PARAMETER(float, Persistence)
 		SHADER_PARAMETER(float, Inflation)
 		SHADER_PARAMETER(float, InflationGain)
+		SHADER_PARAMETER(float, SampleSmoothing)
 		SHADER_PARAMETER(float, UnionSmoothing)
 		SHADER_PARAMETER(float, ClippingSmoothing)
 		SHADER_PARAMETER(float, TerrainEpsilon)

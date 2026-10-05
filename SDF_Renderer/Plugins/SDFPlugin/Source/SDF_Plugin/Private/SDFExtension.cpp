@@ -126,6 +126,7 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	GT.Settings.Terrain.Persistence = SDFSettings->Persistence;
 	GT.Settings.Terrain.Inflation = SDFSettings->Inflation;
 	GT.Settings.Terrain.InflationGain = SDFSettings->InflationGain;
+	GT.Settings.Terrain.SampleSmoothing = SDFSettings->SampleSmoothing;
 	GT.Settings.Terrain.UnionSmoothing = SDFSettings->UnionSmoothing;
 	GT.Settings.Terrain.ClippingSmoothing = SDFSettings->ClippingSmoothing;
 	GT.Settings.Terrain.bBandLimiting = SDFSettings->bBandLimiting;
@@ -393,6 +394,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 		PassParameters->Persistence = RT.Settings.Terrain.Persistence;
 		PassParameters->Inflation = RT.Settings.Terrain.Inflation;
 		PassParameters->InflationGain = RT.Settings.Terrain.InflationGain;
+		PassParameters->SampleSmoothing = RT.Settings.Terrain.SampleSmoothing;
 		PassParameters->UnionSmoothing = RT.Settings.Terrain.UnionSmoothing;
 		PassParameters->ClippingSmoothing = RT.Settings.Terrain.ClippingSmoothing;
 		PassParameters->bSimplex = RT.Settings.Terrain.bSimplex;
