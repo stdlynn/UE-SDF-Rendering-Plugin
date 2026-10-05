@@ -55,11 +55,12 @@ public:
 						UIMin = "1.0") )
 	float Lacunarity{ 2.0f };
 
-	// The maximum diameter of the first octave of noise
+	// The maximum diameter of the first octave of noise, relative to the frequency
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
 			   meta = (DisplayName = "Amplitude (m)",
 						ClampMin = "0.0001",
-						UIMin = "0.1") )
+						UIMin = "0.1",
+						UIMax = "1.0") )
 	float Amplitude{ 1.0f };
 
 	// Amplitude gain (per octave)
@@ -103,7 +104,7 @@ public:
 	float UnionSmoothing{ 0.1f };
 
 	// TODO:
-	// TODO: default & clamps
+	// TODO: default & clamps & comment
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Max. Radius Variance (%)",
 						ClampMin = "0.0",

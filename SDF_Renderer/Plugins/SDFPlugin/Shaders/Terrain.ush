@@ -105,25 +105,17 @@ float3x3 GetRowRotMatrix( float3 RotAxis, float RotAngle )
 
 namespace DistFn
 {
-	// TODO: add a height offset for the noise relative to the terrain/amplitude [0,1]
-	float FBM( float3 Pos, FTerrainParams Params, float PixelSize = 0.0, float TotalDist = 0.0 )
+	float FBM( float3 Pos, FTerrainParams Params, float PixelSize = 0.0 )
     {
-		// TODO: I would like for the Frequency to not change any other parts of the result
-		// TODO: e.g. the amplitude 
-		//Params.Amplitude /= Params.Frequency;
-		// TODO: that seems to work, but only for the first octave
-
 		// Sample from a base (plane) SDF to get our initial distance field
 		// The octaves will subsequently add noise to said field
 		float Dist = Pos.z - Params.PlanePos.z;
+		
+		// Changing the frequency should only scale the noise, not modify it
+		// Thus, we must make the amplitude relative to the frequency
+		// For (e.g.) half the frequency (double the space for a sphere), we have twice the diameter
+		Params.Amplitude /= Params.Frequency;
 
-		// TODO: try to make it so that regardless of PlaneZ and Amplitude,
-		// TODO: - Octave 1 spheres are sliced exactly in half by the plane
-		// TODO: - inflation = 0.5 results in EXACTLY 1 sphere fully showing
-		// TODO: currently it only works for (e.g.) Freq=1 & Amp=500
-		// TODO: do note that creases appear if 'Persistence > 1/Lacunarity' (because radius > half cell size)
-		// TODO: or maybe amplitude could be relative to the cell size (maybe that also solves the second TODO in this fn)
-		// TODO: - Amplitude would range [0, 0.5], [0, 1] if we change it to be diameter
 		// Move the sample position into the coordinate space of the plane
 		// We do this so the noise is stable when moving the plane
 		Pos -= Params.PlanePos;
@@ -138,10 +130,7 @@ namespace DistFn
 		// The sample position is scaled by 'Frequency * Lacunarity^i'
 		// Apply the frequency scaling, as it doesn't depend on the octave
 		Pos *= Params.Frequency;
-		// Our sampled distance fields won't be true SDFs, 
-		// as scaling causes the gradient's magnitude to no longer be 1 at all points
-		// We keep track of the current scaling, so we can undo it after sampling
-		float LocalScale = Params.Frequency;
+
 		// Instead of directly applying the lacunarity,
 		// we integrate it into a matrix that also has rotation,
 		// to avoid patterns in our noise
@@ -164,7 +153,7 @@ namespace DistFn
 			// We want the smoothing factors/distances to apply similar smoothing regardless of the sphere diameter
 			// Therefore we multiply a base value by this octave's maximum sphere diameter
 			const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
-			// TODO: why do high values result in a crease? (try just octave 1)
+			// TODO: TODO: there is a crease for high values (obviously because there is no smin)
 			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
 
 #if 0
@@ -175,7 +164,7 @@ namespace DistFn
 			// The higher the frequency, the smaller the local unit scale, resulting in more spheres per world-space unit
 			const float LocalPointDist = SampleHashSphere8( Pos );
 			// Convert the distance to world space
-			const float PointDist = LocalPointDist / LocalScale;
+			const float PointDist = LocalPointDist / Params.Frequency;
 			const float SphereDist = PointDist - (Params.Amplitude / 2.0); // TODO: still correct?
 #else
 			// We simulate an infinite grid of spheres (through domain repetition)
@@ -185,7 +174,7 @@ namespace DistFn
 			// The higher the frequency, the smaller the local unit scale, resulting in more spheres per world-space unit
 			const float LocalPointDist = length( Pos - round( Pos ) );
 			// Convert the distance to world space
-			const float PointDist = LocalPointDist / LocalScale;
+			const float PointDist = LocalPointDist / Params.Frequency;
 			const float SphereDist = PointDist - (Params.Amplitude / 2.0); // TODO: amplitude should be relative to cell size
 #endif
 
@@ -200,19 +189,23 @@ namespace DistFn
 			// We do this through by taking the minimum, as to not disturb the gradient's magnitude
 			Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
 			
-			// Set up the next octave
-			Pos = mul( Pos, LacunarityMatrix ); // The sample position is scaled by 'Frequency * Lacunarity^i'
-			LocalScale *= Params.Lacunarity;
-			Params.Amplitude *= Params.Persistence; // The amplitude is the maximum diameter of a sample sphere
+			// The sample position is scaled by 'Frequency * Lacunarity^i'
+			Pos = mul( Pos, LacunarityMatrix );
+			// Our sampled distance fields won't be true SDFs, 
+			// as scaling causes the gradient's magnitude to no longer be 1 at all points
+			// We keep track of the current scaling (frequency), so we can undo it after sampling
+			Params.Frequency *= Params.Lacunarity;
+			// The amplitude is the maximum diameter of a sample sphere
+			Params.Amplitude *= Params.Persistence;
+			// Subsequent octaves have more frequent noise/spheres, so we need to adjust our clipping mask size
 			Params.Inflation *= Params.InflationGain;
 			
 			// Visualizations (move above octave setup)
 			continue;
-			if (i == Params.NumOctaves - 1) { return SphereDist; } // Visualize the newest set of spheres
-			if (i == Params.NumOctaves - 1) { return ClippedDist; } // Visualize the newest layer of noise
+			if (i == Params.NumOctaves - 1) { return SphereDist; } // Visualize the last set of spheres
+			if (i == Params.NumOctaves - 1) { return ClippedDist; } // Visualize the last layer of noise
 			if (i == Params.NumOctaves - 1) { return InflatedDist; } // Visualize the second to last layer inflated
-			// To make the band-limiting visualization work:
-			// - The viewport and render resolutions need to be the same
+			// The viewport and render resolutions need to be the same to make the band-limiting visualization work
 			if (Params.Amplitude < PixelSize * 100.0) { return ClippedDist; } // Visualize the band-limiting
 		}
 		return Dist;
