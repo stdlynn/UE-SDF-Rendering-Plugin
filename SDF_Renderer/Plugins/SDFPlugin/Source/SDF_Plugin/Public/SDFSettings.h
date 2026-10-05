@@ -13,23 +13,31 @@ class SDFPLUGIN_API USDFSettings : public UDeveloperSettings
 
 public:
 
+	// TODO: comment parameters where necessary
+
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Noise",
 			   meta = (DisplayName = "Plane Position") )
 	FVector3f PlanePos{ 0.0f, 0.0f, 0.0f };
 
-	// TODO: default
+	// Relative to the diameter (amplitude)
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Noise",
+			   meta = (DisplayName = "Vertical Offset",
+						ClampMin = "-0.5",
+						ClampMax = "0.5") )
+	float VerticalNoiseOffset{ 0.0f };
+
+	// Normalized
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Noise",
 			   meta = (DisplayName = "Rotation Axis",
 						ClampMin = "0.0",
 						ClampMax = "1.0") )
-	FVector3f RotAxis{ 0.0f, 0.6f, -0.8f };
+	FVector3f RotAxis{ 1.0f, 1.0f, 1.0f };
 
-	// TODO: default
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Noise",
 			   meta = (DisplayName = "Rotation Angle",
 						ClampMin = "0.0",
 						ClampMax = "360.0") )
-	float RotAngle{ 90.0f };
+	float RotAngle{ 54.0f };
 
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
 			   meta = (DisplayName = "Num Octaves",
@@ -40,22 +48,23 @@ public:
 			   meta = (DisplayName = "Frequency (m)",
 						ClampMin = "0.0001",
 						UIMin = "0.1") )
-	float Frequency{ 100.0f };
+	float Frequency{ 1.0f };
 
+	// Frequency gain (per octave)
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
 			   meta = (DisplayName = "Lacunarity",
 						ClampMin = "0.0",
 						UIMin = "1.0") )
 	float Lacunarity{ 2.0f };
 
-	// TODO: default
-	// The maximum radius of a sample sphere
+	// The maximum diameter of the first octave of noise
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
 			   meta = (DisplayName = "Amplitude (m)",
 						ClampMin = "0.0001",
 						UIMin = "0.1") )
-	float Amplitude{ 50.0f };
+	float Amplitude{ 1.0f };
 
+	// Amplitude gain (per octave)
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
 			   meta = (DisplayName = "Persistence",
 						ClampMin = "0.0",
@@ -63,7 +72,8 @@ public:
 	float Persistence{ 0.5f };
 
 	// TODO: default
-	// A value of 1 corresponds to the diameter of a sphere
+	// TODO: update comment if changed
+	// Inflation distance relative to the sphere diameter
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Inflation (%)",
 						ClampMin = "0.0",
@@ -95,6 +105,7 @@ public:
 						UIMax = "1.0") )
 	float UnionSmoothing{ 0.1f };
 
+	// TODO:
 	// TODO: default & clamps
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|Blending",
 			   meta = (DisplayName = "Max. Radius Variance (%)",
@@ -106,7 +117,6 @@ public:
 			   meta = (DisplayName = "Band-limiting") )
 	bool bBandLimiting{ true };
 
-	// TODO: default & clamps
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|BruteForceRendering",
 			   meta = (DisplayName = "Surface Epsilon",
 						UIMin = "0.0001",
@@ -119,9 +129,6 @@ public:
 						UIMin = "0.01",
 						UIMax = "1.0") )
 	float TerrainDerivativeH{ 4e-2f };
-
-	// TODO: radius randomness thing (e.g. if 1.2, use '1-(1.2-1)' to find lower range, clamp [1,2])
-	// actually clamp it [0,1] and do +1 in shader)
 
 	// ========================
 	// fBM above, other beneath

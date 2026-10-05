@@ -27,6 +27,7 @@ public:
 			FVector3f RotAxis;
 			float RotAngle;
 			FVector3f PlanePos;
+			float VerticalNoiseOffset;
 			uint32 NumOctaves;
 			float Frequency;
 			float Lacunarity;
@@ -133,6 +134,7 @@ public:
 		SHADER_PARAMETER(FVector3f, RotAxis)
 		SHADER_PARAMETER(float, RotAngle)
 		SHADER_PARAMETER(FVector3f, PlanePos)
+		SHADER_PARAMETER(float, VerticalNoiseOffset)
 		SHADER_PARAMETER(uint32, NumOctaves)
 		SHADER_PARAMETER(float, Frequency)
 		SHADER_PARAMETER(float, Lacunarity)

@@ -5,6 +5,7 @@ struct FTerrainParams
 	float3 RotAxis;
 	float RotAngle;
     float3 PlanePos;
+	float VerticalNoiseOffset;
     uint NumOctaves;
     float Frequency;
     float Lacunarity;
@@ -122,10 +123,17 @@ namespace DistFn
 		// TODO: currently it only works for (e.g.) Freq=1 & Amp=500
 		// TODO: do note that creases appear if 'Persistence > 1/Lacunarity' (because radius > half cell size)
 		// TODO: or maybe amplitude could be relative to the cell size (maybe that also solves the second TODO in this fn)
-		// TODO: - Amplitude would range [0, 0.5]
+		// TODO: - Amplitude would range [0, 0.5], [0, 1] if we change it to be diameter
 		// Move the sample position into the coordinate space of the plane
 		// We do this so the noise is stable when moving the plane
 		Pos -= Params.PlanePos;
+		
+		// Offset the noise vertically (the only axis on which it is not possible through 'PlanePos')
+		// The offset ranges [-0.5, 0.5], relative to the diameter for the first octave of noise
+		Pos.z -= Params.VerticalNoiseOffset * Params.Amplitude;
+		// The inflation ranges [0, 1] and should map to the minimum and maximum height of the terrain
+		// Adjust for/multiply by the percentage of the sphere above the terrain
+		Params.Inflation *= max( Params.VerticalNoiseOffset + 0.5, 0.0 );
 
 		// The sample position is scaled by 'Frequency * Lacunarity^i'
 		// Apply the frequency scaling, as it doesn't depend on the octave
@@ -143,19 +151,19 @@ namespace DistFn
 		// Apply a layer of noise for each octave
 		for (uint i = 0; i < Params.NumOctaves; ++i)
 		{
+			// TODO: why does it look worse with band-limiting
 			// Band-limit the samples
 			// Attempting to render detail smaller than a pixel introduces aliasing,
 			// so stop adding octaves once the sphere diameter is smaller than a pixel to avoid artefacts
-			if (Params.Amplitude * 2.0 < PixelSize) { break; } // TODO: change amplitude to be diameter for this
+			if (Params.Amplitude < PixelSize) { break; }
 			
-			// TODO: change amplitude to be diameter, change comments accordingly and remove this *2.0
 			// We sample from an infinite grid of spheres, but only want those closest to the terrain to add to it
 			// Our inflation distance should therefore not be any higher than the maximum diameter of a sample sphere
-			// The base inflation ranges [0, 1], where 1 corresponds to the diameter of a sphere
-			// Therefore we multiply said base by this octave's maximum sphere diameter
-			const float Inflation = Params.Inflation * Params.Amplitude * 2.0;
-			// We want the smoothing factors/distances to apply similar smoothing regardless of the sphere radius
-			// Therefore we multiply a base value by this octave's maximum sphere radius
+			// The base inflation ranges [0, 1], relative to the sphere diameter
+			// Therefore we multiply said base by this octave's (maximum) sphere diameter
+			const float Inflation = Params.Inflation * Params.Amplitude;
+			// We want the smoothing factors/distances to apply similar smoothing regardless of the sphere diameter
+			// Therefore we multiply a base value by this octave's maximum sphere diameter
 			const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
 			// TODO: why do high values result in a crease? (try just octave 1)
 			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
@@ -169,7 +177,7 @@ namespace DistFn
 			const float LocalPointDist = SampleHashSphere8( Pos );
 			// Convert the distance to world space
 			const float PointDist = LocalPointDist / LocalScale;
-			const float SphereDist = PointDist - Params.Amplitude; // TODO: still correct?
+			const float SphereDist = PointDist - (Params.Amplitude / 2.0); // TODO: still correct?
 #else
 			// We simulate an infinite grid of spheres (through domain repetition)
 			// There is a sphere on every unit boundary in local space
@@ -179,7 +187,7 @@ namespace DistFn
 			const float LocalPointDist = length( Pos - round( Pos ) );
 			// Convert the distance to world space
 			const float PointDist = LocalPointDist / LocalScale;
-			const float SphereDist = PointDist - Params.Amplitude; // TODO: amplitude should be relative to cell size
+			const float SphereDist = PointDist - (Params.Amplitude / 2.0); // TODO: amplitude should be relative to cell size
 #endif
 
 			// We cannot inflate the current distance field by a factor/through multiplication,
@@ -193,12 +201,10 @@ namespace DistFn
 			// We do this through by taking the minimum, as to not disturb the gradient's magnitude
 			Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
 			
-			// TODO: if (Dist < TerrainDerivativeH) { break; }
-
 			// Set up the next octave
 			Pos = mul( Pos, LacunarityMatrix ); // The sample position is scaled by 'Frequency * Lacunarity^i'
 			LocalScale *= Params.Lacunarity;
-			Params.Amplitude *= Params.Persistence; // The amplitude is the maximum radius of a sample sphere
+			Params.Amplitude *= Params.Persistence; // The amplitude is the maximum diameter of a sample sphere
 			Params.Inflation *= Params.InflationGain;
 			
 			// Visualizations (move above octave setup)

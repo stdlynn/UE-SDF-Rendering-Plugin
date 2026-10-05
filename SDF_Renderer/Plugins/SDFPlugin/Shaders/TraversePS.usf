@@ -20,6 +20,7 @@ float UnitScale;
 float3 RotAxis;
 float RotAngle;
 float3 PlanePos;
+float VerticalNoiseOffset;
 uint NumOctaves;
 float Frequency;
 float Lacunarity;
@@ -37,21 +38,22 @@ float TerrainDerivativeH;
 
 FTerrainParams GetTerrainParams()
 {
-    FTerrainParams Params;
-	Params.RotAxis			  = RotAxis;
-	Params.RotAngle			  = RotAngle;
-    Params.PlanePos           = PlanePos;
-    Params.NumOctaves         = NumOctaves;
-    Params.Frequency          = Frequency;
-    Params.Lacunarity         = Lacunarity;
-    Params.Amplitude          = Amplitude;
-    Params.Persistence        = Persistence;
-    Params.Inflation          = Inflation;
-    Params.InflationGain      = InflationGain;
-    Params.UnionSmoothing     = UnionSmoothing;
-    Params.ClippingSmoothing  = ClippingSmoothing;
-    Params.MaxRadiusVariance  = MaxRadiusVariance;
-    return Params;
+	FTerrainParams Params;
+	Params.RotAxis = RotAxis;
+	Params.RotAngle = RotAngle;
+	Params.PlanePos = PlanePos;
+	Params.VerticalNoiseOffset = VerticalNoiseOffset;
+	Params.NumOctaves = NumOctaves;
+	Params.Frequency = Frequency;
+	Params.Lacunarity = Lacunarity;
+	Params.Amplitude = Amplitude;
+	Params.Persistence = Persistence;
+	Params.Inflation = Inflation;
+	Params.InflationGain = InflationGain;
+	Params.UnionSmoothing = UnionSmoothing;
+	Params.ClippingSmoothing = ClippingSmoothing;
+	Params.MaxRadiusVariance = MaxRadiusVariance;
+	return Params;
 }
 
 // TODO: make this clamped
@@ -191,11 +193,11 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out float3 Albedo, float Pix
 	// Terrain
 	if (SphereTraceFBM( Ray, Normal, PixelFootprint ))
 	{
-		const float Height = Ray.GetHitPos().z;
-		if (Height < 20.0 * UnitScale) { Albedo = float3(0.1, 0.1, 0.5); }
-		else if (Height < 45.0 * UnitScale) { Albedo = float3(0.8, 0.6, 0.2); }
-		else if (Height < 200.0 * UnitScale) { Albedo = float3(0.2, 0.5, 0.1); }
-		else if (Height < 600.0 * UnitScale) { Albedo = float3(0.25, 0.25, 0.3); }
+		const float Height = Ray.GetHitPos().z - PlanePos.z;
+		if (Height < 7.0 * UnitScale) { Albedo = float3(0.1, 0.1, 0.5); }
+		else if (Height < 7.5 * UnitScale) { Albedo = float3(0.8, 0.6, 0.2); }
+		else if (Height < 11.0 * UnitScale) { Albedo = float3(0.2, 0.5, 0.1); }
+		else if (Height < 12.0 * UnitScale) { Albedo = float3(0.25, 0.25, 0.3); }
 		else { Albedo = float3(0.75, 0.75, 0.8); }
 	}
 

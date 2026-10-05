@@ -117,6 +117,7 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	GT.Settings.Terrain.RotAxis = SDFSettings->RotAxis.GetUnsafeNormal();
 	GT.Settings.Terrain.RotAngle = FMath::DegreesToRadians( SDFSettings->RotAngle );
 	GT.Settings.Terrain.PlanePos = SDFSettings->PlanePos * SDFSettings->GPUUnitScale;
+	GT.Settings.Terrain.VerticalNoiseOffset = SDFSettings->VerticalNoiseOffset;
 	GT.Settings.Terrain.NumOctaves = SDFSettings->NumOctaves;
 	GT.Settings.Terrain.Frequency = SDFSettings->Frequency / (SDFSettings->GPUUnitScale * 100.0f); // Frequency is a "per-length"
 	GT.Settings.Terrain.Amplitude = SDFSettings->Amplitude * (SDFSettings->GPUUnitScale * 100.0f); // Amplitude is a length
@@ -382,6 +383,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 		PassParameters->RotAxis = RT.Settings.Terrain.RotAxis;
 		PassParameters->RotAngle = RT.Settings.Terrain.RotAngle;
 		PassParameters->PlanePos = RT.Settings.Terrain.PlanePos;
+		PassParameters->VerticalNoiseOffset = RT.Settings.Terrain.VerticalNoiseOffset;
 		PassParameters->NumOctaves = RT.Settings.Terrain.NumOctaves;
 		PassParameters->Frequency = RT.Settings.Terrain.Frequency;
 		PassParameters->Lacunarity = RT.Settings.Terrain.Lacunarity;
