@@ -121,7 +121,7 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	GT.Settings.Terrain.MinNoiseScale = SDFSettings->MinNoiseScale;
 	GT.Settings.Terrain.NumOctaves = SDFSettings->NumOctaves;
 	GT.Settings.Terrain.Frequency = SDFSettings->Frequency / (SDFSettings->GPUUnitScale * 100.0f); // Frequency is a "per-length"
-	GT.Settings.Terrain.Amplitude = SDFSettings->Amplitude * (SDFSettings->GPUUnitScale * 100.0f); // Amplitude is a length
+	GT.Settings.Terrain.Amplitude = SDFSettings->Amplitude;
 	GT.Settings.Terrain.Lacunarity = SDFSettings->Lacunarity;
 	GT.Settings.Terrain.Persistence = SDFSettings->Persistence;
 	GT.Settings.Terrain.Inflation = SDFSettings->Inflation;

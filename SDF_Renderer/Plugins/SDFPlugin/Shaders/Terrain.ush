@@ -134,6 +134,7 @@ namespace DistFn
 		// The octaves will subsequently add noise to said field
 		float Dist = Pos.z - Params.PlanePos.z;
 		
+		// TODO: uuuh only works when multiplied with 100*UnitScale
 		// Changing the frequency should only scale the noise, not modify it
 		// Thus, we must make the amplitude relative to the frequency
 		// For (e.g.) half the frequency (double the space for a sphere), we have twice the diameter
