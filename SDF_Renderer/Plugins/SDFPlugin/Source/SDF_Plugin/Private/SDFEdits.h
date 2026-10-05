@@ -231,6 +231,7 @@ class USDFSubsystem : public UTickableWorldSubsystem
 public:
 
 	virtual void Tick(float DeltaTime) override;
+	// For profiling
 	virtual TStatId GetStatId() const override
 	{
 		RETURN_QUICK_DECLARE_CYCLE_STAT(USDFSubsystem, STATGROUP_Tickables);
