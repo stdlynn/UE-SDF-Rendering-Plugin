@@ -57,8 +57,8 @@ public:
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
 			   meta = (DisplayName = "Frequency (m)",
 						ClampMin = "0.0001",
-						UIMin = "0.1") )
-	float Frequency{ 1.0f };
+						UIMin = "0.01") )
+	float Frequency{ 0.1f };
 
 	// Frequency gain (per octave)
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|FBM",
