@@ -76,6 +76,12 @@ struct FRenderSDF
 			default: Data = FVector4f(0.f, 0.f, 0.f, 0.f); break;
 		}
 	}
+	
+	[[nodiscard]] float GetSphereRadius() const { return Data.X; }
+	[[nodiscard]] FVector3f GetLinePosB() const { return FVector3f(Data.X, Data.Y, Data.Z); }
+	[[nodiscard]] float GetLineRadius() const { return Data.W; }
+	[[nodiscard]] FVector3f GetBoxHalfExtent() const { return FVector3f(Data.X, Data.Y, Data.Z); }
+	[[nodiscard]] float GetBoxRounding() const { return Data.W; }
 
 	FVector3f Pos;
 	EPrimitive Primitive;
@@ -218,11 +224,20 @@ private:
 }; // ASDFActor
 
 UCLASS()
-class USDFSubsystem : public UWorldSubsystem
+class USDFSubsystem : public UTickableWorldSubsystem
 {
 	GENERATED_BODY()
 
 public:
+
+	virtual void Tick(float DeltaTime) override;
+	// For profiling
+	virtual TStatId GetStatId() const override
+	{
+		RETURN_QUICK_DECLARE_CYCLE_STAT(USDFSubsystem, STATGROUP_Tickables);
+	}
+	virtual bool IsTickableInEditor() const override { return true; }
+	void DrawDebug();
 
 	void RegisterSDF( const USDFComponent& Comp );
 	void UnregisterSDF( const USDFComponent& Comp );
