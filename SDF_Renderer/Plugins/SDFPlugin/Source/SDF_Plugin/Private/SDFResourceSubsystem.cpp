@@ -1,9 +1,21 @@
 #include "SDFResourceSubsystem.h"
 #include "SDFExtension.h"
-
-#include "SDFResourceSubsystem.h"
-#include "SDFExtension.h"
 #include "SceneViewExtension.h"
+#include "HAL/IConsoleManager.h"
+#include "Editor.h"
+
+static FAutoConsoleCommandWithWorld GSDFDebugClearCmd(
+	TEXT("r.SDF.Debug.Clear"),
+	TEXT("Clears the entire brickmap to remove stale cache"),
+	FConsoleCommandWithWorldDelegate::CreateLambda([](const UWorld* World)
+		{
+			if (!World) return;
+			if (USDFResourceSubsystem* Subsystem = World->GetSubsystem<USDFResourceSubsystem>())
+			{
+				Subsystem->ResetSDF();
+			}
+		}),
+	ECVF_Cheat);
 
 bool USDFResourceSubsystem::ShouldCreateSubsystem( UObject* Outer ) const
 {
@@ -20,6 +32,14 @@ bool USDFResourceSubsystem::DoesSupportWorldType( const EWorldType::Type WorldTy
 	return WorldType == EWorldType::Game
 		   || WorldType == EWorldType::PIE
 		   || WorldType == EWorldType::Editor;
+}
+
+void USDFResourceSubsystem::ResetSDF() const
+{
+	if (SceneViewExtension)
+	{
+		SceneViewExtension->Reset();
+	}
 }
 
 void USDFResourceSubsystem::Initialize( FSubsystemCollectionBase& Collection )

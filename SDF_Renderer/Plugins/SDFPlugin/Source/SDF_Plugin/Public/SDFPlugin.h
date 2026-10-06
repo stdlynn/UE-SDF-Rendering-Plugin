@@ -5,10 +5,10 @@
 
 #pragma once
 
+// UE
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
 #include "Modules/ModuleInterface.h"
-#include "Interfaces/IPluginManager.h"
 
 class FSDFPlugin : public IModuleInterface
 {

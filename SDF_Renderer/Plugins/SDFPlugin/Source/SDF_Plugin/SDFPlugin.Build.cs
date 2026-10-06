@@ -19,7 +19,13 @@ public class SDFPlugin : ModuleRules
             "RHI",
             "Projects",
             "DeveloperSettings"
-            });
+        });
+
+        PrivateDependencyModuleNames.AddRange(new string[] {
+            "Slate",
+            "SlateCore",
+            "InputCore"
+        });
 
         var EngineDir = Path.GetFullPath(Target.RelativeEnginePath);
 
