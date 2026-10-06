@@ -159,7 +159,7 @@ void USDFSubsystem::RegisterSDF( const USDFComponent& Comp )
 {
 	const FVector3f Pos{ Comp.GetComponentTransform().GetLocation() };
 	const FQuat Quat{ Comp.GetComponentTransform().GetRotation() };
-	RenderSDFs.Add( Comp.GetID(), { Comp.GetSDF(), Pos, Quat } );
+	RenderSDFs.Add( Comp.GetID(), { Comp, Pos, Quat } );
 	bDirty = true;
 }
 
@@ -173,7 +173,7 @@ void USDFSubsystem::SetSDFDirty( const USDFComponent& Comp )
 {
 	const FVector3f Pos{ Comp.GetComponentTransform().GetLocation() };
 	const FQuat Quat{ Comp.GetComponentTransform().GetRotation() };
-	RenderSDFs[Comp.GetID()] = FRenderSDF{ Comp.GetSDF(), Pos, Quat };
+	RenderSDFs[Comp.GetID()] = FRenderSDF{ Comp, Pos, Quat };
 	bDirty = true;
 }
 

@@ -19,71 +19,150 @@ enum class EPrimitive : uint8
 	Box	   UMETA( DisplayName = "Box")
 };
 
-// SDF edit representation used for the SDF component
-USTRUCT( BlueprintType )
-struct FGameSDF
+
+UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
+class USDFComponent : public USceneComponent
 {
 	GENERATED_BODY()
 
-	UPROPERTY( EditAnywhere, BlueprintReadOnly )
+public:
+
+	USDFComponent();
+
+	virtual void OnRegister() override;
+	virtual void OnUnregister() override;
+#if WITH_EDITOR
+	virtual void PostEditComponentMove(bool bFinished) override;
+#endif
+
+	uint64 GetID() const { return ID; }
+
+	UFUNCTION(BlueprintCallable)
+	void SetPrimitive(EPrimitive NewPrimitive)
+	{
+		Primitive = NewPrimitive;
+		SetDirty();
+	}
+
+	UFUNCTION(BlueprintCallable)
+	void SetRadius(float NewRadius)
+	{
+		Radius = NewRadius;
+		SetDirty();
+	}
+
+	void SetRounding(float NewRounding)
+	{
+		Rounding = NewRounding;
+		SetDirty();
+	}
+
+	UFUNCTION(BlueprintCallable)
+	void SetOperation(EOperation NewOperation)
+	{
+		Operation = NewOperation;
+		SetDirty();
+	}
+
+	UFUNCTION(BlueprintCallable)
+	void SetDoesSmoothing(bool bNewDoesSmoothing)
+	{
+		bSmooths = bNewDoesSmoothing;
+		SetDirty();
+	}
+
+	UFUNCTION(BlueprintCallable)
+	void SetSmoothing(float NewSmoothing)
+	{
+		Smoothing = NewSmoothing;
+		SetDirty();
+	}
+
+	UFUNCTION(BlueprintCallable)
+	void SetMaterialIndex(int NewMaterialIndex)
+	{
+		MaterialIndex = NewMaterialIndex;
+		SetDirty();
+	}
+
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shape")
 	EOperation Operation{ EOperation::Add };
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (
-		EditCondition = "Operation == EOperation::Subtract", EditConditionHides))
-	bool bColorsSubtraction{ false };
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shape")
 	EPrimitive Primitive{ EPrimitive::Sphere };
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0",
-		EditCondition = "Primitive == EPrimitive::Sphere || Primitive == EPrimitive::Line",
-		EditConditionHides))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shape",
+		meta = (ClampMin = "0.0",
+			EditCondition = "Primitive == EPrimitive::Sphere || Primitive == EPrimitive::Line",
+			EditConditionHides))
 	float Radius{ 100.0f };
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0",
-		EditCondition = "Primitive == EPrimitive::Box", EditConditionHides))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shape",
+		meta = (ClampMin = "0.0",
+			EditCondition = "Primitive == EPrimitive::Box", EditConditionHides))
 	float Rounding{ 0.0f };
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shape", meta = (
 		DisplayName = "Line End Position",
 		EditCondition = "Primitive == EPrimitive::Line", EditConditionHides))
 	FVector3f LinePosB{ 0.0, 0.0, 100.0 };
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0",
-		DisplayName = "Extent (half)",
-		EditCondition = "Primitive == EPrimitive::Box", EditConditionHides))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shape",
+		meta = (ClampMin = "0.0",
+			DisplayName = "Extent (half)",
+			EditCondition = "Primitive == EPrimitive::Box", EditConditionHides))
 	FVector3f BoxSize{ 100.0, 100.0, 100.0 };
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shape")
 	bool bSmooths{ false };
 
-	UPROPERTY( EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "1.0") )
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shape", meta = (ClampMin = "1.0"))
 	float Smoothing{ 1.0f };
 
-	UPROPERTY( EditAnywhere, BlueprintReadOnly, meta = 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Material", meta =
 		(ClampMin = "0",
-		ClampMax = "255") )
+			ClampMax = "255"))
 	int MaterialIndex{ 0 };
-};
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Material", meta = (
+		EditCondition = "Operation == EOperation::Subtract",
+		EditConditionHides))
+	bool bColorsSubtraction{ false };
+
+protected:
+
+	virtual void OnUpdateTransform(EUpdateTransformFlags TransformFlags,
+		ETeleportType TeleportType = ETeleportType::None) override;
+
+private:
+
+	inline static uint64 NextID{ 0 };
+
+	void SetDirty() const;
+
+	uint64 ID;
+
+}; // USDFComponent
 
 // SDF edit representation sent to the render thread
 struct FRenderSDF
 {
-	FRenderSDF( const FGameSDF& GameSDF, const FVector3f& Pos, const FQuat& Quat )
+	FRenderSDF( const USDFComponent& SDFComp, const FVector3f& Pos, const FQuat& Quat )
 		: Pos{ Pos }
-		, Primitive{ GameSDF.Primitive }
+		, Primitive{ SDFComp.Primitive }
 		, Quat{ Quat }
-		, Operation{ GameSDF.Operation }
-		, bColorsSubtraction{ GameSDF.bColorsSubtraction }
-		, bSmooths{ GameSDF.bSmooths }
-		, SmoothingStrength{ GameSDF.Smoothing }
-		, MatIdx{ static_cast<uint32>(GameSDF.MaterialIndex) }
+		, Operation{ SDFComp.Operation }
+		, bColorsSubtraction{ SDFComp.bColorsSubtraction }
+		, bSmooths{ SDFComp.bSmooths }
+		, SmoothingStrength{ SDFComp.Smoothing }
+		, MatIdx{ static_cast<uint32>(SDFComp.MaterialIndex) }
 	{
-		switch (GameSDF.Primitive)
+		switch (SDFComp.Primitive)
 		{
-			case EPrimitive::Sphere: Data = FVector4f(GameSDF.Radius, 0.f, 0.f, 0.f); break;
-			case EPrimitive::Line: Data = FVector4f(GameSDF.LinePosB, GameSDF.Radius); break;
-			case EPrimitive::Box: Data = FVector4f(GameSDF.BoxSize, GameSDF.Rounding); break;
+			case EPrimitive::Sphere: Data = FVector4f(SDFComp.Radius, 0.f, 0.f, 0.f); break;
+			case EPrimitive::Line: Data = FVector4f(SDFComp.LinePosB, SDFComp.Radius); break;
+			case EPrimitive::Box: Data = FVector4f(SDFComp.BoxSize, SDFComp.Rounding); break;
 			default: Data = FVector4f(0.f, 0.f, 0.f, 0.f); break;
 		}
 	}
@@ -137,95 +216,6 @@ struct alignas(16) FGPUSDF
 	uint32 ID;
 	uint32 MatIdx;
 };
-
-UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
-class USDFComponent : public USceneComponent
-{
-	GENERATED_BODY()
-
-public:
-
-	USDFComponent();
-
-	virtual void OnRegister() override;
-	virtual void OnUnregister() override;
-#if WITH_EDITOR
-	virtual void PostEditComponentMove( bool bFinished ) override;
-#endif
-
-	const FGameSDF& GetSDF() const { return GameSDF; }
-	uint64 GetID() const { return ID; }
-
-	UFUNCTION(BlueprintCallable)
-	void SetPrimitive( EPrimitive NewPrimitive )
-	{
-		GameSDF.Primitive = NewPrimitive;
-		SetDirty();
-	}
-
-	UFUNCTION( BlueprintCallable )
-	void SetRadius( float NewRadius )
-	{
-		GameSDF.Radius = NewRadius;
-		SetDirty();
-	}
-
-	void SetRounding( float NewRounding )
-	{
-		GameSDF.Rounding = NewRounding;
-		SetDirty();
-	}
-
-	UFUNCTION( BlueprintCallable )
-	void SetOperation( EOperation NewOperation )
-	{
-		GameSDF.Operation = NewOperation;
-		SetDirty();
-	}
-
-	UFUNCTION(BlueprintCallable)
-	void SetDoesSmoothing(bool bNewDoesSmoothing)
-	{
-		GameSDF.bSmooths = bNewDoesSmoothing;
-		SetDirty();
-	}
-
-	UFUNCTION( BlueprintCallable )
-	void SetSmoothing( float NewSmoothing )
-	{
-		GameSDF.Smoothing = NewSmoothing;
-		SetDirty();
-	}
-
-	UFUNCTION( BlueprintCallable )
-	void SetMaterialIndex( int NewMaterialIndex )
-	{
-		GameSDF.MaterialIndex = NewMaterialIndex;
-		SetDirty();
-	}
-
-protected:
-
-	virtual void OnUpdateTransform( EUpdateTransformFlags TransformFlags,
-									ETeleportType TeleportType = ETeleportType::None ) override;
-
-private:
-
-	inline static uint64 NextID{ 0 };
-
-	void SetDirty() const;
-
-	// Game params, game thread
-	UPROPERTY( EditAnywhere,
-		BlueprintReadOnly, // Edit through setters
-		Category = "SDF",
-		meta = (DisplayName = "Shape",
-			ShowOnlyInnerProperties,
-			AllowPrivateAccess = "true") )
-	FGameSDF GameSDF{};
-	uint64 ID;
-
-}; // USDFComponent
 
 UCLASS()
 class ASDFActor : public AActor
