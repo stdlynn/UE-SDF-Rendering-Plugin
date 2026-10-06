@@ -190,7 +190,7 @@ void TraversePS(
 	out float OutDepth : SV_DEPTH ) // Depth
 {
 	// Screen UV
-	const float2 ViewportUV = ( InPosition.xy - View.ViewRectMin.xy ) * View.ViewSizeAndInvSize.zw;
+	const float2 ViewportUV = (InPosition.xy - View.ViewRectMin.xy) * View.ViewSizeAndInvSize.zw;
 	const float2 NDC = ViewportUV * float2( 2, -2 ) + float2( -1, 1 );
 
 	// Ray setup
@@ -201,7 +201,7 @@ void TraversePS(
 
 	// Trace
 	float3 Normal;
-	if ( !TraceScene( Ray, Normal ) ) { discard; }
+	if (!TraceScene( Ray, Normal )) { discard; }
 
 	// Convert unit size
 	float ViewZ = mul( float4( (Ray.GetPos() - Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
