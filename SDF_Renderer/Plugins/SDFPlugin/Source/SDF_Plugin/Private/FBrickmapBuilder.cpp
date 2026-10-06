@@ -8,7 +8,7 @@ void FBrickmapBuilder::AllocateResources()
 {
 	check( IsInRenderingThread() );
 
-	const FRDGTextureDesc BrickAtlasDesc = FRDGTextureDesc::Create3D( FIntVector( AtlasSize ), PF_R8,
+	const FRDGTextureDesc BrickAtlasDesc = FRDGTextureDesc::Create3D( FIntVector( AtlasSize ), PF_R16F,
 																	  FClearValueBinding::None,
 																	  TexCreate_ShaderResource | TexCreate_UAV );
 	RT.BrickAtlas = AllocatePooledTexture( BrickAtlasDesc, TEXT( "SDF_BrickAtlas" ) );

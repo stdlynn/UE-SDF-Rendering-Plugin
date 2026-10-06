@@ -32,11 +32,12 @@ float3 GetAtlasNormal( float3 Pos, float3 BoundsMin )
 {
 	// Note that the normals are reversed on the inside of geometry (so for negative distances)
 	// This should be fine, as those should never be visible anyway
+	const float H = 0.5 * VoxSize;
 	const float2 K = float2( 1, -1 );
-	return normalize( K.xyy * GetAtlasDistClamped( Pos + (K.xyy * DerivativeH), BoundsMin ) +
-					  K.yyx * GetAtlasDistClamped( Pos + (K.yyx * DerivativeH), BoundsMin ) +
-					  K.yxy * GetAtlasDistClamped( Pos + (K.yxy * DerivativeH), BoundsMin ) +
-					  K.xxx * GetAtlasDistClamped( Pos + (K.xxx * DerivativeH), BoundsMin ) );
+	return normalize( K.xyy * GetAtlasDistClamped( Pos + (K.xyy * H), BoundsMin ) +
+					  K.yyx * GetAtlasDistClamped( Pos + (K.yyx * H), BoundsMin ) +
+					  K.yxy * GetAtlasDistClamped( Pos + (K.yxy * H), BoundsMin ) +
+					  K.xxx * GetAtlasDistClamped( Pos + (K.xxx * H), BoundsMin ) );
 }
 float3 GetNormal( float3 Pos )
 {
@@ -90,15 +91,17 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 
 			float TempT = DDA.T;
 			uint i = 0;
-			while (TempT < DistInsideBrick && i < 32)
+			while (TempT < DistInsideBrick)
 			{
 				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAtOffset( TempT ), GridAABB.Min, VoxSize );
-				const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
+				const float EncodedDist = BrickAtlas.SampleLevel( BrickSampler, UVW, 0 );
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
 				if (SampleDist < SurfaceEpsilon)
 				{
 					Ray.Advance( TempT );
 					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
+					const float Cos = max( -dot( Ray.Dir, Normal ), 0.1 );
+					Ray.Advance( SampleDist / Cos );
 					return true;
 				}
 				TempT += SampleDist;
@@ -120,15 +123,17 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 
 			float TempT = DDA.T;
 			uint i = 0;
-			while (TempT < DistInsideBrick && i < 32)
+			while (TempT < DistInsideBrick)
 			{
 				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAtOffset( TempT ), GridAABB.Min, VoxSize );
-				const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
+				const float EncodedDist = BrickAtlas.SampleLevel( BrickSampler, UVW, 0 );
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
 				if (SampleDist < SurfaceEpsilon)
 				{
 					Ray.Advance( TempT );
 					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
+					const float Cos = max( -dot( Ray.Dir, Normal ), 0.1 );
+					Ray.Advance( SampleDist / Cos );
 					return true;
 				}
 				TempT += SampleDist;
