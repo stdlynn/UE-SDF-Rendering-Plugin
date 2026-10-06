@@ -101,7 +101,7 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 					Ray.Advance( TempT );
 					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
 					const float Cos = max( -dot( Ray.Dir, Normal ), 0.1 );
-					Ray.Advance( SampleDist / Cos);
+					Ray.Advance( SampleDist / Cos );
 					return true;
 				}
 				TempT += SampleDist;
@@ -126,12 +126,14 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 			while (TempT < DistInsideBrick)
 			{
 				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAtOffset( TempT ), GridAABB.Min, VoxSize );
-				const float EncodedDist = BrickAtlas.Sample( BrickSampler, UVW );
+				const float EncodedDist = BrickAtlas.SampleLevel( BrickSampler, UVW, 0 );
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
 				if (SampleDist < SurfaceEpsilon)
 				{
 					Ray.Advance( TempT );
 					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
+					const float Cos = max( -dot( Ray.Dir, Normal ), 0.1 );
+					Ray.Advance( SampleDist / Cos );
 					return true;
 				}
 				TempT += SampleDist;
