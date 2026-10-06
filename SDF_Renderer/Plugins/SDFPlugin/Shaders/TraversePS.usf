@@ -118,7 +118,8 @@ bool SphereTraceFBM( inout FRay Ray, out float3 Normal, float PixelFootprint )
 		DistTravelled += ClosestDist;
 		if (DistTravelled > Ray.RelativeMaxT) { break; }
 		// A lot of detail is lost at a higher epsilon
-		if (ClosestDist < TerrainEpsilon)
+		// If we're closer than half a pixel to geometry, no more detail is gained from stepping closer
+		if (ClosestDist < max(TerrainEpsilon, PixelSize * 0.5))
 		{
 			Ray.SetHitT( DistTravelled );
 			Normal = GetTerrainNormal( Ray.GetHitPos(), Params, PixelSize );
