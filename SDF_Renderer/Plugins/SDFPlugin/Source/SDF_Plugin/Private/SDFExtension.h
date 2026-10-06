@@ -58,6 +58,7 @@ public:
 	FScreenPassTexture RenderDebug( FRDGBuilder& GraphBuilder, const FSceneView& SceneView, const FPostProcessMaterialInputs& Inputs );
 
 	void ReleaseResources();
+	void Reset();
 
 protected:
 

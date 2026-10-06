@@ -1,5 +1,15 @@
 #include "SDFEdits.h"
 
+namespace
+{
+	TAutoConsoleVariable CVarDebugWireframe(TEXT("r.SDF.Debug.Wireframe"),
+		0,
+		TEXT("Enable debug view of subtractive edits \n")
+		TEXT(" 0: OFF;")
+		TEXT(" 1: Subtractive only;")
+		TEXT(" 2: ALL"));
+}
+
 // Sets default values
 ASDFActor::ASDFActor()
 	: SDFComp{ CreateDefaultSubobject<USDFComponent>( TEXT( "SDF Edit" ) ) }
@@ -9,6 +19,13 @@ ASDFActor::ASDFActor()
 
 	// Do we need this? Sure don't hope so
 	PrimaryActorTick.bCanEverTick = false;
+}
+
+void USDFSubsystem::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	DrawDebug();
 }
 
 FGPUSDF::FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
@@ -158,4 +175,70 @@ void USDFSubsystem::SetSDFDirty( const USDFComponent& Comp )
 	const FQuat Quat{ Comp.GetComponentTransform().GetRotation() };
 	RenderSDFs[Comp.GetID()] = FRenderSDF{ Comp.GetSDF(), Pos, Quat };
 	bDirty = true;
+}
+
+// Render wireframe of subtractive edits so we can see them
+void USDFSubsystem::DrawDebug()
+{
+	int CVar = CVarDebugWireframe.GetValueOnGameThread();
+	if (!CVar) return;
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	for (const auto& [ID, Edit] : RenderSDFs)
+	{
+		float SizeEpsilon = 1e-2;
+		float SizeMult = 3.5e-2;
+		FColor Color = FColor::Green;
+		EOperation Op = Edit.Operation;
+		
+		if (Op == EOperation::Add)
+		{
+			SizeMult += 1.0f;
+			if (CVar < 2) continue;
+		}
+		else
+		{
+			// Invert epsilon for subtractive edits because they're on the inside
+			SizeEpsilon *= -1.0f;
+			SizeMult = 1.0f - SizeMult;
+
+			Color = FColor::Red;
+		}
+
+		switch (Edit.Primitive)
+		{
+			default:
+			case EPrimitive::Sphere:
+			{
+				// Account for sphere's limited vertex resolution making it clip inside
+				const float Radius = Edit.GetSphereRadius() * SizeMult;
+				DrawDebugSphere( World, static_cast<FVector>(Edit.Pos),
+								 Radius, 16, Color );
+				break;
+			}
+			case EPrimitive::Line:
+			{
+				const FVector PosA = static_cast<FVector>(Edit.Pos);
+				const FVector PosB = PosA + static_cast<FVector>(Edit.GetLinePosB());
+				const FVector Center = (PosA + PosB) / 2.0f;
+				const float Radius = Edit.GetLineRadius() * SizeMult;
+				const float HalfHeight = FVector::Dist( PosA, PosB ) * 0.5f + Radius;
+
+				const FVector Dir = (PosB - PosA).GetSafeNormal();
+				const FQuat Rotation = FQuat::FindBetweenNormals( FVector::UpVector, Dir );
+
+				DrawDebugCapsule( World, Center, HalfHeight, Radius,
+								  Rotation, Color );
+				break;
+			}
+			case EPrimitive::Box:
+			{
+				DrawDebugBox( World, static_cast<FVector>(Edit.Pos),
+							  static_cast<FVector>( Edit.GetBoxHalfExtent() ) + SizeEpsilon,
+							  Edit.Quat, Color );
+				break;
+			}
+		}
+	}
 }

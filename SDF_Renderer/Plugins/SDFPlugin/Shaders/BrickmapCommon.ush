@@ -48,7 +48,7 @@ float DecodeDistance( float Distance, float Diagonal )
 }
 
 float GetBrickSize( float VoxSize ) { return VoxSize * VoxRes; }
-float GetDiagonal( float VoxSize ) { return (sqrt( 3.0 ) / 2.0) * VoxSize; }
+float GetDiagonal( float VoxSize ) { return (sqrt( 3.0 )) * VoxSize; }
 
 namespace AABB
 {

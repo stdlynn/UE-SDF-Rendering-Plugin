@@ -8,7 +8,7 @@ void FBrickmapBuilder::AllocateResources()
 {
 	check( IsInRenderingThread() );
 
-	const FRDGTextureDesc BrickAtlasDesc = FRDGTextureDesc::Create3D( FIntVector( AtlasSize ), PF_R8,
+	const FRDGTextureDesc BrickAtlasDesc = FRDGTextureDesc::Create3D( FIntVector( AtlasSize ), PF_R16F,
 																	  FClearValueBinding::None,
 																	  TexCreate_ShaderResource | TexCreate_UAV );
 	RT.BrickAtlas = AllocatePooledTexture( BrickAtlasDesc, TEXT( "SDF_BrickAtlas" ) );
@@ -50,6 +50,28 @@ bool FBrickmapBuilder::AreResourcesValid() const
 		   && RT.UpdateListResource.IsValid()
 		   && RT.FreedListResource.IsValid()
 		   && RT.DeallocatedListResource.IsValid();
+}
+
+void FBrickmapBuilder::ClearBrickmap(FRDGBuilder& GraphBuilder )
+{
+	const FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture(GetBrickAtlas(), ERDGTextureFlags::MultiFrame);
+	const FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(GetPtrGrid(), ERDGBufferFlags::MultiFrame);
+	const FRDGBufferRef AllocCountersRDG = GraphBuilder.RegisterExternalBuffer(GetBrickAllocCounter(), ERDGBufferFlags::MultiFrame);
+	const FRDGBufferRef FreedListRDG = GraphBuilder.RegisterExternalBuffer(GetFreedList(), ERDGBufferFlags::MultiFrame);
+	const FRDGBufferRef DeallocatedListRDG = GraphBuilder.RegisterExternalBuffer(GetDeallocatedList(), ERDGBufferFlags::MultiFrame);
+
+	const FRDGBufferUAVRef PtrGridUAV = GraphBuilder.CreateUAV(PtrBufferRDG, PF_R32_UINT);
+	const FRDGTextureUAVRef BrickAtlasUAV = GraphBuilder.CreateUAV(BrickAtlasRDG);
+	const FRDGBufferUAVRef FreedListUAV = GraphBuilder.CreateUAV(FreedListRDG, PF_R32_UINT);
+	const FRDGBufferUAVRef DeallocatedListUAV = GraphBuilder.CreateUAV(DeallocatedListRDG, PF_R32_UINT);
+	const FRDGBufferUAVRef AllocCountersUAV = GraphBuilder.CreateUAV(AllocCountersRDG, PF_R32_UINT);
+
+	AddClearUAVPass(GraphBuilder, PtrGridUAV, 0xFFFFFFFFu);
+	AddClearUAVPass(GraphBuilder, BrickAtlasUAV, 1.0f);
+	AddClearUAVPass(GraphBuilder, FreedListUAV, 0xFFFFFFFFu);
+	AddClearUAVPass(GraphBuilder, DeallocatedListUAV, 0xFFFFFFFFu);
+	AddClearUAVPass(GraphBuilder, AllocCountersUAV, 0u);
+	bReset = false;
 }
 
 void FBrickmapBuilder::SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FVector3f& PtrGridPos, float VoxSize )
