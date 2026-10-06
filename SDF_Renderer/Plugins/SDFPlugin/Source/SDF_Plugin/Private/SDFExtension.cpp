@@ -423,59 +423,62 @@ FScreenPassTexture FSDFExtension::RenderDebug( FRDGBuilder& GraphBuilder, const 
 	const FSceneViewFamily& ViewFamily = *SceneView.Family;
 	const FScreenPassTexture& SceneColor = FScreenPassTexture::CopyFromSlice( GraphBuilder, Inputs.GetInput( EPostProcessMaterialInput::SceneColor ) );
 
-	if (! SceneColor.IsValid()
+	if (! SceneColor.IsValid() 
 		|| CVarShadersOn.GetValueOnRenderThread() == 0
-		|| CVarDebugGrid.GetValueOnRenderThread() == 0)
+		)
 	{
 		return SceneColor;
 	}
 
-	const FScreenPassTextureViewport SceneColorViewport( SceneColor );
-
-	RDG_EVENT_SCOPE( GraphBuilder, "SDF_Debug" );
+	if (CVarDebugGrid.GetValueOnRenderThread())
 	{
-		FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap( ViewFamily.GetFeatureLevel() );
+		const FScreenPassTextureViewport SceneColorViewport( SceneColor );
 
-		FRDGTextureDesc OutputDesc;
+		RDG_EVENT_SCOPE( GraphBuilder, "SDF_Debug" );
 		{
-			OutputDesc = SceneColor.Texture->Desc;
+			FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap( ViewFamily.GetFeatureLevel() );
 
-			OutputDesc.Reset();
-			OutputDesc.Flags |= TexCreate_UAV;
-			OutputDesc.Flags &= ~(TexCreate_RenderTargetable | TexCreate_FastVRAM);
+			FRDGTextureDesc OutputDesc;
+			{
+				OutputDesc = SceneColor.Texture->Desc;
 
-			FLinearColor ClearColor( 0., 0., 0., 0. );
-			OutputDesc.ClearValue = FClearValueBinding( ClearColor );
+				OutputDesc.Reset();
+				OutputDesc.Flags |= TexCreate_UAV;
+				OutputDesc.Flags &= ~(TexCreate_RenderTargetable | TexCreate_FastVRAM);
+
+				FLinearColor ClearColor( 0., 0., 0., 0. );
+				OutputDesc.ClearValue = FClearValueBinding( ClearColor );
+			}
+
+			FRDGTextureRef OutputTexture = GraphBuilder.CreateTexture( OutputDesc, TEXT( "Custom Effect Output Texture" ) );
+			FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer( RT.BrickmapBuilder.GetPtrGrid(), ERDGBufferFlags::MultiFrame );
+
+			FDebugShader::FParameters* PassParameters = GraphBuilder.AllocParameters<FDebugShader::FParameters>();
+			PassParameters->OriginalSceneColor = SceneColor.Texture;
+			PassParameters->DepthTex = Inputs.SceneTextures.SceneTextures->GetParameters()->SceneDepthTexture;
+			PassParameters->View = SceneView.ViewUniformBuffer;
+			PassParameters->PtrGrid = GraphBuilder.CreateSRV( PtrBufferRDG, PF_R32_UINT );
+			PassParameters->SceneColorViewport = GetScreenPassTextureViewportParameters( SceneColorViewport );
+			PassParameters->PtrGridPos = RT.Settings.PtrGridPos;
+			PassParameters->VoxSize = RT.Settings.VoxSize;
+			PassParameters->UnitScale = RT.Settings.GPUUnitScale;
+			PassParameters->DbgVisMaxBricks = RT.Settings.DbgVisMaxBricks;
+			PassParameters->DbgVisBlendFactor = RT.Settings.DbgVisBlendFactor;
+			PassParameters->Output = GraphBuilder.CreateUAV( FRDGTextureUAVDesc( OutputTexture ) );
+
+			FIntPoint PassViewSize = SceneColor.ViewRect.Size();
+			FIntVector GroupCount = FComputeShaderUtils::GetGroupCount( PassViewSize, FComputeShaderUtils::kGolden2DGroupSize );
+
+			TShaderMapRef<FDebugShader> ComputeShader( GlobalShaderMap );
+
+			FComputeShaderUtils::AddPass( GraphBuilder,
+										  RDG_EVENT_NAME( "SDF Debug Post Processing CS Shader %dx%d", PassViewSize.X, PassViewSize.Y ),
+										  ComputeShader,
+										  PassParameters,
+										  GroupCount );
+
+			AddCopyTexturePass( GraphBuilder, OutputTexture, SceneColor.Texture );
 		}
-
-		FRDGTextureRef OutputTexture = GraphBuilder.CreateTexture( OutputDesc, TEXT( "Custom Effect Output Texture" ) );
-		FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer( RT.BrickmapBuilder.GetPtrGrid(), ERDGBufferFlags::MultiFrame );
-
-		FDebugShader::FParameters* PassParameters = GraphBuilder.AllocParameters<FDebugShader::FParameters>();
-		PassParameters->OriginalSceneColor = SceneColor.Texture;
-		PassParameters->DepthTex = Inputs.SceneTextures.SceneTextures->GetParameters()->SceneDepthTexture;
-		PassParameters->View = SceneView.ViewUniformBuffer;
-		PassParameters->PtrGrid = GraphBuilder.CreateSRV( PtrBufferRDG, PF_R32_UINT );
-		PassParameters->SceneColorViewport = GetScreenPassTextureViewportParameters( SceneColorViewport );
-		PassParameters->PtrGridPos = RT.Settings.PtrGridPos;
-		PassParameters->VoxSize = RT.Settings.VoxSize;
-		PassParameters->UnitScale = RT.Settings.GPUUnitScale;
-		PassParameters->DbgVisMaxBricks = RT.Settings.DbgVisMaxBricks;
-		PassParameters->DbgVisBlendFactor = RT.Settings.DbgVisBlendFactor;
-		PassParameters->Output = GraphBuilder.CreateUAV( FRDGTextureUAVDesc( OutputTexture ) );
-
-		FIntPoint PassViewSize = SceneColor.ViewRect.Size();
-		FIntVector GroupCount = FComputeShaderUtils::GetGroupCount( PassViewSize, FComputeShaderUtils::kGolden2DGroupSize );
-
-		TShaderMapRef<FDebugShader> ComputeShader( GlobalShaderMap );
-
-		FComputeShaderUtils::AddPass( GraphBuilder,
-									  RDG_EVENT_NAME( "SDF Debug Post Processing CS Shader %dx%d", PassViewSize.X, PassViewSize.Y ),
-									  ComputeShader,
-									  PassParameters,
-									  GroupCount );
-
-		AddCopyTexturePass( GraphBuilder, OutputTexture, SceneColor.Texture );
 	}
 
 	return SceneColor;
