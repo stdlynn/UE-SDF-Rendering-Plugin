@@ -88,7 +88,6 @@ void FBrickmapBuilder::SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FV
 
 	for ( const auto& SDF : SDFs )
 	{
-
 		FAABB AABB = AABB::GetSDFAABB( SDF );
 		const FVector3f MinF = ( AABB.Min - GridMin - Thickness ) / BrickSize;
 		const FVector3f MaxF = ( AABB.Max - GridMin + Thickness ) / BrickSize;

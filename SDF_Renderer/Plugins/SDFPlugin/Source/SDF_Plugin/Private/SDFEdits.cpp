@@ -33,10 +33,12 @@ FGPUSDF::FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
 	, Flags { 0 }
 	, SmoothingStrength{ RenderSDF.SmoothingStrength * GPUUnitScale }
 	, ID{ ID }
+	, MatIdx{ RenderSDF.MatIdx }
 {
-	SetPrimitive(RenderSDF.Primitive);
-	SetOperation(RenderSDF.Operation);
-	EnableSmoothing(RenderSDF.bSmooths);
+	SetPrimitive( RenderSDF.Primitive );
+	SetOperation( RenderSDF.Operation );
+	SetColorsSubtraction( RenderSDF.bColorsSubtraction );
+	EnableSmoothing( RenderSDF.bSmooths );
 
 	switch (RenderSDF.Primitive)
 	{
@@ -87,10 +89,16 @@ void FGPUSDF::SetOperation( const EOperation NewOperation )
 	Flags = (Flags & ~Mask) | ((static_cast<uint32>(NewOperation) << 2) & Mask);
 }
 
-void FGPUSDF::EnableSmoothing( const bool Enabled )
+void FGPUSDF::SetColorsSubtraction( const bool bEnabled)
+{
+	static constexpr uint32 Mask = 0b10000;
+	Flags = (Flags & ~Mask) | (bEnabled ? Mask : 0u);
+}
+
+void FGPUSDF::EnableSmoothing( const bool bEnabled )
 {
 	static constexpr uint32 Mask = 0b1000;
-	Flags = (Flags & ~Mask) | (Enabled ? Mask : 0u);
+	Flags = (Flags & ~Mask) | (bEnabled ? Mask : 0u);
 }
 
 USDFComponent::USDFComponent()
@@ -151,7 +159,7 @@ void USDFSubsystem::RegisterSDF( const USDFComponent& Comp )
 {
 	const FVector3f Pos{ Comp.GetComponentTransform().GetLocation() };
 	const FQuat Quat{ Comp.GetComponentTransform().GetRotation() };
-	RenderSDFs.Add( Comp.GetID(), { Comp.GetSDF(), Pos, Quat } );
+	RenderSDFs.Add( Comp.GetID(), { Comp, Pos, Quat } );
 	bDirty = true;
 }
 
@@ -165,7 +173,7 @@ void USDFSubsystem::SetSDFDirty( const USDFComponent& Comp )
 {
 	const FVector3f Pos{ Comp.GetComponentTransform().GetLocation() };
 	const FQuat Quat{ Comp.GetComponentTransform().GetRotation() };
-	RenderSDFs[Comp.GetID()] = FRenderSDF{ Comp.GetSDF(), Pos, Quat };
+	RenderSDFs[Comp.GetID()] = FRenderSDF{ Comp, Pos, Quat };
 	bDirty = true;
 }
 

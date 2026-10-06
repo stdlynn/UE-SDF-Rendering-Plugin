@@ -104,8 +104,24 @@ void FSDFExtension::BeginRenderViewFamily( FSceneViewFamily& InViewFamily )
 
 void FSDFExtension::TransferSettingsToRenderThread()
 {
+	USDFSettings* SDFSettings{ GetMutableDefault<USDFSettings>() };
+
+	// Check if the materials are dirty
+	if (SDFSettings->bMaterialsDirty)
+	{
+		// Store materials
+		GT.Materials = SDFSettings->Materials;
+		SDFSettings->bMaterialsDirty = false;
+
+		auto TransferMaterials{ [this, Materials = GT.Materials]( FRHICommandList& ) mutable
+		{
+			RT.Materials = Materials;
+		} };
+
+		ENQUEUE_RENDER_COMMAND(SDFSettingsThreadTransfer)(TransferMaterials);
+	}
+
 	// Check if any of the settings are dirty
-	const USDFSettings* SDFSettings{ GetDefault<USDFSettings>() };
 	if (GT.Settings.PtrGridPos == SDFSettings->PtrGridPos
 		&& GT.Settings.VoxSize == SDFSettings->VoxSize
 		&& GT.Settings.DbgVisMaxBricks == SDFSettings->DbgVisMaxBricks
@@ -189,6 +205,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 
 	// Update upload buffers
 	UpdateSDFBuffer();
+	UpdateMaterialBuffer();
 	RT.BrickmapBuilder.AllocateBrickList();
 
 	if (! RT.BrickmapBuilder.AreResourcesValid())
@@ -306,6 +323,33 @@ void FSDFExtension::UpdateSDFBuffer()
 	}
 }
 
+void FSDFExtension::UpdateMaterialBuffer()
+{
+	// The buffer is not up-to-date (or doesn't exist)
+	if (not RT.MaterialsResource.bDirty) { return; }
+
+	// We need to upload the updated Material buffer
+	RT.MaterialsResource.bUpload = true;
+
+	// If the buffer hasn't been allocated or isn't large enough
+	// If not, we simply overwrite the current data through the upload call
+	if (not RT.MaterialsResource.Buff.IsValid()
+		|| (RT.MaterialsResource.Buff->GetSize() / sizeof( FSDFMaterial )) < static_cast<uint32>(RT.Materials.Num()))
+	{
+		// We cannot allocate a buffer of size 0
+		const uint32 Capacity{ static_cast<uint32>(FMath::Max(RT.Materials.Num(), 1)) };
+
+		// We need a structured buffer (because we're storing an array of structs)
+		// We need it to be an upload buffer, which are for CPU-to-GPU uploads
+		const FRDGBufferDesc Desc{ FRDGBufferDesc::CreateStructuredUploadDesc(sizeof( FSDFMaterial ), Capacity) };
+
+		// By manually allocating a buffer, we guarantee it's persistent among frames
+		// This wouldn't be the case for 'GraphBuilder.CreateBuffer()'
+		// If we already have a buffer allocated, it will be deallocated by the RDG when it goes out of scope
+		RT.MaterialsResource.Buff = AllocatePooledBuffer( Desc, TEXT( "SDF Material Upload Buffer" ) );
+	}
+}
+
 FRDGBufferRef FSDFExtension::RegisterSDFBuffer( FRDGBuilder& GraphBuilder )
 {
 	const FRDGBufferRef SDFBuffRDG{ GraphBuilder.RegisterExternalBuffer( RT.SDFResources.Buff, ERDGBufferFlags::MultiFrame ) };
@@ -320,6 +364,20 @@ FRDGBufferRef FSDFExtension::RegisterSDFBuffer( FRDGBuilder& GraphBuilder )
 		RT.SDFResources.bUpload = false;
 	}
 	return SDFBuffRDG;
+}
+
+FRDGBufferRef FSDFExtension::RegisterMaterialBuffer(FRDGBuilder& GraphBuilder)
+{
+	const FRDGBufferRef MaterialBuffRDG{ GraphBuilder.RegisterExternalBuffer( RT.MaterialsResource.Buff, ERDGBufferFlags::MultiFrame ) };
+	if (RT.MaterialsResource.bUpload)
+	{
+		GraphBuilder.QueueBufferUpload( MaterialBuffRDG,
+										RT.Materials.GetData(),
+										sizeof( FSDFMaterial ) * RT.Materials.Num(),
+										ERDGInitialDataFlags::NoCopy );
+		RT.MaterialsResource.bUpload = false;
+	}
+	return MaterialBuffRDG;
 }
 
 void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphBuilder,
@@ -355,6 +413,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 		// Tell the RDG that the SDF buffer will be used this frame
 		// Specify that it is persistent/external ('MultiFrame')
 		const FRDGBufferRef SDFBuffRDG{ RegisterSDFBuffer( GraphBuilder ) };
+		const FRDGBufferRef MaterialBuffRDG{ RegisterMaterialBuffer( GraphBuilder ) };
 
 		const FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture( RT.BrickmapBuilder.GetBrickAtlas(), ERDGTextureFlags::MultiFrame );
 		const FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer( RT.BrickmapBuilder.GetPtrGrid(), ERDGBufferFlags::MultiFrame );
@@ -364,6 +423,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 				GraphBuilder.AllocParameters<FSDFTraverseShader::FParameters>();
 		PassParameters->View = InView.ViewUniformBuffer;
 		PassParameters->SDFEdits = GraphBuilder.CreateSRV( SDFBuffRDG ); // Create the SDF buffer view (which specifies how the shader should read it)
+		PassParameters->Materials = GraphBuilder.CreateSRV( MaterialBuffRDG );
 		PassParameters->NumEdits = RT.SDFs.Num();
 		PassParameters->BrickAtlas = GraphBuilder.CreateSRV( BrickAtlasRDG );
 		PassParameters->BrickSampler = BrickSampler;
