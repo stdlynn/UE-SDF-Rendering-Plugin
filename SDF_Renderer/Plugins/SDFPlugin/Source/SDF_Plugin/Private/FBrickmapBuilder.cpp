@@ -8,7 +8,7 @@ void FBrickmapBuilder::AllocateResources()
 {
 	check( IsInRenderingThread() );
 
-	const FRDGTextureDesc BrickAtlasDesc = FRDGTextureDesc::Create3D( FIntVector( AtlasSize ), PF_R8,
+	const FRDGTextureDesc BrickAtlasDesc = FRDGTextureDesc::Create3D( FIntVector( AtlasSize ), PF_R16F,
 																	  FClearValueBinding::None,
 																	  TexCreate_ShaderResource | TexCreate_UAV );
 	RT.BrickAtlas = AllocatePooledTexture( BrickAtlasDesc, TEXT( "SDF_BrickAtlas" ) );
@@ -88,7 +88,6 @@ void FBrickmapBuilder::SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FV
 
 	for ( const auto& SDF : SDFs )
 	{
-
 		FAABB AABB = AABB::GetSDFAABB( SDF );
 		const FVector3f MinF = ( AABB.Min - GridMin - Thickness ) / BrickSize;
 		const FVector3f MaxF = ( AABB.Max - GridMin + Thickness ) / BrickSize;

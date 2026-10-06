@@ -2,6 +2,10 @@
 
 #pragma once
 
+// Plugin
+#include "SDFMaterial.h"
+
+// UE
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
 #include "SDFSettings.generated.h"
@@ -190,6 +194,12 @@ public:
 
 	// True if any setting is dirty (NOT materials)
 	bool bSettingDirty = true;
+	
+	UPROPERTY(EditAnywhere, Config, Category = "Rendering",
+		meta = (DisplayName = "Materials"))
+	TArray<FSDFMaterial> Materials;
+
+	bool bMaterialsDirty = true;
 
 	virtual FName GetCategoryName() const override { return TEXT( "Plugins" ); }
 

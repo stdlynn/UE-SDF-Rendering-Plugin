@@ -5,12 +5,12 @@ void USDFSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChanged
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 
-	//if (PropertyChangedEvent.GetMemberPropertyName() ==
-	//	 GET_MEMBER_NAME_CHECKED(USDFSettings, Materials))
-	//{
-	//	bMaterialsDirty = true;
-	//}
-	//else
+	if (PropertyChangedEvent.GetMemberPropertyName() ==
+		 GET_MEMBER_NAME_CHECKED(USDFSettings, Materials))
+	{
+		bMaterialsDirty = true;
+	}
+	else
 	{
 		bSettingDirty = true;
 	}
