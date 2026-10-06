@@ -82,7 +82,7 @@ float3 GetAtlasNormal( float3 Pos, float3 BoundsMin )
 					  K.yxy * GetAtlasDistClamped( Pos + (K.yxy * DerivativeH), BoundsMin ) +
 					  K.xxx * GetAtlasDistClamped( Pos + (K.xxx * DerivativeH), BoundsMin ) );
 }
-float3 GetTerrainNormal( float3 Pos, FTerrainParams Params )
+float3 GetTerrainNormal( float3 Pos, FTerrainParams Params, float PixelSize )
 {
 	// TODO: this calculates the world-space diameter of the noise (for simplex it would be slightly smaller)
 	// TODO: use this to calculate H automatically
@@ -90,10 +90,10 @@ float3 GetTerrainNormal( float3 Pos, FTerrainParams Params )
 	const float NoiseSize = Params.Amplitude * pow( Params.Persistence, max( Params.NumOctaves, 1 ) - 1 ) / Params.Frequency / 100.;
 	
 	const float2 K = float2( 1, -1 );
-	return normalize( K.xyy * DistFn::FBM( Pos + (K.xyy * TerrainDerivativeH), Params ) +
-					  K.yyx * DistFn::FBM( Pos + (K.yyx * TerrainDerivativeH), Params ) +
-					  K.yxy * DistFn::FBM( Pos + (K.yxy * TerrainDerivativeH), Params ) +
-					  K.xxx * DistFn::FBM( Pos + (K.xxx * TerrainDerivativeH), Params ) );
+	return normalize( K.xyy * DistFn::FBM( Pos + (K.xyy * TerrainDerivativeH), Params, PixelSize ) +
+					  K.yyx * DistFn::FBM( Pos + (K.yyx * TerrainDerivativeH), Params, PixelSize ) +
+					  K.yxy * DistFn::FBM( Pos + (K.yxy * TerrainDerivativeH), Params, PixelSize ) +
+					  K.xxx * DistFn::FBM( Pos + (K.xxx * TerrainDerivativeH), Params, PixelSize ) );
 }
 float3 GetNormal( float3 Pos )
 {
@@ -121,7 +121,7 @@ bool SphereTraceFBM( inout FRay Ray, out float3 Normal, float PixelFootprint )
 		if (ClosestDist < TerrainEpsilon)
 		{
 			Ray.SetHitT( DistTravelled );
-			Normal = GetTerrainNormal( Ray.GetHitPos(), Params );
+			Normal = GetTerrainNormal( Ray.GetHitPos(), Params, PixelSize );
 			return true;
 		}
 	}
