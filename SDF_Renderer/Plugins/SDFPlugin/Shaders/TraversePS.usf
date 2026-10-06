@@ -121,7 +121,7 @@ bool SphereTraceFBM( inout FRay Ray, out float3 Normal, float PixelFootprint )
 		{
 			Ray.SetHitT( DistTravelled );
 
-#if 1
+#if 0
 			// Flatten water
 			const float PlaneZ = 6.999;
 			const float WaterZ = PlaneZ / (Frequency * 100.0);
@@ -177,9 +177,9 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
 				if (SampleDist < SurfaceEpsilon)
 				{
-					Normal = GetAtlasNormal( Ray.GetPosAt( TemptT ), GridAABB.Min );
+					Normal = GetAtlasNormal( Ray.GetPosAt( TempT ), GridAABB.Min );
 					const float Cos = max( -dot( Ray.Dir, Normal ), 0.1 );
-					Ray.SetHitT( TemptT + (SampleDist / Cos) );
+					Ray.SetHitT( TempT + (SampleDist / Cos) );
 					return true;
 				}
 				TempT += SampleDist;
@@ -208,9 +208,9 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
 				if (SampleDist < SurfaceEpsilon)
 				{
-					Normal = GetAtlasNormal( Ray.GetPosAt( TemptT ), GridAABB.Min );
+					Normal = GetAtlasNormal( Ray.GetPosAt( TempT ), GridAABB.Min );
 					const float Cos = max( -dot( Ray.Dir, Normal ), 0.1 );
-					Ray.SetHitT( TemptT + (SampleDist / Cos) );
+					Ray.SetHitT( TempT + (SampleDist / Cos) );
 					return true;
 				}
 				TempT += SampleDist;
@@ -317,6 +317,7 @@ void TraversePS(
 	const float3 Dir = normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w );
 	FRay Ray = FRay::Create( ResolvedView.ViewOriginHigh * UnitScale, Dir ); // Convert unit size
 
+	// TODO: albedo
 	// Trace
 	float3 Normal, Albedo;
 	if (! TraceScene( Ray, Normal, Albedo, GetPixelFootprint() )) { discard; }
@@ -325,7 +326,7 @@ void TraversePS(
     const float ViewZ = (Ray.GetHitT() / UnitScale) * dot( Dir, ResolvedView.ViewForward.xyz );
     OutDepth = ConvertToDeviceZ( ViewZ );
 
-	FSDFMaterial Material = SampleMaterial( Ray.GetPos() );
+	FSDFMaterial Material = SampleMaterial( Ray.GetHitPos() );
 
 	FGBufferData GBuffer = (FGBufferData)0;
 	GBuffer.BaseColor = Material.Albedo;

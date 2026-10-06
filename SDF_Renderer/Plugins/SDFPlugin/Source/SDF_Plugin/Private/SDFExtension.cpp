@@ -122,7 +122,6 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	}
 
 	// Check if any of the settings are dirty
-	USDFSettings* SDFSettings{ GetMutableDefault<USDFSettings>() };
 	if (not SDFSettings->bSettingDirty && not GT.Settings.bUnitScaleDirty) { return; }
 	SDFSettings->bSettingDirty = false;
 
