@@ -102,7 +102,7 @@ float3 GetNormal( float3 Pos )
 					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH) ) );
 }
 
-bool SphereTraceFBM( inout FRay Ray, out float3 Normal, float PixelFootprint )
+bool SphereTraceFBM( inout FRay Ray, inout float3 Normal, float PixelFootprint )
 {
 	float DistTravelled = 0.0;
 	FTerrainParams Params = GetTerrainParams();
@@ -147,7 +147,7 @@ bool SphereTraceFBM( inout FRay Ray, out float3 Normal, float PixelFootprint )
 }
 
 // Pointer Grid DDA
-bool TracePtrGrid( inout FRay Ray, out float3 Normal )
+bool TracePtrGrid( inout FRay Ray, inout float3 Normal )
 {
 	// TODO:
 	const float BrickSize = GetBrickSize( VoxSize );
