@@ -174,7 +174,7 @@ public:
 
 	// The 'h' in L'Hôpital's rule
 	UPROPERTY( EditAnywhere, Config, Category = "Rendering",
-			   meta = (DisplayName = "Normals' Smoothing",
+			   meta = (DisplayName = "Brute-Force Normals' Smoothing",
 						ClampMin = "0.0",
 						UIMin = "0.1",
 						UIMax = "1.0") )
