@@ -122,25 +122,38 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	}
 
 	// Check if any of the settings are dirty
-	if (GT.Settings.PtrGridPos == SDFSettings->PtrGridPos
-		&& GT.Settings.VoxSize == SDFSettings->VoxSize
-		&& GT.Settings.DbgVisMaxBricks == SDFSettings->DbgVisMaxBricks
-		&& GT.Settings.DbgVisBlendFactor == SDFSettings->DbgVisBlendFactor
-		&& GT.Settings.SurfaceEpsilon == SDFSettings->SurfaceEpsilon
-		&& GT.Settings.DerivativeH == SDFSettings->DerivativeH
-		&& GT.Settings.GPUUnitScale == SDFSettings->GPUUnitScale)
-	{
-		return;
-	}
+	if (not SDFSettings->bSettingDirty && not GT.Settings.bUnitScaleDirty) { return; }
+	SDFSettings->bSettingDirty = false;
 
 	// Store settings to compare next frame
-	GT.Settings.PtrGridPos = SDFSettings->PtrGridPos;
-	GT.Settings.VoxSize = SDFSettings->VoxSize;
+	// Convert the unit scale where necessary
+	GT.Settings.PtrGridPos = SDFSettings->PtrGridPos * SDFSettings->GPUUnitScale;
+	GT.Settings.VoxSize = SDFSettings->VoxSize * SDFSettings->GPUUnitScale;
 	GT.Settings.DbgVisMaxBricks = SDFSettings->DbgVisMaxBricks;
 	GT.Settings.DbgVisBlendFactor = SDFSettings->DbgVisBlendFactor;
-	GT.Settings.SurfaceEpsilon = SDFSettings->SurfaceEpsilon;
-	GT.Settings.DerivativeH = SDFSettings->DerivativeH;
+	GT.Settings.SurfaceEpsilon = SDFSettings->SurfaceEpsilon * SDFSettings->GPUUnitScale;
+	GT.Settings.DerivativeH = SDFSettings->DerivativeH * SDFSettings->GPUUnitScale;
 	GT.Settings.GPUUnitScale = SDFSettings->GPUUnitScale;
+	// Terrain
+	GT.Settings.Terrain.RotAxis = SDFSettings->RotAxis.GetUnsafeNormal();
+	GT.Settings.Terrain.RotAngle = FMath::DegreesToRadians( SDFSettings->RotAngle );
+	GT.Settings.Terrain.PlanePos = SDFSettings->PlanePos * SDFSettings->GPUUnitScale;
+	GT.Settings.Terrain.VerticalNoiseOffset = SDFSettings->VerticalNoiseOffset;
+	GT.Settings.Terrain.MinNoiseScale = SDFSettings->MinNoiseScale;
+	GT.Settings.Terrain.NumOctaves = SDFSettings->NumOctaves;
+	GT.Settings.Terrain.Frequency = SDFSettings->Frequency / (SDFSettings->GPUUnitScale * 100.0f); // Frequency is a "per-length"
+	GT.Settings.Terrain.Amplitude = SDFSettings->Amplitude;
+	GT.Settings.Terrain.Lacunarity = SDFSettings->Lacunarity;
+	GT.Settings.Terrain.Persistence = SDFSettings->Persistence;
+	GT.Settings.Terrain.Inflation = SDFSettings->Inflation;
+	GT.Settings.Terrain.InflationGain = SDFSettings->InflationGain;
+	GT.Settings.Terrain.SampleSmoothing = SDFSettings->SampleSmoothing;
+	GT.Settings.Terrain.UnionSmoothing = SDFSettings->UnionSmoothing;
+	GT.Settings.Terrain.ClippingSmoothing = SDFSettings->ClippingSmoothing;
+	GT.Settings.Terrain.bBandLimiting = SDFSettings->bBandLimiting;
+	GT.Settings.Terrain.bSimplex = SDFSettings->bSimplex;
+	GT.Settings.Terrain.Epsilon = SDFSettings->TerrainEpsilon * SDFSettings->GPUUnitScale;
+	GT.Settings.Terrain.DerivativeH = SDFSettings->TerrainDerivativeH * SDFSettings->GPUUnitScale;
 	GT.Settings.bUnitScaleDirty = true;
 
 	// Transfer lambda
@@ -149,12 +162,6 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	{
 		// Copy the settings over to the render thread
 		RT.Settings = Settings;
-
-		// Convert to GPU unit scale
-		RT.Settings.PtrGridPos *= Settings.GPUUnitScale;
-		RT.Settings.VoxSize *= Settings.GPUUnitScale;
-		RT.Settings.SurfaceEpsilon *= Settings.GPUUnitScale;
-		RT.Settings.DerivativeH *= Settings.GPUUnitScale;
 	} };
 
 	// Perform the transfer safely on the render thread
@@ -434,6 +441,26 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 		PassParameters->SurfaceEpsilon = RT.Settings.SurfaceEpsilon;
 		PassParameters->DerivativeH = RT.Settings.DerivativeH;
 		PassParameters->UnitScale = RT.Settings.GPUUnitScale;
+		// Terrain
+		PassParameters->RotAxis = RT.Settings.Terrain.RotAxis;
+		PassParameters->RotAngle = RT.Settings.Terrain.RotAngle;
+		PassParameters->PlanePos = RT.Settings.Terrain.PlanePos;
+		PassParameters->VerticalNoiseOffset = RT.Settings.Terrain.VerticalNoiseOffset;
+		PassParameters->MinNoiseScale = RT.Settings.Terrain.MinNoiseScale;
+		PassParameters->NumOctaves = RT.Settings.Terrain.NumOctaves;
+		PassParameters->Frequency = RT.Settings.Terrain.Frequency;
+		PassParameters->Lacunarity = RT.Settings.Terrain.Lacunarity;
+		PassParameters->Amplitude = RT.Settings.Terrain.Amplitude;
+		PassParameters->Persistence = RT.Settings.Terrain.Persistence;
+		PassParameters->Inflation = RT.Settings.Terrain.Inflation;
+		PassParameters->InflationGain = RT.Settings.Terrain.InflationGain;
+		PassParameters->SampleSmoothing = RT.Settings.Terrain.SampleSmoothing;
+		PassParameters->UnionSmoothing = RT.Settings.Terrain.UnionSmoothing;
+		PassParameters->ClippingSmoothing = RT.Settings.Terrain.ClippingSmoothing;
+		PassParameters->bSimplex = RT.Settings.Terrain.bSimplex;
+		PassParameters->bBandLimiting = RT.Settings.Terrain.bBandLimiting;
+		PassParameters->TerrainEpsilon = RT.Settings.Terrain.Epsilon;
+		PassParameters->TerrainDerivativeH = RT.Settings.Terrain.DerivativeH;
 		PassParameters->RenderTargets = RenderTargets;
 		PassParameters->RenderTargets.DepthStencil = FDepthStencilBinding( DepthTexture,
 																		   ERenderTargetLoadAction::ELoad, // Depth

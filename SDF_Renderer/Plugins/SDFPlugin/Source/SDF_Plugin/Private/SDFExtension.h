@@ -23,6 +23,28 @@ public:
 
 	struct FSettings
 	{
+		struct TerrainParams
+		{
+			FVector3f RotAxis;
+			float RotAngle;
+			FVector3f PlanePos;
+			float VerticalNoiseOffset;
+			float MinNoiseScale;
+			uint32 NumOctaves;
+			float Frequency;
+			float Lacunarity;
+			float Amplitude;
+			float Persistence;
+			float Inflation;
+			float InflationGain;
+			float SampleSmoothing;
+			float UnionSmoothing;
+			float ClippingSmoothing;
+			float Epsilon;
+			float DerivativeH;
+			bool bSimplex;
+			bool bBandLimiting;
+		} Terrain;
 		FVector3f PtrGridPos;
 		float VoxSize;
 		uint32 DbgVisMaxBricks;
@@ -119,6 +141,26 @@ public:
 		SHADER_PARAMETER( float, SurfaceEpsilon )
 		SHADER_PARAMETER( float, DerivativeH )
 		SHADER_PARAMETER( float, UnitScale )
+		// Terrain
+		SHADER_PARAMETER(FVector3f, RotAxis)
+		SHADER_PARAMETER(float, RotAngle)
+		SHADER_PARAMETER(FVector3f, PlanePos)
+		SHADER_PARAMETER(float, VerticalNoiseOffset)
+		SHADER_PARAMETER(float, MinNoiseScale)
+		SHADER_PARAMETER(uint32, NumOctaves)
+		SHADER_PARAMETER(float, Frequency)
+		SHADER_PARAMETER(float, Lacunarity)
+		SHADER_PARAMETER(float, Amplitude)
+		SHADER_PARAMETER(float, Persistence)
+		SHADER_PARAMETER(float, Inflation)
+		SHADER_PARAMETER(float, InflationGain)
+		SHADER_PARAMETER(float, SampleSmoothing)
+		SHADER_PARAMETER(float, UnionSmoothing)
+		SHADER_PARAMETER(float, ClippingSmoothing)
+		SHADER_PARAMETER(float, TerrainEpsilon)
+		SHADER_PARAMETER(float, TerrainDerivativeH)
+		SHADER_PARAMETER(uint32, bSimplex)
+		SHADER_PARAMETER(uint32, bBandLimiting)
 		RENDER_TARGET_BINDING_SLOTS() // GBuffer Textures
 	END_SHADER_PARAMETER_STRUCT()
 

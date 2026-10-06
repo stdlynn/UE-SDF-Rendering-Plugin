@@ -3,6 +3,7 @@
 #include "/Engine/Private/DeferredShadingCommon.ush"
 #include "BrickmapCommon.ush"
 #include "Common.ush"
+#include "Terrain.ush"
 
 // Shader bindings
 SamplerState BrickSampler;
@@ -12,6 +13,49 @@ float VoxSize;
 float SurfaceEpsilon;
 float DerivativeH;
 float UnitScale;
+// Terrain
+float3 RotAxis;
+float RotAngle;
+float3 PlanePos;
+float VerticalNoiseOffset;
+float MinNoiseScale;
+uint NumOctaves;
+float Frequency;
+float Lacunarity;
+float Amplitude;
+float Persistence;
+float Inflation;
+float InflationGain;
+float SampleSmoothing;
+float UnionSmoothing;
+float ClippingSmoothing;
+// Brute-force terrain rendering
+uint bSimplex;
+uint bBandLimiting;
+float TerrainEpsilon;
+float TerrainDerivativeH;
+
+FTerrainParams GetTerrainParams()
+{
+	FTerrainParams Params;
+	Params.RotAxis = RotAxis;
+	Params.RotAngle = RotAngle;
+	Params.PlanePos = PlanePos;
+	Params.VerticalNoiseOffset = VerticalNoiseOffset;
+	Params.NumOctaves = NumOctaves;
+	Params.Frequency = Frequency;
+	Params.Lacunarity = Lacunarity;
+	Params.Amplitude = Amplitude;
+	Params.Persistence = Persistence;
+	Params.Inflation = Inflation;
+	Params.InflationGain = InflationGain;
+	Params.SampleSmoothing = SampleSmoothing;
+	Params.UnionSmoothing = UnionSmoothing;
+	Params.ClippingSmoothing = ClippingSmoothing;
+	Params.MinNoiseScale = MinNoiseScale;
+	Params.bSimplex = bSimplex > 0;
+	return Params;
+}
 
 // TODO: make this clamped
 // TODO: if outside of bounds, return Diagonal? Unsure
@@ -36,6 +80,19 @@ float3 GetAtlasNormal( float3 Pos, float3 BoundsMin )
 					  K.yxy * GetAtlasDistClamped( Pos + (K.yxy * H), BoundsMin ) +
 					  K.xxx * GetAtlasDistClamped( Pos + (K.xxx * H), BoundsMin ) );
 }
+float3 GetTerrainNormal( float3 Pos, FTerrainParams Params, float PixelSize )
+{
+	// TODO: this calculates the world-space diameter of the noise (for simplex it would be slightly smaller)
+	// TODO: use this to calculate H automatically
+	// TODO: I have no clue why the UnitScale x100 has to be here
+	const float NoiseSize = Params.Amplitude * pow( Params.Persistence, max( Params.NumOctaves, 1 ) - 1 ) / Params.Frequency / 100.;
+	
+	const float2 K = float2( 1, -1 );
+	return normalize( K.xyy * DistFn::FBM( Pos + (K.xyy * TerrainDerivativeH), Params, PixelSize ) +
+					  K.yyx * DistFn::FBM( Pos + (K.yyx * TerrainDerivativeH), Params, PixelSize ) +
+					  K.yxy * DistFn::FBM( Pos + (K.yxy * TerrainDerivativeH), Params, PixelSize ) +
+					  K.xxx * DistFn::FBM( Pos + (K.xxx * TerrainDerivativeH), Params, PixelSize ) );
+}
 float3 GetNormal( float3 Pos )
 {
 	const float2 K = float2( 1, -1 );
@@ -45,16 +102,52 @@ float3 GetNormal( float3 Pos )
 					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH) ) );
 }
 
-// Brick Sphere Tracing
-bool TraceBrick( inout FRay Ray )
+bool SphereTraceFBM( inout FRay Ray, inout float3 Normal, float PixelFootprint )
 {
-	// Compute position local to brick (probably as VoxSize=1.0, yes definitely)
-	// Compute MaxT
-	// Sphere trace
+	float DistTravelled = 0.0;
+	FTerrainParams Params = GetTerrainParams();
+	for (uint Step = 0; Step < 256; ++Step)
+	{
+		// TODO: (see word doc) if we hit the max step count and never went under the epsilon,
+		// TODO: keep track of the smallest distance value and use that instead
+		// TODO: though tbh who cares about the brute-force rendering
+		const float PixelSize = (bBandLimiting == 0) ? 0.0 : PixelFootprint * (DistTravelled + Ray.T);
+		float ClosestDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), Params, PixelSize );
+		DistTravelled += ClosestDist;
+		if (DistTravelled > Ray.RelativeMaxT) { break; }
+		// A lot of detail is lost at a higher epsilon
+		// If we're closer than half a pixel to geometry, no more detail is gained from stepping closer
+		if (ClosestDist < max(TerrainEpsilon, PixelSize * 0.5))
+		{
+			Ray.SetHitT( DistTravelled );
+
+#if 0
+			// Flatten water
+			const float PlaneZ = 6.999;
+			const float WaterZ = PlaneZ / (Frequency * 100.0);
+
+			const float3 RayPos = Ray.GetPos();
+			const bool bUnderwater = Ray.GetHitPos().z < WaterZ;
+
+			if (bUnderwater && RayPos.z > WaterZ && Ray.Dir.z < 0.0)
+			{
+				// Distance relative to Ray.T where the ray crosses the plane
+				const float WaterT = (WaterZ - RayPos.z) / Ray.Dir.z;
+				Ray.SetHitT( WaterT );
+				Normal = float3(0, 0, 1);
+				return true;
+			}
+#endif
+
+			Normal = GetTerrainNormal( Ray.GetHitPos(), Params, PixelSize );
+			return true;
+		}
+	}
+	return false;
 }
 
 // Pointer Grid DDA
-bool TracePtrGrid( inout FRay Ray, out float3 Normal )
+bool TracePtrGrid( inout FRay Ray, inout float3 Normal )
 {
 	// TODO:
 	const float BrickSize = GetBrickSize( VoxSize );
@@ -63,42 +156,30 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 
 	// Setup
 	FDDA DDA = FDDA::Init( Ray, GridAABB.Min, BrickSize );
-
-	// TODO: idkkk
-	// Step in brick space
-	// DDA.ScaleUnitSize( 1.0 / BrickSize );
-
+	
 	// Initial sample
-	if (DDA.IsValidCell( PtrGridSize, Ray.MaxT ))
+	if (DDA.IsValidCell( PtrGridSize, Ray.RelativeMaxT ))
 	{
-		// TODO:
-		// TODO: DEPTH IS WRONG WHEN OUTSIDE OF THE GRID
-		// TODO: you can tell when moving the sphere partially outside the grid
-		// TODO: while the below code is enabled
-		// TODO:
-		// TODO: Depth in general is wrong, enable the debug visualization and see
-		// TODO:
 		if (IsBrickAllocated( DDA.CellCoord ))
 		{
 			// Edge case, might start inside any point within a brick
 			//return true;
 #if 1
 			DDA.FindNextAxis(); // TODO: make more efficient
-			const float DistInsideBrick = DDA.TMax[DDA.Axis];
+			const float DistInsideBrick = min( DDA.TMax[DDA.Axis], Ray.RelativeMaxT );
 
 			float TempT = DDA.T;
 			uint i = 0;
 			while (TempT < DistInsideBrick)
 			{
-				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAtOffset( TempT ), GridAABB.Min, VoxSize );
+				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAt( TempT ), GridAABB.Min, VoxSize );
 				const float EncodedDist = BrickAtlas.SampleLevel( BrickSampler, UVW, 0 );
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
 				if (SampleDist < SurfaceEpsilon)
 				{
-					Ray.Advance( TempT );
-					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
+					Normal = GetAtlasNormal( Ray.GetPosAt( TempT ), GridAABB.Min );
 					const float Cos = max( -dot( Ray.Dir, Normal ), 0.1 );
-					Ray.Advance( SampleDist / Cos );
+					Ray.SetHitT( TempT + (SampleDist / Cos) );
 					return true;
 				}
 				TempT += SampleDist;
@@ -111,26 +192,25 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 	// Should be safe
 	while (true)
 	{
-		if (! DDA.TryStep( PtrGridSize, Ray.MaxT )) { return false; }
+		if (! DDA.TryStep( PtrGridSize, Ray.RelativeMaxT )) { return false; }
 		uint GridIdx = GridCellToGridIdx( DDA.CellCoord );
 		if (IsBrickAllocated( GridIdx ))
 		{
 			DDA.FindNextAxis(); // TODO: make more efficient
-			const float DistInsideBrick = DDA.TMax[DDA.Axis];
+			const float DistInsideBrick = min( DDA.TMax[DDA.Axis], Ray.RelativeMaxT );
 
 			float TempT = DDA.T;
 			uint i = 0;
 			while (TempT < DistInsideBrick)
 			{
-				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAtOffset( TempT ), GridAABB.Min, VoxSize );
+				const float3 UVW = WorldPosToAtlasUVW( Ray.GetPosAt( TempT ), GridAABB.Min, VoxSize );
 				const float EncodedDist = BrickAtlas.SampleLevel( BrickSampler, UVW, 0 );
 				const float SampleDist = DecodeDistance( EncodedDist, Diagonal );
 				if (SampleDist < SurfaceEpsilon)
 				{
-					Ray.Advance( TempT );
-					Normal = GetAtlasNormal( Ray.GetPos(), GridAABB.Min );
+					Normal = GetAtlasNormal( Ray.GetPosAt( TempT ), GridAABB.Min );
 					const float Cos = max( -dot( Ray.Dir, Normal ), 0.1 );
-					Ray.Advance( SampleDist / Cos );
+					Ray.SetHitT( TempT + (SampleDist / Cos) );
 					return true;
 				}
 				TempT += SampleDist;
@@ -140,44 +220,80 @@ bool TracePtrGrid( inout FRay Ray, out float3 Normal )
 	}
 }
 
-bool TraceScene( inout FRay Ray, out float3 Normal )
+bool TraceScene( inout FRay Ray, out float3 Normal, out float3 Albedo, float PixelFootprint )
 {
-	bool bHit = false;
+	// Terrain
+	if (SphereTraceFBM( Ray, Normal, PixelFootprint ))
+	{
+		const float Height = Ray.GetHitPos().z * Frequency * 100.0;
+		if (Height <= 7.0) { Albedo = float3(0.1, 0.1, 0.5); }
+		else if (Height < 7.5) { Albedo = float3(0.8, 0.6, 0.2); }
+		else if (Height < 11.0) { Albedo = float3(0.2, 0.5, 0.1); }
+		else if (Height < 12.0) { Albedo = float3(0.25, 0.25, 0.3); }
+		else { Albedo = float3(0.75, 0.75, 0.8); }
+		Albedo *= 0.2;
+	}
+
 	// Brute-force sphere tracing
 	if (bBruteForceSphereTracing > 0)
     {
+		// TODO: move brute-force terrain here
+		float DistTravelled = 0.0;
 		for (uint Step = 0; Step < 256; ++Step)
 		{
-			float ClosestDist = MapScene( Ray.GetPos() );
+			float ClosestDist = MapScene( Ray.GetPosAt( DistTravelled ) );
+			DistTravelled += ClosestDist;
+			if (DistTravelled > Ray.RelativeMaxT) { break; }
 			if (ClosestDist < SurfaceEpsilon)
 			{
-				Normal = GetNormal( Ray.GetPos() );
-				bHit = true;
+				Ray.SetHitT( DistTravelled );
+				Normal = GetNormal( Ray.GetHitPos() );
+				Albedo = (0.4).xxx;
 				break;
 			}
-			Ray.Advance( ClosestDist );
 		}
     }
 	// Brickmap traversal
 	else
     {
-		// Assume Ray.T is zero
-	    float AABBHitT, AABBOutT;
 	    const float BrickSize = GetBrickSize( VoxSize );
 	    const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
-	    if (IntersectAABB( GridAABB, Ray, AABBHitT, AABBOutT ))
+	    if (MoveRayToAABB( GridAABB, Ray, UnitScale ))
 	    {
-			// Assuming 'Ray.T' is zero
-			const float Epsilon = AABBEpsilon * UnitScale;
-			if (AABBHitT > 0.0) { AABBHitT += Epsilon; }
-			Ray.MaxT = AABBOutT;
-			Ray.Advance( AABBHitT );
-			//Ray.AdvanceOrigin();
-			bHit = TracePtrGrid( Ray, Normal );
+			if (TracePtrGrid( Ray, Normal ))
+			{
+				Albedo = float3(0.8, 0.1, 0.1);
+			}
 	    }
     }
-	Ray.AdvanceOrigin();
-	return bHit;
+	return Ray.bHit;
+}
+
+// The world-space pixel size at unit distance
+float GetPixelFootprint()
+{
+	// 2D visualization of the camera's view into the scene at arbitrary distance:
+	//                  ___
+	//               /|  |
+	//             /  |  |
+	//           /    |  |
+	//         /      |  | (Opposite)
+	//       /        |  | PixelSize * Resolution / 2
+	//     /          |  |
+	//   /        90°_|  |
+	// /____________|_| _|_
+	// \   (Adjacent) |
+	//   \  Distance  | tan( fov / 2 ) = opposite / adjacent
+	//     \          | tan( fov / 2 ) = (size * res) / (dist * 2)
+	//       \        |
+	//         \      |        dist * 2 * tan( fov / 2 )
+	//           \    | size = -------------------------
+	//             \  |                  res
+	//               \|
+	// Return the pixel size at unit distance (scales linearly)
+	const float TanHalfFOV = 1.0 / ResolvedView.ViewToClip[0][0]; // [1][1] for vertical
+	const float InvPixelResolution = ResolvedView.ViewSizeAndInvSize.z; // .w for vertical
+	return 2 * TanHalfFOV * InvPixelResolution;
 }
 
 void TraversePS(
@@ -189,25 +305,28 @@ void TraversePS(
 	out float4 OutGBufferD : SV_Target4, // Custom data
 	out float OutDepth : SV_DEPTH ) // Depth
 {
+	// ...
+	ResolvedView = ResolveView();
+
 	// Screen UV
-	const float2 ViewportUV = (InPosition.xy - View.ViewRectMin.xy) * View.ViewSizeAndInvSize.zw;
+	const float2 ViewportUV = (InPosition.xy - ResolvedView.ViewRectMin.xy) * ResolvedView.ViewSizeAndInvSize.zw;
 	const float2 NDC = ViewportUV * float2( 2, -2 ) + float2( -1, 1 );
 
 	// Ray setup
-	const float4 TranslatedWorldPosH = mul( float4( NDC, 0.5, 1 ), View.ClipToTranslatedWorld );
+	const float4 TranslatedWorldPosH = mul( float4( NDC, 0.5, 1 ), ResolvedView.ClipToTranslatedWorld );
 	const float3 Dir = normalize( TranslatedWorldPosH.xyz / TranslatedWorldPosH.w );
-	const float3 Origin = View.ViewOriginHigh * UnitScale; // Convert unit size
-	FRay Ray = FRay::Create( Origin, Dir );
+	FRay Ray = FRay::Create( ResolvedView.ViewOriginHigh * UnitScale, Dir ); // Convert unit size
 
+	// TODO: albedo
 	// Trace
-	float3 Normal;
-	if (!TraceScene( Ray, Normal )) { discard; }
+	float3 Normal, Albedo;
+	if (! TraceScene( Ray, Normal, Albedo, GetPixelFootprint() )) { discard; }
 
 	// Convert unit size
-	float ViewZ = mul( float4( (Ray.GetPos() - Origin) / UnitScale, 1.0 ), View.TranslatedWorldToView ).z;
-	OutDepth = ConvertToDeviceZ( ViewZ );
+    const float ViewZ = (Ray.GetHitT() / UnitScale) * dot( Dir, ResolvedView.ViewForward.xyz );
+    OutDepth = ConvertToDeviceZ( ViewZ );
 
-	FSDFMaterial Material = SampleMaterial( Ray.GetPos() );
+	FSDFMaterial Material = SampleMaterial( Ray.GetHitPos() );
 
 	FGBufferData GBuffer = (FGBufferData)0;
 	GBuffer.BaseColor = Material.Albedo;
