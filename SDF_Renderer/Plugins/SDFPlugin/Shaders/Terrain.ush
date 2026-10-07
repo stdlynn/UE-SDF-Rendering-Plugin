@@ -125,6 +125,24 @@ float3x3 GetRowRotMatrix( float3 RotAxis, float RotAngle )
 
 namespace DistFn
 {
+	// Calculating the maximum (theoretical) height of the terrain
+	//
+	// Calculate the initial inflation and the rate at which it changes:
+	// 'Amplitude0 = (Amplitude / Frequency) * (bSimplex ? sqrt(3)/2 : 1)'
+	// 'Inflation0 = Inflation * (VerticalNoiseOffset + 0.5) * Amplitude0'
+	// 'Gain = InflationGain * Persistence'
+	//
+	// The inflation for octave 'i' is 'Inflation0 * Gain^i'
+	// We can sum the octaves' inflation distances to get the total inflation:
+	// 'InflationN = Inflation0 * (Gain^0 + Gain^1 + ... + Gain^(N-1))'
+	// 'InflationN = Inflation0 * (1 + Gain^1 + ... + Gain^(N-1))'
+	//
+	// Analytically calculate the sum:
+	// 'GainN = 1 + Gain^1 + ... + Gain^(N-1)'
+	// (Gain != 1) 'GainN = (1 - Gain^N) / (1 - Gain)'
+	// (Gain == 1) 'GainN = N'
+	//
+	// The maximum height of the terrain is 'PlanePos.z + (Inflation0 * GainN)'
 	float FBM( float3 Pos, FTerrainParams Params, float PixelSize = 0.0 )
     {
 		// Sample from a base (plane) SDF to get our initial distance field
@@ -148,7 +166,7 @@ namespace DistFn
 		Pos.z -= Params.VerticalNoiseOffset * Params.Amplitude;
 		// The inflation ranges [0, 1] and should map to the minimum and maximum height of the first octave
 		// Adjust for/multiply by the percentage of the sphere above the terrain
-		Params.Inflation *= max( Params.VerticalNoiseOffset + 0.5, 0.0 );
+		Params.Inflation *= Params.VerticalNoiseOffset + 0.5;
 
 		// The sample position is scaled by 'Frequency * Lacunarity^i'
 		// Apply the frequency scaling, as it doesn't depend on the octave
@@ -159,7 +177,7 @@ namespace DistFn
 		// to avoid patterns in our noise
 		const float3x3 RotMatrix = GetRowRotMatrix( Params.RotAxis, Params.RotAngle );
 		const float3x3 LacunarityMatrix = RotMatrix * Params.Lacunarity;
-		
+
 		// Apply a layer of noise for each octave
 		[loop] for (uint i = 0; i < Params.NumOctaves; ++i)
 		{
