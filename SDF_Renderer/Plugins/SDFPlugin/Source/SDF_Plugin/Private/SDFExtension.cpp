@@ -251,7 +251,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 	ParametersBuild->PtrGridPos = RT.Settings.PtrGridPos;
 	ParametersBuild->VoxSize = RT.Settings.VoxSize;
 	ParametersBuild->UnitScale = RT.Settings.GPUUnitScale;
-	ParametersBuild->NumUpdated = RT.BrickmapBuilder.GetNumUpdatedBricks();
+	ParametersBuild->NumBricks = RT.BrickmapBuilder.GetNumUpdatedBricks();
 	ParametersBuild->UpdateList = GraphBuilder.CreateSRV( BrickListRDG, PF_R32_UINT );
 	ParametersBuild->FreedList = FreedListUAV;
 	ParametersBuild->DeallocatedList = DeallocatedListUAV;
@@ -302,7 +302,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 					GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
 				*ParametersTerrain = *ParametersBuild;
 				ParametersTerrain->BrickOffset = BrickOffset;
-				ParametersTerrain->NumUpdated = TotalBricks;
+				ParametersTerrain->NumBricks = TotalBricks;
 
 				FComputeShaderUtils::AddPass( GraphBuilder,
 											  RDG_EVENT_NAME( "Brickmap_Build_Terrain %d/%d", i + 1, NumDispatches ),
@@ -317,6 +317,33 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 
 	RDG_EVENT_SCOPE( GraphBuilder, "SDF_Brickmap" );
 	{
+		// BUILD
+		const int NumUpdated = RT.BrickmapBuilder.GetNumUpdatedBricks();
+		constexpr int MaxBricksPerDispatch = 32768;
+		const int32 NumDispatches = FMath::DivideAndRoundUp(NumUpdated, MaxBricksPerDispatch);
+
+		PermutationVector.Set<FBuildBrickmapShader::FTerrainPerm>(false);
+		TShaderMapRef<FBuildBrickmapShader> ComputeTerrain(GlobalShaderMap, PermutationVector);
+
+		for (int32 i = 0; i < NumDispatches; i++)
+		{
+			const int32 BrickOffset = i * MaxBricksPerDispatch;
+			const int32 NumBricks = FMath::Min(MaxBricksPerDispatch, NumUpdated - BrickOffset);
+
+			FBuildBrickmapShader::FParameters* ParametersTerrain =
+				GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
+			*ParametersTerrain = *ParametersBuild;
+			ParametersTerrain->BrickOffset = BrickOffset;
+			ParametersTerrain->NumBricks = NumUpdated;
+
+			FComputeShaderUtils::AddPass(GraphBuilder,
+				RDG_EVENT_NAME("Brickmap_Build %d/%d", i + 1, NumDispatches),
+				ComputeTerrain,
+				ParametersTerrain,
+				FIntVector(NumBricks, 1, 1));
+		}
+
+		// TRANSFER + RESET
 		FTransferDeallocatedShader::FParameters* ParametersTransfer = GraphBuilder.AllocParameters<FTransferDeallocatedShader::FParameters>();
 		ParametersTransfer->FreedList = FreedListUAV;
 		ParametersTransfer->DeallocatedList = DeallocatedListUAV;
@@ -327,28 +354,14 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 		ParametersReset->DeallocatedList = DeallocatedListUAV;
 		ParametersReset->BrickAllocCounters = AllocCountersUAV;
 
-		const FIntVector GroupCountBuild
-		{
-			FMath::DivideAndRoundUp( static_cast<int>(ParametersBuild->NumUpdated * BrickResolution), 8 ),
-			FMath::DivideAndRoundUp( static_cast<int>(BrickResolution), 8 ),
-			FMath::DivideAndRoundUp( static_cast<int>(BrickResolution), 8 )
-		};
 		const FIntVector GroupCountTransfer
 		{
-			FMath::DivideAndRoundUp( static_cast<int>(RT.BrickmapBuilder.GetNumUpdatedBricks()), 64 ), 1, 1
+			FMath::DivideAndRoundUp(static_cast<int>(RT.BrickmapBuilder.GetNumUpdatedBricks()), 64), 1, 1
 		};
 		const FIntVector GroupCountReset{ 1, 1, 1 };
 
-		PermutationVector.Set<FBuildBrickmapShader::FTerrainPerm>(false);
-		TShaderMapRef<FBuildBrickmapShader> ComputeBuild(GlobalShaderMap, PermutationVector);
-		const TShaderMapRef<FTransferDeallocatedShader> ComputeTransfer( GlobalShaderMap );
-		const TShaderMapRef<FResetCountersShader> ComputeReset( GlobalShaderMap );
-
-		FComputeShaderUtils::AddPass( GraphBuilder,
-									  RDG_EVENT_NAME( "Brickmap_Build" ),
-									  ComputeBuild,
-									  ParametersBuild,
-									  GroupCountBuild );
+		const TShaderMapRef<FTransferDeallocatedShader> ComputeTransfer(GlobalShaderMap);
+		const TShaderMapRef<FResetCountersShader> ComputeReset(GlobalShaderMap);
 
 		FComputeShaderUtils::AddPass( GraphBuilder,
 									  RDG_EVENT_NAME( "Brickmap_Transfer" ),

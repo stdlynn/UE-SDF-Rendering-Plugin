@@ -202,7 +202,7 @@ public:
 		SHADER_PARAMETER(float, VoxSize)
 		SHADER_PARAMETER(float, UnitScale)
 
-		SHADER_PARAMETER(uint32, NumUpdated)
+		SHADER_PARAMETER(uint32, NumBricks)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(Buffer<uint32>, UpdateList)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, FreedList)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, DeallocatedList)

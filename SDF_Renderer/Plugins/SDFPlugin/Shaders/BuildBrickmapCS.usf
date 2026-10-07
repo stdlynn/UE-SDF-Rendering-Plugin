@@ -10,7 +10,7 @@ float VoxSize;
 
 Buffer<uint> UpdateList;
 uint BrickOffset;
-uint NumUpdated;
+uint NumBricks;
 RWBuffer<uint> FreedList;
 RWBuffer<uint> DeallocatedList;
 
@@ -26,9 +26,8 @@ groupshared uint AtlasIdxShared;
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
 void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID )
 {
-#if !TERRAIN
-	if (GroupID.x >= NumUpdated) { return; }
-#endif
+	const uint Idx = GroupID.x + BrickOffset;
+	if (Idx >= NumBricks) { return; }
 
 	// Start out assuming the brick contains no surfaces
 	// If any thread/brick point finds out the contrary, it sets the boolean to true
@@ -40,10 +39,9 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 
 	// Get the data for this thread's brick point
 #if TERRAIN
-	uint GridIdx = GroupID.x + BrickOffset;
-	if (GridIdx >= NumUpdated) return;
+	uint GridIdx = Idx;
 #else
-	const uint GridIdx = UpdateList[GroupID.x];
+	const uint GridIdx = UpdateList[Idx];
 #endif
 	const uint3 GridCell = GridIdxToGridCell( GridIdx );
 	const float3 WorldPos = GridCellToWorldPos( GridCell, GridAABB.Min, BrickSize ) + float3( GroupThreadID ) * VoxSize;
