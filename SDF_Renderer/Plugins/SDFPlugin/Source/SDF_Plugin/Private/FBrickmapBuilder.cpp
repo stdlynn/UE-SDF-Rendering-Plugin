@@ -72,6 +72,7 @@ void FBrickmapBuilder::ClearBrickmap(FRDGBuilder& GraphBuilder )
 	AddClearUAVPass(GraphBuilder, DeallocatedListUAV, 0xFFFFFFFFu);
 	AddClearUAVPass(GraphBuilder, AllocCountersUAV, 0u);
 	bReset = false;
+	bTerrainDirty = true;
 }
 
 void FBrickmapBuilder::SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FVector3f& PtrGridPos, float VoxSize )

@@ -9,6 +9,7 @@ float3 PtrGridPos;
 float VoxSize;
 
 Buffer<uint> UpdateList;
+uint BrickOffset;
 uint NumUpdated;
 RWBuffer<uint> FreedList;
 RWBuffer<uint> DeallocatedList;
@@ -39,16 +40,13 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 
 	// Get the data for this thread's brick point
 #if TERRAIN
-	uint GridIdx = GroupID.x;
-	uint3 GridCell = GridIdxToGridCell( GridIdx );
-	GridCell.z = PtrGridSize.z - 1 - GridCell.z;
-	GridIdx = GridCellToGridIdx( GridCell );
-	const float3 WorldPos = GridCellToWorldPos( GridCell, GridAABB.Min, BrickSize ) + float3( GroupThreadID ) * VoxSize;
+	uint GridIdx = GroupID.x + BrickOffset;
+	if (GridIdx >= NumUpdated) return;
 #else
 	const uint GridIdx = UpdateList[GroupID.x];
+#endif
 	const uint3 GridCell = GridIdxToGridCell( GridIdx );
 	const float3 WorldPos = GridCellToWorldPos( GridCell, GridAABB.Min, BrickSize ) + float3( GroupThreadID ) * VoxSize;
-#endif
 	uint AtlasIdx = PtrGrid[GridIdx];
 
 	// Find the closest SDF to the brick point

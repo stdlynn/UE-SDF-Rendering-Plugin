@@ -190,6 +190,7 @@ public:
 	using FPermutationDomain = TShaderPermutationDomain<FTerrainPerm>;
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		SHADER_PARAMETER(uint32, BrickOffset)
 		SHADER_PARAMETER(uint32, NumEdits)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FGPUSDF>, SDFEdits)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(Texture3D<float>, BrickAtlas)

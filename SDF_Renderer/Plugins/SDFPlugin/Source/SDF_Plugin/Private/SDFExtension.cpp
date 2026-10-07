@@ -283,27 +283,35 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 		{
 			RT.BrickmapBuilder.bTerrainDirty = false;
 
-			FBuildBrickmapShader::FParameters* ParametersTerrain = GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
-			*ParametersTerrain = *ParametersBuild;
-
 			FIntVector Dimensions = static_cast<FIntVector>(PtrGridSize);
-			Dimensions.Z = 64; // Max height of terrain TODO: calculate dynamically
-			const int NumBricks = Dimensions.X * Dimensions.Y * Dimensions.Z;
-			const FIntVector GroupCountBuild
-			{
-				FMath::DivideAndRoundUp(static_cast<int>(NumBricks * BrickResolution), 8),
-				FMath::DivideAndRoundUp(static_cast<int>(BrickResolution), 8),
-				FMath::DivideAndRoundUp(static_cast<int>(BrickResolution), 8)
-			};
+			Dimensions.Z = FMath::Min<int32>( 18, PtrGridSize.Z ); // Max height of terrain TODO: calculate dynamically
+			const int TotalBricks = Dimensions.X * Dimensions.Y * Dimensions.Z;
 
-			PermutationVector.Set<FBuildBrickmapShader::FTerrainPerm>(true);
+			constexpr int MaxBricksPerDispatch = 32768;
+			const int32 NumDispatches = FMath::DivideAndRoundUp( TotalBricks, MaxBricksPerDispatch );
+
+			PermutationVector.Set<FBuildBrickmapShader::FTerrainPerm>( true );
 			TShaderMapRef<FBuildBrickmapShader> ComputeTerrain(GlobalShaderMap, PermutationVector);
 
-			FComputeShaderUtils::AddPass( GraphBuilder,
-										  RDG_EVENT_NAME( "Brickmap_Build_Terrain" ),
-										  ComputeTerrain,
-										  ParametersTerrain,
-										  GroupCountBuild );
+			for (int32 i = 0; i < NumDispatches; i++)
+			{
+				const int32 BrickOffset = i * MaxBricksPerDispatch;
+				const int32 NumBricks = FMath::Min( MaxBricksPerDispatch, TotalBricks - BrickOffset );
+
+				FBuildBrickmapShader::FParameters* ParametersTerrain =
+					GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
+				*ParametersTerrain = *ParametersBuild;
+				ParametersTerrain->BrickOffset = BrickOffset;
+				ParametersTerrain->NumUpdated = TotalBricks;
+
+				FComputeShaderUtils::AddPass( GraphBuilder,
+											  RDG_EVENT_NAME( "Brickmap_Build_Terrain %d/%d", i + 1, NumDispatches ),
+											  ComputeTerrain,
+											  ParametersTerrain,
+											  FIntVector( NumBricks, 1, 1 ));
+			}
+
+			GEngine->AddOnScreenDebugMessage( -1, 2.0f, FColor::Green, TEXT("Generated Terrain") );
 		}
 	}
 
