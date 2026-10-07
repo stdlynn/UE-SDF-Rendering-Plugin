@@ -196,6 +196,11 @@ public:
 	bool bSettingDirty = true;
 	
 	UPROPERTY(EditAnywhere, Config, Category = "Rendering",
+		meta = (DisplayName = "Terrain Material Index",
+			ClampMin = "0"))
+	uint32 TerrainMatIdx{ 0 };
+
+	UPROPERTY(EditAnywhere, Config, Category = "Rendering",
 		meta = (DisplayName = "Materials"))
 	TArray<FSDFMaterial> Materials;
 

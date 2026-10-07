@@ -17,6 +17,7 @@ float SampleSmoothing;
 float UnionSmoothing;
 float ClippingSmoothing;
 uint bSimplex;
+uint TerrainMatIdx;
 
 struct FTerrainParams
 {

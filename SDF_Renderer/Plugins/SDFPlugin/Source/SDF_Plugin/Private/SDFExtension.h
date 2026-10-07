@@ -44,6 +44,7 @@ public:
 			float DerivativeH;
 			bool bSimplex;
 			bool bBandLimiting;
+			uint32 MatIdx;
 		} Terrain;
 		FVector3f PtrGridPos;
 		float VoxSize;
@@ -159,6 +160,7 @@ public:
 		SHADER_PARAMETER(float, ClippingSmoothing)
 		SHADER_PARAMETER(float, TerrainEpsilon)
 		SHADER_PARAMETER(float, TerrainDerivativeH)
+		SHADER_PARAMETER(uint32, TerrainMatIdx)
 		SHADER_PARAMETER(uint32, bSimplex)
 		SHADER_PARAMETER(uint32, bBandLimiting)
 		RENDER_TARGET_BINDING_SLOTS() // GBuffer Textures
@@ -228,6 +230,7 @@ public:
 		SHADER_PARAMETER(float, TerrainDerivativeH)
 		SHADER_PARAMETER(uint32, bSimplex)
 		SHADER_PARAMETER(uint32, bBandLimiting)
+		SHADER_PARAMETER(uint32, TerrainMatIdx)
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)

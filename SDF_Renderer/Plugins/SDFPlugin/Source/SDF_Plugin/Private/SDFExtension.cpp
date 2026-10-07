@@ -154,6 +154,7 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	GT.Settings.Terrain.bSimplex = SDFSettings->bSimplex;
 	GT.Settings.Terrain.Epsilon = SDFSettings->TerrainEpsilon * SDFSettings->GPUUnitScale;
 	GT.Settings.Terrain.DerivativeH = SDFSettings->TerrainDerivativeH * SDFSettings->GPUUnitScale;
+	GT.Settings.Terrain.MatIdx = SDFSettings->TerrainMatIdx;
 	GT.Settings.bUnitScaleDirty = true;
 
 	// Transfer lambda
@@ -276,6 +277,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 	ParametersBuild->bBandLimiting = RT.Settings.Terrain.bBandLimiting;
 	ParametersBuild->TerrainEpsilon = RT.Settings.Terrain.Epsilon;
 	ParametersBuild->TerrainDerivativeH = RT.Settings.Terrain.DerivativeH;
+	ParametersBuild->TerrainMatIdx = RT.Settings.Terrain.MatIdx;
 
 	RDG_EVENT_SCOPE(GraphBuilder, "SDF_Brickmap_Terrain");
 	{
@@ -311,7 +313,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 											  FIntVector( NumBricks, 1, 1 ));
 			}
 
-			GEngine->AddOnScreenDebugMessage( -1, 2.0f, FColor::Green, TEXT("Generated Terrain") );
+			GEngine->AddOnScreenDebugMessage( -1, 2.0f, FColor::Green, TEXT( "Generated Terrain" ) );
 		}
 	}
 
@@ -535,6 +537,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 		PassParameters->bBandLimiting = RT.Settings.Terrain.bBandLimiting;
 		PassParameters->TerrainEpsilon = RT.Settings.Terrain.Epsilon;
 		PassParameters->TerrainDerivativeH = RT.Settings.Terrain.DerivativeH;
+		PassParameters->TerrainMatIdx = RT.Settings.Terrain.MatIdx;
 		PassParameters->RenderTargets = RenderTargets;
 		PassParameters->RenderTargets.DepthStencil = FDepthStencilBinding( DepthTexture,
 																		   ERenderTargetLoadAction::ELoad, // Depth
