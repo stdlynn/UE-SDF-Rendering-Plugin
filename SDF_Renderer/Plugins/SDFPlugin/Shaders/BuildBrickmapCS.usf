@@ -2,6 +2,7 @@
 
 #include "/Engine/Public/Platform.ush"
 #include "BrickmapCommon.ush"
+#include "Terrain.ush"
 #include "Common.ush"
 
 float3 PtrGridPos;
@@ -24,7 +25,9 @@ groupshared uint AtlasIdxShared;
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
 void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID )
 {
+#if !TERRAIN
 	if (GroupID.x >= NumUpdated) { return; }
+#endif
 
 	// Start out assuming the brick contains no surfaces
 	// If any thread/brick point finds out the contrary, it sets the boolean to true
@@ -35,13 +38,27 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 	const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
 
 	// Get the data for this thread's brick point
+#if TERRAIN
+	uint GridIdx = GroupID.x;
+	uint3 GridCell = GridIdxToGridCell( GridIdx );
+	GridCell.z = PtrGridSize.z - 1 - GridCell.z;
+	GridIdx = GridCellToGridIdx( GridCell );
+	const float3 WorldPos = GridCellToWorldPos( GridCell, GridAABB.Min, BrickSize ) + float3( GroupThreadID ) * VoxSize;
+#else
 	const uint GridIdx = UpdateList[GroupID.x];
 	const uint3 GridCell = GridIdxToGridCell( GridIdx );
 	const float3 WorldPos = GridCellToWorldPos( GridCell, GridAABB.Min, BrickSize ) + float3( GroupThreadID ) * VoxSize;
+#endif
 	uint AtlasIdx = PtrGrid[GridIdx];
 
 	// Find the closest SDF to the brick point
-	float Closest = MapScene( WorldPos );
+	FTerrainParams Params = GetTerrainParams();
+#if TERRAIN
+	float Closest = DistFn::FBM( WorldPos, Params );
+#else
+	float ClosestTerrain = DistFn::FBM( WorldPos, Params ); // TODO: Set PixelSize?
+	float Closest = MapScene( WorldPos, ClosestTerrain );
+#endif
 
 	// Indicate if any geometry is within allocation distance
 	// Sync so any thread gets the chance to indicate a surface within range
