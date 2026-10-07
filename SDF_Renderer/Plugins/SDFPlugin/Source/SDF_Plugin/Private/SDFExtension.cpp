@@ -152,7 +152,8 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	GT.Settings.Terrain.ClippingSmoothing = SDFSettings->ClippingSmoothing;
 	GT.Settings.Terrain.bBandLimiting = SDFSettings->bBandLimiting;
 	GT.Settings.Terrain.bSimplex = SDFSettings->bSimplex;
-	GT.Settings.Terrain.Epsilon = SDFSettings->TerrainEpsilon * SDFSettings->GPUUnitScale;
+	GT.Settings.Terrain.PixelEpsilon = SDFSettings->PixelEpsilon;
+	GT.Settings.Terrain.Epsilon = SDFSettings->TerrainEpsilon * SDFSettings->GPUUnitScale / SDFSettings->Frequency;
 	GT.Settings.Terrain.DerivativeH = SDFSettings->TerrainDerivativeH * SDFSettings->GPUUnitScale;
 	GT.Settings.bUnitScaleDirty = true;
 
@@ -459,6 +460,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 		PassParameters->ClippingSmoothing = RT.Settings.Terrain.ClippingSmoothing;
 		PassParameters->bSimplex = RT.Settings.Terrain.bSimplex;
 		PassParameters->bBandLimiting = RT.Settings.Terrain.bBandLimiting;
+		PassParameters->PixelEpsilon = RT.Settings.Terrain.PixelEpsilon;
 		PassParameters->TerrainEpsilon = RT.Settings.Terrain.Epsilon;
 		PassParameters->TerrainDerivativeH = RT.Settings.Terrain.DerivativeH;
 		PassParameters->RenderTargets = RenderTargets;

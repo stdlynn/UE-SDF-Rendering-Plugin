@@ -128,12 +128,19 @@ public:
 			   meta = (DisplayName = "Band-limiting") )
 	bool bBandLimiting{ true };
 
-	// The maximum distance from a surface to still count as a hit
+	// The maximum size of detail to render, relative to a world-space pixel
+	UPROPERTY( EditAnywhere, Config, Category = "Terrain|BruteForceRendering",
+			   meta = (DisplayName = "Pixel Epsilon",
+						UIMin = "0.0",
+						UIMax = "1.0") )
+	float PixelEpsilon{ 0.5f };
+
+	// The maximum distance from a surface to still count as a hit, relative to the frequency
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|BruteForceRendering",
 			   meta = (DisplayName = "Surface Epsilon",
 						UIMin = "0.0001",
 						UIMax = "0.01") )
-	float TerrainEpsilon{ 1e-4f };
+	float TerrainEpsilon{ 0.001f };
 
 	// The 'h' in L'Hôpital's rule
 	UPROPERTY( EditAnywhere, Config, Category = "Terrain|BruteForceRendering",

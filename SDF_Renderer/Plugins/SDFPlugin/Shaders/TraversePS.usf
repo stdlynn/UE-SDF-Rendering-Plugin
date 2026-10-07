@@ -32,6 +32,7 @@ float ClippingSmoothing;
 // Brute-force terrain rendering
 uint bSimplex;
 uint bBandLimiting;
+float PixelEpsilon;
 float TerrainEpsilon;
 float TerrainDerivativeH;
 
@@ -111,13 +112,13 @@ bool SphereTraceFBM( inout FRay Ray, inout float3 Normal, float PixelFootprint )
 		// TODO: (see word doc) if we hit the max step count and never went under the epsilon,
 		// TODO: keep track of the smallest distance value and use that instead
 		// TODO: though tbh who cares about the brute-force rendering
-		const float PixelSize = (bBandLimiting == 0) ? 0.0 : PixelFootprint * (DistTravelled + Ray.T);
-		float ClosestDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), Params, PixelSize );
+		const float PixelSize = PixelFootprint * (DistTravelled + Ray.T);
+		float ClosestDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), Params, (bBandLimiting == 0) ? 0.0 : PixelSize );
 		DistTravelled += ClosestDist;
 		if (DistTravelled > Ray.RelativeMaxT) { break; }
 		// A lot of detail is lost at a higher epsilon
 		// If we're closer than half a pixel to geometry, no more detail is gained from stepping closer
-		if (ClosestDist < max(TerrainEpsilon, PixelSize * 0.5))
+		if (ClosestDist < max(TerrainEpsilon, PixelSize * PixelEpsilon))
 		{
 			Ray.SetHitT( DistTravelled );
 
