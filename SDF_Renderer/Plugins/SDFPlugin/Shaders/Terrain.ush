@@ -126,6 +126,7 @@ float3x3 GetRowRotMatrix( float3 RotAxis, float RotAngle )
 namespace DistFn
 {
 	// Calculating the maximum (theoretical) height of the terrain
+	// Overestimates the height if 'InflationGain * Persistence > 1'
 	//
 	// Calculate the initial inflation and the rate at which it changes:
 	// 'Amplitude0 = (Amplitude / Frequency) * (bSimplex ? sqrt(3)/2 : 1)'
