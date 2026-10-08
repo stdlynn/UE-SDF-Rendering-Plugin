@@ -23,29 +23,7 @@ public:
 
 	struct FSettings
 	{
-		struct TerrainParams
-		{
-			FVector3f RotAxis;
-			float RotAngle;
-			FVector3f PlanePos;
-			float VerticalNoiseOffset;
-			float MinNoiseScale;
-			uint32 NumOctaves;
-			float Frequency;
-			float Lacunarity;
-			float Amplitude;
-			float Persistence;
-			float Inflation;
-			float InflationGain;
-			float SampleSmoothing;
-			float UnionSmoothing;
-			float ClippingSmoothing;
-			float Epsilon;
-			float DerivativeH;
-			bool bSimplex;
-			bool bBandLimiting;
-			uint32 MatIdx;
-		} Terrain;
+		FTerrainParams Terrain;
 		FVector3f PtrGridPos;
 		float VoxSize;
 		uint32 DbgVisMaxBricks;
@@ -231,6 +209,8 @@ public:
 		SHADER_PARAMETER(uint32, bSimplex)
 		SHADER_PARAMETER(uint32, bBandLimiting)
 		SHADER_PARAMETER(uint32, TerrainMatIdx)
+		SHADER_PARAMETER(float, TerrainMinBrick)
+		SHADER_PARAMETER(float, TerrainMaxBrick)
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)

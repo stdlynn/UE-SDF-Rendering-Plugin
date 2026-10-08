@@ -242,6 +242,18 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 
 	FBuildBrickmapShader::FPermutationDomain PermutationVector;
 
+	// Min and max height of terrain in SceneUnit-space
+	const float HeightMin = RT.BrickmapBuilder.GetTerrainHeightMin( RT.Settings.Terrain );
+	const float HeightMax = RT.BrickmapBuilder.GetTerrainHeightMax( RT.Settings.Terrain );
+	const float BrickSize = GetBrickSize(RT.Settings.VoxSize);
+	// Lowest Z of the PtrGrid
+	const float GridMin = RT.Settings.PtrGridPos.Z - (PtrGridSize.Z) * BrickSize * 0.5f;
+	// Min and max brick cell height of terrain
+	const int32 BrickMin = FMath::Clamp(FMath::FloorToInt32((HeightMin - GridMin) / BrickSize), 0, PtrGridSize.Z - 1);
+	const int32 BrickMax = FMath::Clamp(FMath::CeilToInt32((HeightMax - GridMin) / BrickSize), 0, PtrGridSize.Z - 1);
+
+	UE_LOG(LogTemp, Log, TEXT("Bounds: %f, %f"), HeightMin, HeightMax);
+
 	FBuildBrickmapShader::FParameters* ParametersBuild = GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
 	ParametersBuild->NumEdits = RT.SDFs.Num();
 	ParametersBuild->SDFEdits = GraphBuilder.CreateSRV( SDFBuffRDG );
@@ -278,6 +290,8 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 	ParametersBuild->TerrainEpsilon = RT.Settings.Terrain.Epsilon;
 	ParametersBuild->TerrainDerivativeH = RT.Settings.Terrain.DerivativeH;
 	ParametersBuild->TerrainMatIdx = RT.Settings.Terrain.MatIdx;
+	ParametersBuild->TerrainMinBrick = BrickMin;
+	ParametersBuild->TerrainMaxBrick = BrickMax;
 
 	RDG_EVENT_SCOPE(GraphBuilder, "SDF_Brickmap_Terrain");
 	{
@@ -286,8 +300,11 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 			RT.BrickmapBuilder.bTerrainDirty = false;
 
 			FIntVector Dimensions = static_cast<FIntVector>(PtrGridSize);
-			Dimensions.Z = FMath::Min<int32>( 18, PtrGridSize.Z ); // Max height of terrain TODO: calculate dynamically
-			const int TotalBricks = Dimensions.X * Dimensions.Y * Dimensions.Z;
+
+			UE_LOG(LogTemp, Log, TEXT("Bricks: %d, %d"), BrickMin, BrickMax);
+
+			Dimensions.Z = BrickMax - BrickMin + 1;
+			const int32 TotalBricks = Dimensions.X * Dimensions.Y * Dimensions.Z;
 
 			constexpr int MaxBricksPerDispatch = 32768;
 			const int32 NumDispatches = FMath::DivideAndRoundUp( TotalBricks, MaxBricksPerDispatch );
@@ -321,7 +338,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 	{
 		// BUILD
 		const int NumUpdated = RT.BrickmapBuilder.GetNumUpdatedBricks();
-		constexpr int MaxBricksPerDispatch = 32768;
+		constexpr int MaxBricksPerDispatch = 65024; // 2^16 - 8^3
 		const int32 NumDispatches = FMath::DivideAndRoundUp(NumUpdated, MaxBricksPerDispatch);
 
 		PermutationVector.Set<FBuildBrickmapShader::FTerrainPerm>(false);
@@ -329,7 +346,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 
 		for (int32 i = 0; i < NumDispatches; i++)
 		{
-			const int32 BrickOffset = i * MaxBricksPerDispatch;
+			const int32 BrickOffset = MaxBricksPerDispatch * i;
 			const int32 NumBricks = FMath::Min(MaxBricksPerDispatch, NumUpdated - BrickOffset);
 
 			FBuildBrickmapShader::FParameters* ParametersTerrain =

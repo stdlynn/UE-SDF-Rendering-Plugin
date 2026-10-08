@@ -4,6 +4,24 @@
 #include "SDFEdits.h"
 #include "SDFFunctions.h"
 
+float FBrickmapBuilder::GetTerrainHeightMin( const FTerrainParams& TerrainParams )
+{
+	return TerrainParams.PlanePos.Z;
+}
+
+float FBrickmapBuilder::GetTerrainHeightMax( const FTerrainParams& TerrainParams )
+{
+	const FTerrainParams& P = TerrainParams;
+	const float Amplitude0 = P.Amplitude / P.Frequency * (P.bSimplex ? sqrt(3.0f) / 2.0f : 1.0f);
+	const float Inflation0 = P.Inflation * (P.VerticalNoiseOffset + 0.5f) * Amplitude0;
+	const float Gain = P.InflationGain * P.Persistence;
+	const float GainN = (Gain == 1.0f) ? P.NumOctaves : (1.0f - pow(Gain, P.NumOctaves)) / (1.0f - Gain);
+	const float InflationN = Inflation0 * GainN;
+
+	const float MaxHeight = P.PlanePos.Z + InflationN;
+	return MaxHeight;
+}
+
 void FBrickmapBuilder::AllocateResources()
 {
 	check( IsInRenderingThread() );

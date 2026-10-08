@@ -11,6 +11,8 @@ float VoxSize;
 Buffer<uint> UpdateList;
 uint BrickOffset;
 uint NumBricks;
+float TerrainMinBrick;
+float TerrainMaxBrick;
 RWBuffer<uint> FreedList;
 RWBuffer<uint> DeallocatedList;
 
@@ -39,7 +41,7 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 
 	// Get the data for this thread's brick point
 #if TERRAIN
-	uint GridIdx = Idx;
+	uint GridIdx = Idx + (TerrainMinBrick * PtrGridSize.x * PtrGridSize.y);
 #else
 	const uint GridIdx = UpdateList[Idx];
 #endif
