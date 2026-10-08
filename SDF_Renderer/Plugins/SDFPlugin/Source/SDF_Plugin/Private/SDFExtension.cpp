@@ -176,7 +176,7 @@ void FSDFExtension::TransferSDFsToRenderThread()
 	if (not SDFSubsystem->GetAndResetDirty() && not GT.Settings.bUnitScaleDirty) { return; }
 
 	// Grab the game thread's SDFs
-	const auto& SDFs{ SDFSubsystem->GetRenderSDFs() };
+	const auto& SDFs{ SDFSubsystem->GetEdits() };
 
 	// Transfer lambda
 	// Capture the parameters by copy, their state on the game thread might change before the lambda runs
@@ -185,9 +185,14 @@ void FSDFExtension::TransferSDFsToRenderThread()
 		// Copy the SDF data over to the render thread
 		RT.SDFs.Empty();
 		RT.SDFs.Reserve( SDFs.Num() );
+		RT.SDFBounds.Empty();
+		RT.SDFBounds.Reserve( SDFs.Num() );
 		for (const auto& Pair : SDFs)
 		{
-			RT.SDFs.Emplace( Pair.Value, Pair.Key, RT.Settings.GPUUnitScale );
+			// Copy over the SDF
+			const int32 Idx{ RT.SDFs.Emplace( Pair.Value, Pair.Key, RT.Settings.GPUUnitScale ) };
+			// Copy over the AABB
+			RT.SDFBounds.Emplace( Pair.Value.Bounds * RT.Settings.GPUUnitScale );
 		}
 		RT.SDFResources.bDirty = true;
 	} };

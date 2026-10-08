@@ -4,6 +4,17 @@
 #include "Components/SceneComponent.h"
 #include "SDFEdits.generated.h"
 
+struct FAABB
+{
+	FAABB operator*( float Scale ) const
+	{
+		return FAABB{ Min * Scale, Max * Scale };
+	}
+
+	FVector3f Min;
+	FVector3f Max;
+};
+
 UENUM( BlueprintType )
 enum class EOperation : uint8
 {
@@ -18,7 +29,6 @@ enum class EPrimitive : uint8
 	Line   UMETA( DisplayName = "Line"),
 	Box	   UMETA( DisplayName = "Box")
 };
-
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class USDFComponent : public USceneComponent
@@ -146,9 +156,9 @@ private:
 }; // USDFComponent
 
 // SDF edit representation sent to the render thread
-struct FRenderSDF
+struct FSDF
 {
-	FRenderSDF( const USDFComponent& SDFComp, const FVector3f& Pos, const FQuat& Quat )
+	FSDF( const USDFComponent& SDFComp, const FVector3f& Pos, const FQuat& Quat )
 		: Pos{ Pos }
 		, Primitive{ SDFComp.Primitive }
 		, Quat{ Quat }
@@ -165,14 +175,17 @@ struct FRenderSDF
 			case EPrimitive::Box: Data = FVector4f(SDFComp.BoxSize, SDFComp.Rounding); break;
 			default: Data = FVector4f(0.f, 0.f, 0.f, 0.f); break;
 		}
+		CalcBounds();
 	}
 	
+	void CalcBounds();
 	[[nodiscard]] float GetSphereRadius() const { return Data.X; }
 	[[nodiscard]] FVector3f GetLinePosB() const { return FVector3f(Data.X, Data.Y, Data.Z); }
 	[[nodiscard]] float GetLineRadius() const { return Data.W; }
 	[[nodiscard]] FVector3f GetBoxHalfExtent() const { return FVector3f(Data.X, Data.Y, Data.Z); }
 	[[nodiscard]] float GetBoxRounding() const { return Data.W; }
 
+	FAABB Bounds;
 	FVector3f Pos;
 	EPrimitive Primitive;
 	FQuat Quat; // Data1 in FGPUSDF
@@ -188,7 +201,7 @@ struct FRenderSDF
 struct alignas(16) FGPUSDF
 {
 	// Convert to GPU unit scale
-	FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale );
+	FGPUSDF( const FSDF& RenderSDF, uint32 ID, float GPUUnitScale );
 
 	void SetPrimitive( const EPrimitive NewPrimitive );
 	void SetSphereData( const float Radius );
@@ -256,7 +269,7 @@ public:
 	void UnregisterSDF( const USDFComponent& Comp );
 	void SetSDFDirty( const USDFComponent& Comp );
 
-	const auto& GetRenderSDFs() const { return RenderSDFs; }
+	const auto& GetEdits() const { return Edits; }
 	bool GetAndResetDirty()
 	{
 		const bool bWasDirty{ bDirty };
@@ -271,7 +284,7 @@ protected:
 private:
 
 	// Render params, game thread
-	TMap<uint64, FRenderSDF> RenderSDFs;
+	TMap<uint64, FSDF> Edits;
 	bool bDirty{ true };
 
 }; // USDFSubsystem

@@ -28,7 +28,52 @@ void USDFSubsystem::Tick(float DeltaTime)
 	DrawDebug();
 }
 
-FGPUSDF::FGPUSDF( const FRenderSDF& RenderSDF, uint32 ID, float GPUUnitScale )
+void FSDF::CalcBounds()
+{
+	switch (Primitive)
+	{
+		case EPrimitive::Sphere: 
+		{
+			Bounds.Min = Pos - GetLineRadius();
+			Bounds.Max = Pos + GetLineRadius();
+			break;
+		}
+		case EPrimitive::Line: 
+		{
+			Bounds.Min = FMath::Min( Pos, GetLinePosB() ) - GetLineRadius();
+			Bounds.Max = FMath::Max( Pos, GetLinePosB() ) + GetLineRadius();
+			break;
+		}
+		case EPrimitive::Box:
+		{
+			// Scale the box down by the smoothing radius
+			const float SmoothDist = bSmooths ? SmoothingStrength : 0.0f;
+			const FVector3f HalfExtent{ GetBoxHalfExtent() - SmoothDist };
+			
+			// Without quaternion applied
+			const FAABB AlignedBounds{ Pos - HalfExtent, Pos + HalfExtent };
+
+			// [CREDITS] Graphics Gems by Jim Arvo
+			const FMatrix Mat{ Quat.ToMatrix() };
+			for (uint32 R{ 0 }; R < 3; R++)
+			{
+				for (uint32 C{ 0 }; C < 3; C++)
+				{
+					const float A = Mat.GetColumn( C )[R] * AlignedBounds.Min[C];
+					const float B = Mat.GetColumn( C )[R] * AlignedBounds.Min[C];
+					Bounds.Min[R] += (A < B) ? A : B;
+					Bounds.Max[R] += (A < B) ? B : A;
+				}
+			}
+			// Expand the AABB in all directions by the smoothing distance
+			Bounds.Min -= FVector3f{ SmoothDist };
+			Bounds.Max += FVector3f{ SmoothDist };
+			break;
+		}
+	}
+}
+
+FGPUSDF::FGPUSDF( const FSDF& RenderSDF, uint32 ID, float GPUUnitScale )
 	: Pos{ RenderSDF.Pos * GPUUnitScale }
 	, Flags { 0 }
 	, SmoothingStrength{ RenderSDF.SmoothingStrength * GPUUnitScale }
@@ -159,13 +204,13 @@ void USDFSubsystem::RegisterSDF( const USDFComponent& Comp )
 {
 	const FVector3f Pos{ Comp.GetComponentTransform().GetLocation() };
 	const FQuat Quat{ Comp.GetComponentTransform().GetRotation() };
-	RenderSDFs.Add( Comp.GetID(), { Comp, Pos, Quat } );
+	Edits.Add( Comp.GetID(), { Comp, Pos, Quat } );
 	bDirty = true;
 }
 
 void USDFSubsystem::UnregisterSDF( const USDFComponent& Comp )
 {
-	RenderSDFs.Remove( Comp.GetID() );
+	Edits.Remove( Comp.GetID() );
 	bDirty = true;
 }
 
@@ -173,19 +218,24 @@ void USDFSubsystem::SetSDFDirty( const USDFComponent& Comp )
 {
 	const FVector3f Pos{ Comp.GetComponentTransform().GetLocation() };
 	const FQuat Quat{ Comp.GetComponentTransform().GetRotation() };
-	RenderSDFs[Comp.GetID()] = FRenderSDF{ Comp, Pos, Quat };
+	Edits[Comp.GetID()] = FSDF{ Comp, Pos, Quat };
 	bDirty = true;
 }
 
 // Render wireframe of subtractive edits so we can see them
 void USDFSubsystem::DrawDebug()
 {
+	// TODO:
+	// TODO: LYNN PLS
+	// TODO: MAKE A CVAR FOR RENDERING BOUNDING BOXES AS WELL
+	// TODO:
+
 	int CVar = CVarDebugWireframe.GetValueOnGameThread();
 	if (!CVar) return;
 	UWorld* World = GetWorld();
 	if (!World) return;
 
-	for (const auto& [ID, Edit] : RenderSDFs)
+	for (const auto& [ID, Edit] : Edits)
 	{
 		float SizeEpsilon = 1e-2;
 		float SizeMult = 3.5e-2;

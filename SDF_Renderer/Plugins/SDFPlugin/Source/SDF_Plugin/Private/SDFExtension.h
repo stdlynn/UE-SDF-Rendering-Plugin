@@ -7,6 +7,7 @@
 #include "SDFEdits.h"
 #include "SDFMaterial.h"
 #include "FBrickmapBuilder.h"
+#include "bvh.h"
 
 // UE
 #include "CoreMinimal.h"
@@ -112,6 +113,7 @@ private:
 		TArray<FSDFMaterial> Materials;
 		FSDFResources MaterialsResource;
 		TArray<FGPUSDF> SDFs;
+		TArray<FAABB> SDFBounds;
 		FSDFResources SDFResources;
 		FBrickmapBuilder BrickmapBuilder;
 	} RT{};
