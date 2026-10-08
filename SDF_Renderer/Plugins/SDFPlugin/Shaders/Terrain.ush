@@ -130,24 +130,32 @@ namespace DistFn
 	// - A column of spheres needs to line up perfectly vertically
 	// - Each sphere must be exactly touching the ones below and above it
 	// - Each sphere in the column must have local radius 1
+	// - (For 'UnionSmoothing > 0') Each sphere is outside of clipping distance
 	// The maximum height is overestimated if 'InflationGain * Persistence > 1'
 	//
-	// Calculate the initial inflation and the rate at which it changes:
+	// Calculate the initial inflation and smoothing, and the rate at which they change:
 	// 'Amplitude0 = (Amplitude / Frequency) * (bSimplex ? sqrt(3)/2 : 1)'
 	// 'Inflation0 = Inflation * (VerticalNoiseOffset + 0.5) * Amplitude0'
+	// 'Smoothing0 = UnionSmoothing * Amplitude0'
 	// 'Gain = InflationGain * Persistence'
+	// The smoothing's gain is 'Persistence'
 	//
 	// The inflation for octave 'i' is 'Inflation0 * Gain^i'
 	// We can sum the octaves' inflation distances to get the total inflation:
 	// 'InflationN = Inflation0 * (Gain^0 + Gain^1 + ... + Gain^(N-1))'
 	// 'InflationN = Inflation0 * (1 + Gain^1 + ... + Gain^(N-1))'
-	//
+	// 'InflationN = Inflation0 * GainN'
 	// Analytically calculate the sum:
 	// 'GainN = 1 + Gain^1 + ... + Gain^(N-1)'
 	// (Gain != 1) 'GainN = (1 - Gain^N) / (1 - Gain)'
 	// (Gain == 1) 'GainN = N'
 	//
-	// The maximum height of the terrain is 'PlanePos.z + (Inflation0 * GainN)'
+	// The smoothing for octave 'i' is 'Smoothing0 * Persistence^i'
+	// 'SmoothingN = Smoothing0 * PersistenceN'
+	// (Persistence != 1) 'PersistenceN = (1 - Persistence^N) / (1 - Persistence)'
+	// (Persistence == 1) 'PersistenceN = N'
+	//
+	// The maximum height of the terrain is 'PlanePos.z + InflationN + SmoothingN'
 	float FBM( float3 Pos, FTerrainParams Params, float PixelSize = 0.0 )
     {
 		// Sample from a base (plane) SDF to get our initial distance field
