@@ -11,8 +11,8 @@ float VoxSize;
 Buffer<uint> UpdateList;
 uint BrickOffset;
 uint NumBricks;
-float TerrainMinBrick;
-float TerrainMaxBrick;
+uint TerrainMinBrick;
+uint TerrainMaxBrick;
 RWBuffer<uint> FreedList;
 RWBuffer<uint> DeallocatedList;
 
@@ -54,7 +54,11 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 #if TERRAIN
 	float Closest = DistFn::FBM( WorldPos, Params );
 #else
-	float ClosestTerrain = DistFn::FBM( WorldPos, Params ); // TODO: Set PixelSize?
+	float ClosestTerrain = 1e35;
+	if (GridCell.z < TerrainMinBrick || GridCell.z > TerrainMaxBrick)
+	{
+		ClosestTerrain = DistFn::FBM( WorldPos, Params );
+	}
 	float Closest = MapScene( WorldPos, ClosestTerrain );
 #endif
 
@@ -71,6 +75,7 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 		// Deallocate if we own a brick but there is no longer any geometry in range
 		if (bDeallocate)
 		{
+#if !TERRAIN
 			if (AtlasIdx != Empty)
 			{
 				// Claim an index within the deallocation list
@@ -83,6 +88,7 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 				PtrGrid[GridIdx] = Empty;
 				AtlasIdx = Empty;
 			}
+#endif
 		}
 		// Our grid cell contains geometry
 		// If we don't own a brick, allocate one

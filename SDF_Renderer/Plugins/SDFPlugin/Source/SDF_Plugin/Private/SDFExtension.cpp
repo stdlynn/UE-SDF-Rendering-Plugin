@@ -250,10 +250,8 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 	const float GridMin = RT.Settings.PtrGridPos.Z - (PtrGridSize.Z) * BrickSize * 0.5f;
 	// Min and max brick cell height of terrain
 	const int32 BrickMin = FMath::Clamp(FMath::FloorToInt32((HeightMin - GridMin) / BrickSize), 0, PtrGridSize.Z - 1);
-	const int32 BrickMax = FMath::Clamp(FMath::CeilToInt32((HeightMax - GridMin) / BrickSize), 0, PtrGridSize.Z - 1);
-
-	UE_LOG(LogTemp, Log, TEXT("Bounds: %f, %f"), HeightMin, HeightMax);
-
+	const int32 BrickMax = FMath::Clamp(FMath::FloorToInt32((HeightMax - GridMin) / BrickSize), 0, PtrGridSize.Z - 1);
+	
 	FBuildBrickmapShader::FParameters* ParametersBuild = GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
 	ParametersBuild->NumEdits = RT.SDFs.Num();
 	ParametersBuild->SDFEdits = GraphBuilder.CreateSRV( SDFBuffRDG );
@@ -293,9 +291,9 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 	ParametersBuild->TerrainMinBrick = BrickMin;
 	ParametersBuild->TerrainMaxBrick = BrickMax;
 
-	RDG_EVENT_SCOPE(GraphBuilder, "SDF_Brickmap_Terrain");
+	if (RT.BrickmapBuilder.bTerrainDirty)
 	{
-		if (RT.BrickmapBuilder.bTerrainDirty)
+		RDG_EVENT_SCOPE(GraphBuilder, "SDF_Brickmap_Terrain");
 		{
 			RT.BrickmapBuilder.bTerrainDirty = false;
 

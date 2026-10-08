@@ -62,6 +62,14 @@ float3 GetNormal( float3 Pos )
 					  K.yxy * MapScene( Pos + (K.yxy * DerivativeH) ) +
 					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH) ) );
 }
+float3 GetNormalCombined( float3 Pos, FTerrainParams Params )
+{
+	const float2 K = float2( 1, -1 );
+	return normalize( K.xyy * MapScene( Pos + (K.xyy * DerivativeH), DistFn::FBM( Pos + (K.xyy * DerivativeH), Params ) ) +
+					  K.yyx * MapScene( Pos + (K.yyx * DerivativeH), DistFn::FBM( Pos + (K.yyx * DerivativeH), Params ) ) +
+					  K.yxy * MapScene( Pos + (K.yxy * DerivativeH), DistFn::FBM( Pos + (K.yxy * DerivativeH), Params ) ) +
+					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH), DistFn::FBM( Pos + (K.xxx * DerivativeH), Params ) ) );
+}
 
 bool SphereTraceFBM( inout FRay Ray, inout float3 Normal, float PixelFootprint )
 {
@@ -181,35 +189,24 @@ bool TracePtrGrid( inout FRay Ray, inout float3 Normal )
 	}
 }
 
-bool TraceScene( inout FRay Ray, out float3 Normal, out float3 Albedo, float PixelFootprint )
+bool TraceScene( inout FRay Ray, out float3 Normal, float PixelFootprint )
 {
+	FTerrainParams TerrainParams = GetTerrainParams();
 	// Brute-force sphere tracing
 	if (bBruteForceSphereTracing > 0)
     {
-		// Terrain
-		if (SphereTraceFBM( Ray, Normal, PixelFootprint ))
-		{
-			const float Height = Ray.GetHitPos().z * Frequency * 100.0;
-			if (Height <= 7.0) { Albedo = float3(0.1, 0.1, 0.5); }
-			else if (Height < 7.5) { Albedo = float3(0.8, 0.6, 0.2); }
-			else if (Height < 11.0) { Albedo = float3(0.2, 0.5, 0.1); }
-			else if (Height < 12.0) { Albedo = float3(0.25, 0.25, 0.3); }
-			else { Albedo = float3(0.75, 0.75, 0.8); }
-			Albedo *= 0.2;
-		}
-
-		// TODO: move brute-force terrain here
 		float DistTravelled = 0.0;
 		for (uint Step = 0; Step < 256; ++Step)
 		{
-			float ClosestDist = MapScene( Ray.GetPosAt( DistTravelled ) );
+			const float PixelSize = (bBandLimiting == 0) ? 0.0 : PixelFootprint * (DistTravelled + Ray.T);
+			float TerrainDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), TerrainParams, PixelSize );
+			float ClosestDist = MapScene( Ray.GetPosAt( DistTravelled ), TerrainDist );
 			DistTravelled += ClosestDist;
 			if (DistTravelled > Ray.RelativeMaxT) { break; }
 			if (ClosestDist < SurfaceEpsilon)
 			{
 				Ray.SetHitT( DistTravelled );
-				Normal = GetNormal( Ray.GetHitPos() );
-				Albedo = (0.4).xxx;
+				Normal = GetNormalCombined( Ray.GetHitPos(), TerrainParams );
 				break;
 			}
 		}
@@ -221,10 +218,7 @@ bool TraceScene( inout FRay Ray, out float3 Normal, out float3 Albedo, float Pix
 	    const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
 	    if (MoveRayToAABB( GridAABB, Ray, UnitScale ))
 	    {
-			if (TracePtrGrid( Ray, Normal ))
-			{
-				Albedo = float3(0.8, 0.1, 0.1);
-			}
+			TracePtrGrid( Ray, Normal );
 	    }
     }
 	return Ray.bHit;
@@ -280,8 +274,8 @@ void TraversePS(
 
 	// TODO: albedo
 	// Trace
-	float3 Normal, Albedo;
-	if (! TraceScene( Ray, Normal, Albedo, GetPixelFootprint() )) { discard; }
+	float3 Normal;
+	if (! TraceScene( Ray, Normal, GetPixelFootprint() )) { discard; }
 
 	// Convert unit size
     const float ViewZ = (Ray.GetHitT() / UnitScale) * dot( Dir, ResolvedView.ViewForward.xyz );

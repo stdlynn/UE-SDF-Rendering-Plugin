@@ -14,11 +14,14 @@ float FBrickmapBuilder::GetTerrainHeightMax( const FTerrainParams& TerrainParams
 	const FTerrainParams& P = TerrainParams;
 	const float Amplitude0 = P.Amplitude / P.Frequency * (P.bSimplex ? sqrt(3.0f) / 2.0f : 1.0f);
 	const float Inflation0 = P.Inflation * (P.VerticalNoiseOffset + 0.5f) * Amplitude0;
+	const float Smoothing0 = P.UnionSmoothing * Amplitude0;
 	const float Gain = P.InflationGain * P.Persistence;
 	const float GainN = (Gain == 1.0f) ? P.NumOctaves : (1.0f - pow(Gain, P.NumOctaves)) / (1.0f - Gain);
 	const float InflationN = Inflation0 * GainN;
+	const float PersistenceN = (P.Persistence == 1.0f) ? P.NumOctaves : (1.0f - pow(P.Persistence, P.NumOctaves)) / (1.0f - P.Persistence);
+	const float SmoothingN = Smoothing0 * PersistenceN;
 
-	const float MaxHeight = P.PlanePos.Z + InflationN;
+	const float MaxHeight = P.PlanePos.Z + InflationN + SmoothingN;
 	return MaxHeight;
 }
 
@@ -111,12 +114,12 @@ void FBrickmapBuilder::SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FV
 		const FVector3f MinF = ( AABB.Min - GridMin - Thickness ) / BrickSize;
 		const FVector3f MaxF = ( AABB.Max - GridMin + Thickness ) / BrickSize;
 
-		const FIntVector3 MinCell(FMath::Clamp( FMath::FloorToInt32( MinF.X ), 0, GridMax.X ),
-								  FMath::Clamp( FMath::FloorToInt32( MinF.Y ), 0, GridMax.Y ),
-								  FMath::Clamp( FMath::FloorToInt32( MinF.Z ), 0, GridMax.Z ));
-		const FIntVector3 MaxCell(FMath::Clamp( FMath::FloorToInt32( MaxF.X ), 0, GridMax.X ),
-								  FMath::Clamp( FMath::FloorToInt32( MaxF.Y ), 0, GridMax.Y ),
-								  FMath::Clamp( FMath::FloorToInt32( MaxF.Z ), 0, GridMax.Z ));
+		const FIntVector3 MinCell(FMath::Clamp( FMath::FloorToInt32( MinF.X ), 0, GridMax.X - 1 ),
+								  FMath::Clamp( FMath::FloorToInt32( MinF.Y ), 0, GridMax.Y - 1 ),
+								  FMath::Clamp( FMath::FloorToInt32( MinF.Z ), 0, GridMax.Z - 1 ));
+		const FIntVector3 MaxCell(FMath::Clamp( FMath::FloorToInt32( MaxF.X ), 0, GridMax.X - 1 ),
+								  FMath::Clamp( FMath::FloorToInt32( MaxF.Y ), 0, GridMax.Y - 1 ),
+								  FMath::Clamp( FMath::FloorToInt32( MaxF.Z ), 0, GridMax.Z - 1 ));
 
 		// @formatter:off
 		for ( int32 z = MinCell.Z; z <= MaxCell.Z; z++ )

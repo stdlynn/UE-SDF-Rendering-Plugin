@@ -209,8 +209,8 @@ public:
 		SHADER_PARAMETER(uint32, bSimplex)
 		SHADER_PARAMETER(uint32, bBandLimiting)
 		SHADER_PARAMETER(uint32, TerrainMatIdx)
-		SHADER_PARAMETER(float, TerrainMinBrick)
-		SHADER_PARAMETER(float, TerrainMaxBrick)
+		SHADER_PARAMETER(uint32, TerrainMinBrick)
+		SHADER_PARAMETER(uint32, TerrainMaxBrick)
 	END_SHADER_PARAMETER_STRUCT()
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
