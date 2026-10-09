@@ -94,6 +94,10 @@ void DebugCS( uint2 DispatchThreadId : SV_DispatchThreadID )
 
 	// Compute output color
 	const float4 OriginalColor = OriginalSceneColor.SampleLevel( GlobalPointClampedSampler, SampleUV, 0 );
-	const float3 NewColor = (NumHits > 0) ? lerp( OriginalColor, InfernoQuintic( NumHits ), DbgVisBlendFactor ) : OriginalColor;
+	float3 NewColor = (NumHits > 0) ? lerp( OriginalColor, InfernoQuintic( NumHits ), DbgVisBlendFactor ) : OriginalColor;
+    if (WorldPosToGridCell(Ray.GetPos(), GridAABB.Min, BrickSize).z == 37)
+    {
+        NewColor = 1.0;
+    }
 	Output[SampleCoord] = float4( NewColor, OriginalColor.w );
 }

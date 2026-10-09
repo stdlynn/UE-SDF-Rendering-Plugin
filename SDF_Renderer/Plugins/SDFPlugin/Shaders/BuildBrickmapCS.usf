@@ -55,7 +55,7 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 	float Closest = DistFn::FBM( WorldPos, Params );
 #else
 	float ClosestTerrain = 1e35;
-	if (GridCell.z < TerrainMinBrick || GridCell.z > TerrainMaxBrick)
+	if (GridCell.z >= TerrainMinBrick && GridCell.z <= TerrainMaxBrick)
 	{
 		ClosestTerrain = DistFn::FBM( WorldPos, Params );
 	}

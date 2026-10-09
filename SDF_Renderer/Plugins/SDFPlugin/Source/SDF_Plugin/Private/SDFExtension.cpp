@@ -243,14 +243,8 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 	FBuildBrickmapShader::FPermutationDomain PermutationVector;
 
 	// Min and max height of terrain in SceneUnit-space
-	const float HeightMin = RT.BrickmapBuilder.GetTerrainHeightMin( RT.Settings.Terrain );
-	const float HeightMax = RT.BrickmapBuilder.GetTerrainHeightMax( RT.Settings.Terrain );
-	const float BrickSize = GetBrickSize(RT.Settings.VoxSize);
-	// Lowest Z of the PtrGrid
-	const float GridMin = RT.Settings.PtrGridPos.Z - (PtrGridSize.Z) * BrickSize * 0.5f;
-	// Min and max brick cell height of terrain
-	const int32 BrickMin = FMath::Clamp(FMath::FloorToInt32((HeightMin - GridMin) / BrickSize), 0, PtrGridSize.Z - 1);
-	const int32 BrickMax = FMath::Clamp(FMath::FloorToInt32((HeightMax - GridMin) / BrickSize), 0, PtrGridSize.Z - 1);
+	const uint32 BrickMin = RT.BrickmapBuilder.GetTerrainBrickMin( RT.Settings.Terrain, RT.Settings.VoxSize, RT.Settings.PtrGridPos.Z );
+	const uint32 BrickMax = RT.BrickmapBuilder.GetTerrainBrickMax( RT.Settings.Terrain, RT.Settings.VoxSize, RT.Settings.PtrGridPos.Z );
 	
 	FBuildBrickmapShader::FParameters* ParametersBuild = GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
 	ParametersBuild->NumEdits = RT.SDFs.Num();

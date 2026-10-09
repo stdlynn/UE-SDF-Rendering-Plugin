@@ -45,8 +45,10 @@ public:
 	[[nodiscard]] FRDGPooledBuffer* GetDeallocatedList() const { return RT.DeallocatedListResource; }
 	[[nodiscard]] uint32 GetLastBuildFrame() const { return RT.LastBuildFrame; }
 	[[nodiscard]] uint32 GetNumUpdatedBricks() const { return RT.UpdateListCPU.Num(); }
-	[[nodiscard]] static float GetTerrainHeightMin( const FTerrainParams& TerrainParams );
-	[[nodiscard]] static float GetTerrainHeightMax( const FTerrainParams& TerrainParams );
+	[[nodiscard]] static float GetTerrainHeightMin( const FTerrainParams& Params );
+	[[nodiscard]] static float GetTerrainHeightMax( const FTerrainParams& Params );
+	[[nodiscard]] static uint32 GetTerrainBrickMin( const FTerrainParams& Params, float VoxSize, float PtrGridZ );
+	[[nodiscard]] static uint32 GetTerrainBrickMax( const FTerrainParams& Params, float VoxSize, float PtrGridZ );
 	void SetLastBuildFrame( const uint32 Frame ) { RT.LastBuildFrame = Frame; }
 
 	void AllocateResources();
