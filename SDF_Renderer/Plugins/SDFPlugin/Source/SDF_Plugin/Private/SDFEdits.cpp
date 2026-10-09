@@ -49,22 +49,16 @@ void FSDF::CalcBounds()
 			// Scale the box down by the smoothing radius
 			const float SmoothDist = bSmooths ? SmoothingStrength : 0.0f;
 			const FVector3f HalfExtent{ GetBoxHalfExtent() - SmoothDist };
-			
-			// Without quaternion applied
-			const FAABB AlignedBounds{ Pos - HalfExtent, Pos + HalfExtent };
 
 			// [CREDITS] Graphics Gems by Jim Arvo
 			const FMatrix Mat{ Quat.ToMatrix() };
-			for (uint32 R{ 0 }; R < 3; R++)
-			{
-				for (uint32 C{ 0 }; C < 3; C++)
-				{
-					const float A = Mat.GetColumn( C )[R] * AlignedBounds.Min[C];
-					const float B = Mat.GetColumn( C )[R] * AlignedBounds.Min[C];
-					Bounds.Min[R] += (A < B) ? A : B;
-					Bounds.Max[R] += (A < B) ? B : A;
-				}
-			}
+			const FVector3f Col0{ FMath::Abs( FVector3f{ Mat.GetColumn( 0 ) } ) * HalfExtent };
+			const FVector3f Col1{ FMath::Abs( FVector3f{ Mat.GetColumn( 1 ) } ) * HalfExtent };
+			const FVector3f Col2{ FMath::Abs( FVector3f{ Mat.GetColumn( 2 ) } ) * HalfExtent };
+			const FVector3f WorldSpaceHalfExtent{ (Col0.X + Col0.Y + Col0.Z), (Col1.X + Col1.Y + Col1.Z), (Col2.X + Col2.Y + Col2.Z) };
+			Bounds.Min = Pos - WorldSpaceHalfExtent;
+			Bounds.Max = Pos + WorldSpaceHalfExtent;
+
 			// Expand the AABB in all directions by the smoothing distance
 			Bounds.Min -= FVector3f{ SmoothDist };
 			Bounds.Max += FVector3f{ SmoothDist };
