@@ -6,28 +6,30 @@ class FSDFBVH
 {
 public:
 
-	struct alignas( 32 ) Node
+	struct alignas( 32 ) FNode
 	{
 		void Refit( const FAABB* AABBs );
 		bool IsLeaf() const { return NumEdits; }
 
 		FVector3f BoundsMin;
-		uint32 LeftChild, RightChild;
+		uint32 LeftChildIdx;
 		FVector3f BoundsMax;
 		uint32 FirstEdit, NumEdits;
 	};
-	static_assert( sizeof( Node ) == 32 );
+	static_assert( sizeof( FNode ) == 32 );
 
-	void Build();
+	void Build( const TArray<FGPUSDF>& Edits );
 
 private:
 
-	void Subdivide( uint32 NodeIdx );
+	static constexpr uint32 ROOT_IDX{ 0u };
 
-	Node& GetRoot() { return Nodes[RootIdx]; }
+	void Subdivide( FNode& Node );
+	FNode& GetRoot() { return Nodes[ROOT_IDX]; }
 
-	Node* Nodes{ nullptr };
-	uint32 RootIdx{ 0u };
+	uint32* EditIndices{ nullptr };
+	FNode* Nodes{ nullptr };
 	uint32 NodesUsed{ 1u };
+	uint32 NumEdits{ 0u };
 
 }; // SDFBVH
