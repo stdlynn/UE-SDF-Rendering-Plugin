@@ -2,80 +2,107 @@
 
 #include "SDFEdits.h"
 
-bool FSDFBVH::Intersect( const FRay3f& Ray )
+FSDFBVH::~FSDFBVH()
+{
+	FMemory::Free( Nodes );
+	delete[] EditIndices;
+}
+
+bool FSDFBVH::Intersect( const FRay3f& Ray, const TArray<FGPUSDF>& Edits ) const
 {
 	// Don't do intersection tests if there are no primitives
 	if (not NumEdits) { return false; }
 
-	const FNode* Node{ &Nodes[ROOT_IDX] };
-	while (true)
-	{
-		if (not Node->Intersect( Ray ).bHit) { continue; }
-		if (Node->IsLeaf())
-		{
-			for (uint32 i{ 0 }; i < Node->NumEdits; ++i)
-			{
-				// TODO: Intersect SDFs
-			}
-		}
-		else
-		{
-			// intersect both children
-		}
-	}
-}
-
-FSDFBVH::FNode::FHitResult FSDFBVH::FNode::Intersect( const FRay3f& Ray ) const
-{
+	// TODO: prevent NaN?
 	const FVector3f InvDir
 	{ 
 		1.0f / Ray.Direction.X,
 		1.0f / Ray.Direction.Y,
 		1.0f / Ray.Direction.Z
 	};
+
+	uint32 LeftChildIdx{};
+	uint32 RightChildIdx{};
+	float LeftT{ Nodes[LeftChildIdx].Intersect( Ray, InvDir ) };
+	float RightT{ Nodes[RightChildIdx].Intersect( Ray, InvDir ) };
+	if (LeftT > RightT)
+	{
+		Swap( LeftT, RightT );
+		Swap( LeftChildIdx, RightChildIdx );
+	}
+	if (LeftT == MAX_T)
+	{
+		
+	}
+	else
+	{
+		if (RightT < MAX_T)
+		{
+			
+		}
+	}
+
+	//const FNode* Node{ &Nodes[ROOT_IDX] };
+	//while (true)
+	//{
+	//	if (not Node->Intersect( Ray ).bHit) { continue; }
+	//	if (Node->IsLeaf())
+	//	{
+	//		for (uint32 i{ 0 }; i < Node->NumEdits; ++i)
+	//		{
+	//			// TODO: Intersect SDFs
+	//		}
+	//	}
+	//	else
+	//	{
+	//		// intersect both children
+	//	}
+	//}
+}
+
+float FSDFBVH::FNode::Intersect( const FRay3f& Ray, const FVector3f& InvDir ) const
+{
 	const FVector3f TToMin = (BoundsMin - Ray.Origin) * InvDir;
 	const FVector3f TToMax = (BoundsMax - Ray.Origin) * InvDir;
 	const FVector3f TMin = FMath::Min( TToMin, TToMax );
 	const FVector3f TMax = FMath::Max( TToMin, TToMax );
 	const float TNear = FMath::Max( FMath::Max3( TMin.X, TMin.Y, TMin.Z ), 0.0f );
-	const float TFar = FMath::Min( FMath::Min3( TMax.X, TMax.Y, TMax.Z ), TNumericLimits<float>::Max() );
-
-	return FHitResult{ TNear, TNear <= TFar };
+	const float TFar = FMath::Min( FMath::Min3( TMax.X, TMax.Y, TMax.Z ), MAX_T );
+	return (TNear <= TFar) ? TNear : MAX_T;
 }
 
-void FSDFBVH::Build( const TArray<FGPUSDF>& Edits )
+void FSDFBVH::Build( const TArray<FGPUSDF>& Edits, const TArray<FSDFBounds>& EditsBounds )
 {
+	// Reset resources
 	const bool bRealloc{ NumEdits != Edits.Num() };
 	if (bRealloc)
 	{
-		// TODO: free Nodes & EditIndices
+		FMemory::Free( Nodes );
+		delete[] EditIndices;
+		Nodes = nullptr;
+		EditIndices = nullptr;
 		NumEdits = Edits.Num();
 	}
 	if (not NumEdits) { return; }
 	if (bRealloc)
 	{
-		// TODO: new64 & EditIndices
-		FAlignedAllocator;
+		Nodes = static_cast<FNode*>(FMemory::Malloc( NumNodesForNObjects( NumEdits ) * sizeof( FNode ), 64u ));
+		EditIndices = new uint32[NumEdits];
 	}
 	for (uint32 i{ 0 }; i < NumEdits; ++i) { EditIndices[i] = i; }
 
-
-
-	const FAABB* AABBs{}; // TODO
-
+	// Initialize root node
 	FNode& Root{ Nodes[ROOT_IDX] };
-	Root.LeftChildIdx = 0;
-	Root.FirstEdit = 0;
+	Root.LeftFirst = 0u;
 	Root.NumEdits = NumEdits;
-
-	// Update node bounds
-	Root.Refit( AABBs );
+	NodesUsed = 2u; // Skip the 2nd node so children share a cacheline
+	RefitNode( Root, EditsBounds );
 
 	// Recursively subdivide
-	Subdivide( Root );
+	Subdivide( Root, EditsBounds );
 }
 
-void FSDFBVH::Subdivide( FNode& Node )
+void FSDFBVH::Subdivide( FNode& Node, const TArray<FSDFBounds>& EditsBounds )
 {
 	// Stop subdividing once there's less than 2 edits left in a node
 	if (Node.NumEdits <= 2) { return; }
@@ -95,56 +122,55 @@ void FSDFBVH::Subdivide( FNode& Node )
 	const float SplitPos{ Node.BoundsMin[Axis] + (Extent[Axis] / 2.0f) };
 	
 	// Go over all primitives held by the node
-	uint32 LeftMostToSort{ Node.FirstEdit };
+	uint32 LeftMostToSort{ Node.LeftFirst };
 	uint32 RightMostToSort{ LeftMostToSort + Node.NumEdits - 1 };
 	// While there are primitives left to be sorted
 	while (LeftMostToSort <= RightMostToSort)
 	{
-		// TODO: instead of storing that separate list of AABBs
-		// TODO: also store other necessary stuff in there, like the centroids
 		// Keep edits on the left side of the split plane at the start of the index buffer
-		if (EditCentroid[Axis] < SplitPos) { LeftMostToSort++; }
+		if (EditsBounds[EditIndices[LeftMostToSort]].Centroid[Axis] < SplitPos) { LeftMostToSort++; }
 		// Move edits on the right side of the split plane to the end of the index buffer
 		else { Swap( EditIndices[LeftMostToSort], EditIndices[RightMostToSort--] ); }
 	}
 
 	// Stop subdivision if the left or right side of the split plane doesn't contain any edits
-	const uint32 NumLeftEdits{ LeftMostToSort - Node.FirstEdit };
+	const uint32 NumLeftEdits{ LeftMostToSort - Node.LeftFirst };
 	if (NumLeftEdits == 0u || NumLeftEdits == Node.NumEdits) { return; }
 
 	// Add child nodes
 	const uint32 LeftChildIdx{ NodesUsed++ };
 	const uint32 RightChildIdx{ NodesUsed++ };
-	Node.LeftChildIdx = LeftChildIdx;
 	FNode& LeftChild{ Nodes[LeftChildIdx] };
 	FNode& RightChild{ Nodes[RightChildIdx] };
 
 	// Assign the children their respective primitives
-	LeftChild.FirstEdit = Node.FirstEdit;
+	LeftChild.LeftFirst = Node.LeftFirst;
 	LeftChild.NumEdits = NumLeftEdits;
-	RightChild.FirstEdit = LeftMostToSort;
+	RightChild.LeftFirst = LeftMostToSort;
 	RightChild.NumEdits = Node.NumEdits - NumLeftEdits;
 	// The original node is no longer a leaf
+	Node.LeftFirst = LeftChildIdx;
 	Node.NumEdits = 0u;
 
 	// Set the bounds for the child nodes
-	LeftChild.Refit(  );
-	RightChild.Refit(  );
+	RefitNode( LeftChild, EditsBounds );
+	RefitNode( RightChild, EditsBounds );
 
 	// Further subdivide both children
-	Subdivide( LeftChild );
-	Subdivide( RightChild );
+	Subdivide( LeftChild, EditsBounds );
+	Subdivide( RightChild, EditsBounds );
 }
 
-void FSDFBVH::FNode::Refit( const FAABB* AABBs )
+void FSDFBVH::RefitNode( FNode& Node, const TArray<FSDFBounds>& EditsBounds ) const
 {
-	BoundsMin = FVector3f{ TNumericLimits<float>::Min() };
-	BoundsMax = FVector3f{ TNumericLimits<float>::Max() };
-	for (uint32 i{ 0 }; i < NumEdits; ++i)
+	Node.BoundsMin = FVector3f{ TNumericLimits<float>::Lowest() };
+	Node.BoundsMax = FVector3f{ TNumericLimits<float>::Max() };
+	const uint32 EndIdx{ Node.LeftFirst + Node.NumEdits };
+	for (uint32 i{ Node.LeftFirst }; i < EndIdx; ++i)
 	{
-		// TODO: access through EditIndices
-		const FAABB& Bounds{ AABBs[FirstEdit + i] };
-		BoundsMin = FMath::Min( BoundsMin, Bounds.Min );
-		BoundsMax = FMath::Max( BoundsMax, Bounds.Max );
+		const uint32 BoundsIdx{ EditIndices[i] };
+		const FSDFBounds& Bounds{ EditsBounds[BoundsIdx] };
+		Node.BoundsMin = FMath::Min( Node.BoundsMin, Bounds.AABB.Min );
+		Node.BoundsMax = FMath::Max( Node.BoundsMax, Bounds.AABB.Max );
 	}
 }

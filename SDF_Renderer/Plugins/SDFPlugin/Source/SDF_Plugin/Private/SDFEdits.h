@@ -15,6 +15,17 @@ struct FAABB
 	FVector3f Max;
 };
 
+struct FSDFBounds
+{
+	FSDFBounds( const FAABB& AABB )
+		: AABB{ AABB }
+		, Centroid{ (AABB.Min + AABB.Max) / 2.0f }
+	{}
+
+	FAABB AABB;
+	FVector3f Centroid;
+};
+
 UENUM( BlueprintType )
 enum class EOperation : uint8
 {
