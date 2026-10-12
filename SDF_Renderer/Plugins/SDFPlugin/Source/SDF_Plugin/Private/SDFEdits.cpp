@@ -133,22 +133,6 @@ void USDFComponent::PostEditComponentMove( bool bFinished )
 }
 #endif
 
-void USDFComponent::SetSettings(const USDFComponent* Source )
-{
-	if (!Source || Source == this) return;
-
-	for (TFieldIterator<FProperty> It( StaticClass(), EFieldIteratorFlags::ExcludeSuper ); It; ++It)
-	{
-		if (!It->HasAnyPropertyFlags( CPF_Edit ))
-		{
-			continue;
-		}
-
-		It->CopyCompleteValue_InContainer( this, &Source );
-	}
-	SetDirty();
-}
-
 void USDFComponent::OnUpdateTransform( EUpdateTransformFlags TransformFlags,
 									   ETeleportType TeleportType )
 {
@@ -164,33 +148,6 @@ void USDFComponent::SetDirty() const
 	{
 		SDFSubsystem->SetSDFDirty( *this );
 	}
-}
-
-void USDFComponent::PostLoad()
-{
-	Super::PostLoad();
-
-	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, TEXT("USDFComponent::PostLoad() called"));
-
-	const FSDFEdit Defaults;
-	auto Migrate = [](auto& Dest, const auto& Old, const auto& Default)
-		{
-			if (Old != Default)
-			{
-				Dest = Old;
-			}
-		};
-
-	Migrate(Edit.Operation,          Operation_DEPRECATED,          Defaults.Operation);
-	Migrate(Edit.Primitive,          Primitive_DEPRECATED,          Defaults.Primitive);
-	Migrate(Edit.Radius,             Radius_DEPRECATED,             Defaults.Radius);
-	Migrate(Edit.Rounding,           Rounding_DEPRECATED,           Defaults.Rounding);
-	Migrate(Edit.LinePosB,           LinePosB_DEPRECATED,           Defaults.LinePosB);
-	Migrate(Edit.BoxSize,            BoxSize_DEPRECATED,            Defaults.BoxSize);
-	Migrate(Edit.bSmooths,           bSmooths_DEPRECATED,           Defaults.bSmooths);
-	Migrate(Edit.Smoothing,          Smoothing_DEPRECATED,          Defaults.Smoothing);
-	Migrate(Edit.MaterialIndex,      MaterialIndex_DEPRECATED,      Defaults.MaterialIndex);
-	Migrate(Edit.bColorsSubtraction, bColorsSubtraction_DEPRECATED, Defaults.bColorsSubtraction);
 }
 
 bool USDFSubsystem::DoesSupportWorldType( const EWorldType::Type WorldType ) const

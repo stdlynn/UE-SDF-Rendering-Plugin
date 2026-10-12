@@ -86,7 +86,12 @@ public:
 
 	uint64 GetID() const { return ID; }
 
-	void SetSettings( const USDFComponent* Source );
+	UFUNCTION(BlueprintCallable)
+	void SetAllEditProperties( const FSDFEdit& NewEdit )
+	{
+		Edit = NewEdit;
+		SetDirty();
+	}
 
 	UFUNCTION(BlueprintCallable)
 	void SetPrimitive(EPrimitive NewPrimitive)

@@ -60,7 +60,7 @@ void FSDFPlugin::StartupModule()
 
 void FSDFPlugin::ShutdownModule() {}
 
-void USDFPluginLibrary::SpawnSDF( const UObject* WorldContextObject, const FVector& Location, const USDFComponent* Settings )
+void USDFPluginLibrary::SpawnSDF( const UObject* WorldContextObject, const FVector& Location, const FSDFEdit& Settings )
 {
     UWorld* World = GEngine->GetWorldFromContextObject( WorldContextObject, EGetWorldErrorMode::LogAndReturnNull );
     if (!World) return;
@@ -71,7 +71,7 @@ void USDFPluginLibrary::SpawnSDF( const UObject* WorldContextObject, const FVect
     {
         USDFComponent* Comp = Actor->GetSDFComponent();
 
-		Comp->SetSettings( Settings );
+		Comp->SetAllEditProperties( Settings );
         Comp->SetWorldLocation( Location );
         Subsystem->RegisterSDF( *Comp );
     }
