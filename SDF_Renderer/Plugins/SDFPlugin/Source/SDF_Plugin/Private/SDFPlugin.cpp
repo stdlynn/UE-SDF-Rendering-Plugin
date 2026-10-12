@@ -60,10 +60,10 @@ void FSDFPlugin::StartupModule()
 
 void FSDFPlugin::ShutdownModule() {}
 
-void USDFPluginLibrary::SpawnSDF( const UObject* WorldContextObject, const FVector& Location, const FSDFEdit& Settings )
+ASDFActor* USDFPluginLibrary::SpawnSDF( const UObject* WorldContextObject, const FVector& Location, const FSDFEdit& Settings )
 {
     UWorld* World = GEngine->GetWorldFromContextObject( WorldContextObject, EGetWorldErrorMode::LogAndReturnNull );
-    if (!World) return;
+	if (!World) return nullptr;
 
     ASDFActor* Actor = World->SpawnActor<ASDFActor>( Location, FRotator::ZeroRotator );
     USDFSubsystem* Subsystem = World->GetSubsystem<USDFSubsystem>();
@@ -74,7 +74,10 @@ void USDFPluginLibrary::SpawnSDF( const UObject* WorldContextObject, const FVect
 		Comp->SetAllEditProperties( Settings );
         Comp->SetWorldLocation( Location );
         Subsystem->RegisterSDF( *Comp );
+        return Actor;
     }
+
+    return nullptr;
 }
 
 #undef LOCTEXT_NAMESPACE

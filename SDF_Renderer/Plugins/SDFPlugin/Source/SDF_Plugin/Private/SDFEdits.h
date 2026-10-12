@@ -99,7 +99,12 @@ public:
 		Edit.Primitive = NewPrimitive;
 		SetDirty();
 	}
-
+	
+	UFUNCTION(BlueprintCallable)
+	[[nodiscard]] float GetRadius()
+	{
+		return Edit.Radius;
+	}
 	UFUNCTION(BlueprintCallable)
 	void SetRadius(float NewRadius)
 	{

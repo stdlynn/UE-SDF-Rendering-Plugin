@@ -82,5 +82,5 @@ class SDFPLUGIN_API USDFPluginLibrary : public UBlueprintFunctionLibrary
 	GENERATED_BODY()
 public:
 	UFUNCTION(BlueprintCallable, Category = "SDFPlugin", meta = (WorldContext = "WorldContextObject"))
-	static void SpawnSDF( const UObject* WorldContextObject, const FVector& Location, const FSDFEdit& Settings );
+	static ASDFActor* SpawnSDF( const UObject* WorldContextObject, const FVector& Location, const FSDFEdit& Settings );
 };
