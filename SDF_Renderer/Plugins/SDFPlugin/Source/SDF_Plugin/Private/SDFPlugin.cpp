@@ -56,27 +56,25 @@ void FSDFPlugin::StartupModule()
             }
         });
 #endif
-}
+    }
 
 void FSDFPlugin::ShutdownModule() {}
 
-void USDFPluginLibrary::SpawnAdditive(UObject* WorldContextObject, FVector Location)
+void USDFPluginLibrary::SpawnSDF( const UObject* WorldContextObject, const FVector& Location, const USDFComponent* Settings )
 {
-    const UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull);
+    UWorld* World = GEngine->GetWorldFromContextObject( WorldContextObject, EGetWorldErrorMode::LogAndReturnNull );
     if (!World) return;
 
+    ASDFActor* Actor = World->SpawnActor<ASDFActor>( Location, FRotator::ZeroRotator );
     USDFSubsystem* Subsystem = World->GetSubsystem<USDFSubsystem>();
-    if (Subsystem)
+    if (Subsystem && Actor)
     {
-        // TODO: add additive and subtractive SDF component somewhere and read it here instead of hardcoding one
-		USDFComponent* Edit = NewObject<USDFComponent>(World->GetCurrentLevel(), USDFComponent::StaticClass());
-        Subsystem->RegisterSDF( *Edit );
+        USDFComponent* Comp = Actor->GetSDFComponent();
+
+		Comp->SetSettings( Settings );
+        Comp->SetWorldLocation( Location );
+        Subsystem->RegisterSDF( *Comp );
     }
-}
-
-void USDFPluginLibrary::SpawnSubtractive(UObject* WorldContextObject, FVector Location)
-{
-
 }
 
 #undef LOCTEXT_NAMESPACE

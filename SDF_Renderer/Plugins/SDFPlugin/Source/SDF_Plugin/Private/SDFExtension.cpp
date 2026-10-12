@@ -335,7 +335,7 @@ void FSDFExtension::UpdateSDFBuffer()
 void FSDFExtension::UpdateMaterialBuffer()
 {
 	// The buffer is not up-to-date (or doesn't exist)
-	if (not RT.MaterialsResource.bUpload || RT.Materials.Num() == 0) { return; }
+	if (not RT.MaterialsResource.bDirty) { return; }
 
 	// We need to upload the updated Material buffer
 	RT.MaterialsResource.bUpload = true;

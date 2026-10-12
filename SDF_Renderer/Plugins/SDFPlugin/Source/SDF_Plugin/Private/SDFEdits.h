@@ -19,72 +19,10 @@ enum class EPrimitive : uint8
 	Box	   UMETA( DisplayName = "Box")
 };
 
-
-UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
-class USDFComponent : public USceneComponent
+USTRUCT( BlueprintType )
+struct FSDFEdit
 {
 	GENERATED_BODY()
-
-public:
-
-	USDFComponent();
-
-	virtual void OnRegister() override;
-	virtual void OnUnregister() override;
-#if WITH_EDITOR
-	virtual void PostEditComponentMove(bool bFinished) override;
-#endif
-
-	uint64 GetID() const { return ID; }
-
-	UFUNCTION(BlueprintCallable)
-	void SetPrimitive(EPrimitive NewPrimitive)
-	{
-		Primitive = NewPrimitive;
-		SetDirty();
-	}
-
-	UFUNCTION(BlueprintCallable)
-	void SetRadius(float NewRadius)
-	{
-		Radius = NewRadius;
-		SetDirty();
-	}
-
-	void SetRounding(float NewRounding)
-	{
-		Rounding = NewRounding;
-		SetDirty();
-	}
-
-	UFUNCTION(BlueprintCallable)
-	void SetOperation(EOperation NewOperation)
-	{
-		Operation = NewOperation;
-		SetDirty();
-	}
-
-	UFUNCTION(BlueprintCallable)
-	void SetDoesSmoothing(bool bNewDoesSmoothing)
-	{
-		bSmooths = bNewDoesSmoothing;
-		SetDirty();
-	}
-
-	UFUNCTION(BlueprintCallable)
-	void SetSmoothing(float NewSmoothing)
-	{
-		Smoothing = NewSmoothing;
-		SetDirty();
-	}
-
-	UFUNCTION(BlueprintCallable)
-	void SetMaterialIndex(int NewMaterialIndex)
-	{
-		MaterialIndex = NewMaterialIndex;
-		SetDirty();
-	}
-
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shape")
 	EOperation Operation{ EOperation::Add };
@@ -129,6 +67,77 @@ public:
 		EditCondition = "Operation == EOperation::Subtract",
 		EditConditionHides))
 	bool bColorsSubtraction{ false };
+};
+
+UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
+class USDFComponent : public USceneComponent
+{
+	GENERATED_BODY()
+
+public:
+
+	USDFComponent();
+
+	virtual void OnRegister() override;
+	virtual void OnUnregister() override;
+#if WITH_EDITOR
+	virtual void PostEditComponentMove(bool bFinished) override;
+#endif
+
+	uint64 GetID() const { return ID; }
+
+	void SetSettings( const USDFComponent* Source );
+
+	UFUNCTION(BlueprintCallable)
+	void SetPrimitive(EPrimitive NewPrimitive)
+	{
+		Edit.Primitive = NewPrimitive;
+		SetDirty();
+	}
+
+	UFUNCTION(BlueprintCallable)
+	void SetRadius(float NewRadius)
+	{
+		Edit.Radius = NewRadius;
+		SetDirty();
+	}
+
+	void SetRounding(float NewRounding)
+	{
+		Edit.Rounding = NewRounding;
+		SetDirty();
+	}
+
+	UFUNCTION(BlueprintCallable)
+	void SetOperation(EOperation NewOperation)
+	{
+		Edit.Operation = NewOperation;
+		SetDirty();
+	}
+
+	UFUNCTION(BlueprintCallable)
+	void SetDoesSmoothing(bool bNewDoesSmoothing)
+	{
+		Edit.bSmooths = bNewDoesSmoothing;
+		SetDirty();
+	}
+
+	UFUNCTION(BlueprintCallable)
+	void SetSmoothing(float NewSmoothing)
+	{
+		Edit.Smoothing = NewSmoothing;
+		SetDirty();
+	}
+
+	UFUNCTION(BlueprintCallable)
+	void SetMaterialIndex(int NewMaterialIndex)
+	{
+		Edit.MaterialIndex = NewMaterialIndex;
+		SetDirty();
+	}
+
+	UPROPERTY( EditAnywhere, BlueprintReadOnly )
+	FSDFEdit Edit;
 
 protected:
 
@@ -148,21 +157,21 @@ private:
 // SDF edit representation sent to the render thread
 struct FRenderSDF
 {
-	FRenderSDF( const USDFComponent& SDFComp, const FVector3f& Pos, const FQuat& Quat )
+	FRenderSDF( const FSDFEdit& SDFEdit, const FVector3f& Pos, const FQuat& Quat )
 		: Pos{ Pos }
-		, Primitive{ SDFComp.Primitive }
+		, Primitive{ SDFEdit.Primitive }
 		, Quat{ Quat }
-		, Operation{ SDFComp.Operation }
-		, bColorsSubtraction{ SDFComp.bColorsSubtraction }
-		, bSmooths{ SDFComp.bSmooths }
-		, SmoothingStrength{ SDFComp.Smoothing }
-		, MatIdx{ static_cast<uint32>(SDFComp.MaterialIndex) }
+		, Operation{ SDFEdit.Operation }
+		, bColorsSubtraction{ SDFEdit.bColorsSubtraction }
+		, bSmooths{ SDFEdit.bSmooths }
+		, SmoothingStrength{ SDFEdit.Smoothing }
+		, MatIdx{ static_cast<uint32>(SDFEdit.MaterialIndex) }
 	{
-		switch (SDFComp.Primitive)
+		switch (SDFEdit.Primitive)
 		{
-			case EPrimitive::Sphere: Data = FVector4f(SDFComp.Radius, 0.f, 0.f, 0.f); break;
-			case EPrimitive::Line: Data = FVector4f(SDFComp.LinePosB, SDFComp.Radius); break;
-			case EPrimitive::Box: Data = FVector4f(SDFComp.BoxSize, SDFComp.Rounding); break;
+			case EPrimitive::Sphere: Data = FVector4f(SDFEdit.Radius, 0.f, 0.f, 0.f); break;
+			case EPrimitive::Line: Data = FVector4f(SDFEdit.LinePosB, SDFEdit.Radius); break;
+			case EPrimitive::Box: Data = FVector4f(SDFEdit.BoxSize, SDFEdit.Rounding); break;
 			default: Data = FVector4f(0.f, 0.f, 0.f, 0.f); break;
 		}
 	}
@@ -225,6 +234,8 @@ class ASDFActor : public AActor
 public:
 
 	ASDFActor();
+
+	[[nodiscard]] USDFComponent* GetSDFComponent() const { return SDFComp; }
 
 private:
 
