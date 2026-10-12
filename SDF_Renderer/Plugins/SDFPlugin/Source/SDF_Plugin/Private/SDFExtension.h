@@ -101,7 +101,9 @@ private:
 	{
 		TWeakObjectPtr<UWorld> World;
 		FSettings Settings;
+		uint64 SettingsVersion;
 		TArray<FSDFMaterial> Materials;
+		uint64 MaterialsVersion;
 	} GT{};
 
 	// Render thread

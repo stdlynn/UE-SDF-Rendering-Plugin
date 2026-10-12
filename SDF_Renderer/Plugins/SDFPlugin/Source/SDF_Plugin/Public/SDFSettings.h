@@ -192,14 +192,16 @@ public:
 			UIMax = "0.1") )
 	float GPUUnitScale{ 1e-2f };
 
-	// True if any setting is dirty (NOT materials)
-	bool bSettingDirty = true;
+	// Handles settings only, not materials
+	// Set to 1 so it doesn't match 0 on the first frame
+	uint64 SettingsVersion { 1 };
 	
 	UPROPERTY(EditAnywhere, Config, Category = "Rendering",
 		meta = (DisplayName = "Materials"))
 	TArray<FSDFMaterial> Materials;
 
-	bool bMaterialsDirty = true;
+	// Handles materials only
+	uint64 MaterialsVersion { 1 };
 
 	virtual FName GetCategoryName() const override { return TEXT( "Plugins" ); }
 

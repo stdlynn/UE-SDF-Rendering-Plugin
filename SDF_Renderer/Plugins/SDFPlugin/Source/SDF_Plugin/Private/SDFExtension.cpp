@@ -107,23 +107,24 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	USDFSettings* SDFSettings{ GetMutableDefault<USDFSettings>() };
 
 	// Check if the materials are dirty
-	if (SDFSettings->bMaterialsDirty)
+	if (SDFSettings->MaterialsVersion != GT.MaterialsVersion)
 	{
 		// Store materials
+		GT.MaterialsVersion = SDFSettings->MaterialsVersion;
 		GT.Materials = SDFSettings->Materials;
-		SDFSettings->bMaterialsDirty = false;
 
 		auto TransferMaterials{ [this, Materials = GT.Materials]( FRHICommandList& ) mutable
 		{
 			RT.Materials = Materials;
+			RT.MaterialsResource.bDirty = true;
 		} };
 
-		ENQUEUE_RENDER_COMMAND(SDFSettingsThreadTransfer)(TransferMaterials);
+		ENQUEUE_RENDER_COMMAND(SDFSettingsThreadTransfer)( TransferMaterials );
 	}
 
 	// Check if any of the settings are dirty
-	if (not SDFSettings->bSettingDirty && not GT.Settings.bUnitScaleDirty) { return; }
-	SDFSettings->bSettingDirty = false;
+	if (SDFSettings->SettingsVersion == GT.SettingsVersion && not GT.Settings.bUnitScaleDirty) { return; }
+	GT.SettingsVersion = SDFSettings->SettingsVersion;
 
 	// Store settings to compare next frame
 	// Convert the unit scale where necessary
@@ -310,6 +311,7 @@ void FSDFExtension::UpdateSDFBuffer()
 
 	// We need to upload the updated SDF buffer
 	RT.SDFResources.bUpload = true;
+	RT.SDFResources.bDirty = false;
 
 	// If the buffer hasn't been allocated or isn't large enough
 	// If not, we simply overwrite the current data through the upload call
@@ -333,10 +335,11 @@ void FSDFExtension::UpdateSDFBuffer()
 void FSDFExtension::UpdateMaterialBuffer()
 {
 	// The buffer is not up-to-date (or doesn't exist)
-	if (not RT.MaterialsResource.bDirty) { return; }
+	if (not RT.MaterialsResource.bUpload || RT.Materials.Num() == 0) { return; }
 
 	// We need to upload the updated Material buffer
 	RT.MaterialsResource.bUpload = true;
+	RT.MaterialsResource.bDirty = false;
 
 	// If the buffer hasn't been allocated or isn't large enough
 	// If not, we simply overwrite the current data through the upload call
