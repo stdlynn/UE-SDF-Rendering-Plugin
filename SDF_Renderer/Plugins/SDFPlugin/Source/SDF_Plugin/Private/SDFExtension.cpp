@@ -192,6 +192,8 @@ void FSDFExtension::TransferSDFsToRenderThread()
 			// Copy over the SDF
 			const int32 Idx{ RT.SDFs.Emplace( Pair.Value, Pair.Key, RT.Settings.GPUUnitScale ) };
 			// Copy over the AABB
+			// TODO: store AABB centroid
+			// TODO: and don't use a TPair
 			RT.SDFBounds.Emplace( Pair.Value.Bounds * RT.Settings.GPUUnitScale );
 		}
 		RT.SDFResources.bDirty = true;

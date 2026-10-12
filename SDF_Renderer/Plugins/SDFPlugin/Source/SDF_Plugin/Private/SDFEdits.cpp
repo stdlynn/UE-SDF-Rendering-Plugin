@@ -51,11 +51,13 @@ void FSDF::CalcBounds()
 			const FVector3f HalfExtent{ GetBoxHalfExtent() - SmoothDist };
 
 			// [CREDITS] Graphics Gems by Jim Arvo
+			// Rotate locally (note that Unreal Engine uses row-major)
 			const FMatrix Mat{ Quat.ToMatrix() };
 			const FVector3f Col0{ FMath::Abs( FVector3f{ Mat.GetColumn( 0 ) } ) * HalfExtent };
 			const FVector3f Col1{ FMath::Abs( FVector3f{ Mat.GetColumn( 1 ) } ) * HalfExtent };
 			const FVector3f Col2{ FMath::Abs( FVector3f{ Mat.GetColumn( 2 ) } ) * HalfExtent };
 			const FVector3f WorldSpaceHalfExtent{ (Col0.X + Col0.Y + Col0.Z), (Col1.X + Col1.Y + Col1.Z), (Col2.X + Col2.Y + Col2.Z) };
+			// Set world-space bounds
 			Bounds.Min = Pos - WorldSpaceHalfExtent;
 			Bounds.Max = Pos + WorldSpaceHalfExtent;
 

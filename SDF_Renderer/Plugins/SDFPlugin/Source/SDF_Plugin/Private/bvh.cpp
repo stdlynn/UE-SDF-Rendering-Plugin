@@ -2,29 +2,68 @@
 
 #include "SDFEdits.h"
 
+bool FSDFBVH::Intersect( const FRay3f& Ray )
+{
+	// Don't do intersection tests if there are no primitives
+	if (not NumEdits) { return false; }
+
+	const FNode* Node{ &Nodes[ROOT_IDX] };
+	while (true)
+	{
+		if (not Node->Intersect( Ray ).bHit) { continue; }
+		if (Node->IsLeaf())
+		{
+			for (uint32 i{ 0 }; i < Node->NumEdits; ++i)
+			{
+				// TODO: Intersect SDFs
+			}
+		}
+		else
+		{
+			// intersect both children
+		}
+	}
+}
+
+FSDFBVH::FNode::FHitResult FSDFBVH::FNode::Intersect( const FRay3f& Ray ) const
+{
+	const FVector3f InvDir
+	{ 
+		1.0f / Ray.Direction.X,
+		1.0f / Ray.Direction.Y,
+		1.0f / Ray.Direction.Z
+	};
+	const FVector3f TToMin = (BoundsMin - Ray.Origin) * InvDir;
+	const FVector3f TToMax = (BoundsMax - Ray.Origin) * InvDir;
+	const FVector3f TMin = FMath::Min( TToMin, TToMax );
+	const FVector3f TMax = FMath::Max( TToMin, TToMax );
+	const float TNear = FMath::Max( FMath::Max3( TMin.X, TMin.Y, TMin.Z ), 0.0f );
+	const float TFar = FMath::Min( FMath::Min3( TMax.X, TMax.Y, TMax.Z ), TNumericLimits<float>::Max() );
+
+	return FHitResult{ TNear, TNear <= TFar };
+}
+
 void FSDFBVH::Build( const TArray<FGPUSDF>& Edits )
 {
-	// TODO: deallocate if NumEdits != Edits.Num()
-	// TODO: allocate if deallocated and Edits.Num() > 0
-	// TODO: - Including (de)allocating 'EditIndices'
-	// TODO: return if Edits.Num() == 0
-
-	if (Nodes)
+	const bool bRealloc{ NumEdits != Edits.Num() };
+	if (bRealloc)
 	{
-		// TODO: free64
-		Nodes = nullptr;
+		// TODO: free Nodes & EditIndices
+		NumEdits = Edits.Num();
 	}
-	if (Edits.Num())
+	if (not NumEdits) { return; }
+	if (bRealloc)
 	{
-		// TODO: new64
+		// TODO: new64 & EditIndices
+		FAlignedAllocator;
 	}
+	for (uint32 i{ 0 }; i < NumEdits; ++i) { EditIndices[i] = i; }
 
-	if (not Edits.Num()) { return; }
-	if (NumEdits)
+
 
 	const FAABB* AABBs{}; // TODO
 
-	FNode& Root{ GetRoot() };
+	FNode& Root{ Nodes[ROOT_IDX] };
 	Root.LeftChildIdx = 0;
 	Root.FirstEdit = 0;
 	Root.NumEdits = NumEdits;
@@ -103,6 +142,7 @@ void FSDFBVH::FNode::Refit( const FAABB* AABBs )
 	BoundsMax = FVector3f{ TNumericLimits<float>::Max() };
 	for (uint32 i{ 0 }; i < NumEdits; ++i)
 	{
+		// TODO: access through EditIndices
 		const FAABB& Bounds{ AABBs[FirstEdit + i] };
 		BoundsMin = FMath::Min( BoundsMin, Bounds.Min );
 		BoundsMax = FMath::Max( BoundsMax, Bounds.Max );

@@ -113,7 +113,7 @@ private:
 		TArray<FSDFMaterial> Materials;
 		FSDFResources MaterialsResource;
 		TArray<FGPUSDF> SDFs;
-		TArray<FAABB> SDFBounds;
+		TArray<TPair<FAABB, FVector3f>> SDFBounds; // AABB and centroid
 		FSDFResources SDFResources;
 		FBrickmapBuilder BrickmapBuilder;
 	} RT{};

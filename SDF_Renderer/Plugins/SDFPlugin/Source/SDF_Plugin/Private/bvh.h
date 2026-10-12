@@ -1,5 +1,6 @@
 #pragma once
 
+
 struct FGPUSDF;
 struct FAABB;
 class FSDFBVH
@@ -8,6 +9,13 @@ public:
 
 	struct alignas( 32 ) FNode
 	{
+		struct FHitResult
+		{
+			float T;
+			bool bHit;
+		};
+
+		FHitResult Intersect( const FRay3f& Ray ) const;
 		void Refit( const FAABB* AABBs );
 		bool IsLeaf() const { return NumEdits; }
 
@@ -18,6 +26,7 @@ public:
 	};
 	static_assert( sizeof( FNode ) == 32 );
 
+	bool Intersect( const FRay3f& Ray );
 	void Build( const TArray<FGPUSDF>& Edits );
 
 private:
@@ -25,7 +34,6 @@ private:
 	static constexpr uint32 ROOT_IDX{ 0u };
 
 	void Subdivide( FNode& Node );
-	FNode& GetRoot() { return Nodes[ROOT_IDX]; }
 
 	uint32* EditIndices{ nullptr };
 	FNode* Nodes{ nullptr };

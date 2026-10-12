@@ -159,20 +159,32 @@ private:
 struct FSDF
 {
 	FSDF( const USDFComponent& SDFComp, const FVector3f& Pos, const FQuat& Quat )
-		: Pos{ Pos }
-		, Primitive{ SDFComp.Primitive }
-		, Quat{ Quat }
-		, Operation{ SDFComp.Operation }
-		, bColorsSubtraction{ SDFComp.bColorsSubtraction }
+		: SmoothingStrength{ SDFComp.Smoothing }
 		, bSmooths{ SDFComp.bSmooths }
-		, SmoothingStrength{ SDFComp.Smoothing }
+		, bColorsSubtraction{ SDFComp.bColorsSubtraction }
+		, Primitive{ SDFComp.Primitive }
+		, Operation{ SDFComp.Operation }
+		, Pos{ Pos }
 		, MatIdx{ static_cast<uint32>(SDFComp.MaterialIndex) }
+		, Quat{ Quat }
 	{
 		switch (SDFComp.Primitive)
 		{
-			case EPrimitive::Sphere: Data = FVector4f(SDFComp.Radius, 0.f, 0.f, 0.f); break;
-			case EPrimitive::Line: Data = FVector4f(SDFComp.LinePosB, SDFComp.Radius); break;
-			case EPrimitive::Box: Data = FVector4f(SDFComp.BoxSize, SDFComp.Rounding); break;
+			case EPrimitive::Sphere: 
+			{
+				Data = FVector4f(SDFComp.Radius, 0.f, 0.f, 0.f); 
+				break;
+			}
+			case EPrimitive::Line: 
+			{
+				Data = FVector4f(SDFComp.LinePosB, SDFComp.Radius); 
+				break;
+			}
+			case EPrimitive::Box: 
+			{
+				Data = FVector4f(SDFComp.BoxSize, SDFComp.Rounding);
+				break;
+			}
 			default: Data = FVector4f(0.f, 0.f, 0.f, 0.f); break;
 		}
 		CalcBounds();
@@ -186,15 +198,15 @@ struct FSDF
 	[[nodiscard]] float GetBoxRounding() const { return Data.W; }
 
 	FAABB Bounds;
-	FVector3f Pos;
-	EPrimitive Primitive;
-	FQuat Quat; // Data1 in FGPUSDF
-	EOperation Operation;
-	bool bColorsSubtraction;
-	FVector4f Data; // Data0 in FGPUSDF
-	bool bSmooths;
 	float SmoothingStrength;
+	bool bSmooths;
+	bool bColorsSubtraction;
+	EPrimitive Primitive;
+	EOperation Operation;
+	FVector3f Pos;
 	uint32 MatIdx;
+	FQuat Quat; // Data1 in FGPUSDF
+	FVector4f Data; // Data0 in FGPUSDF
 };
 
 // GPU SDF edits
