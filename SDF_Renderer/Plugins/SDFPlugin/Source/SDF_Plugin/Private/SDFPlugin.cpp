@@ -5,6 +5,7 @@
 
 // Plugin
 #include "SDFPlugin.h"
+#include "SDFExtension.h"
 
 // UE
 #include "Interfaces/IPluginManager.h"
@@ -58,6 +59,25 @@ void FSDFPlugin::StartupModule()
 }
 
 void FSDFPlugin::ShutdownModule() {}
+
+void USDFPluginLibrary::SpawnAdditive(UObject* WorldContextObject, FVector Location)
+{
+    const UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull);
+    if (!World) return;
+
+    USDFSubsystem* Subsystem = World->GetSubsystem<USDFSubsystem>();
+    if (Subsystem)
+    {
+        // TODO: add additive and subtractive SDF component somewhere and read it here instead of hardcoding one
+		USDFComponent* Edit = NewObject<USDFComponent>(World->GetCurrentLevel(), USDFComponent::StaticClass());
+        Subsystem->RegisterSDF( *Edit );
+    }
+}
+
+void USDFPluginLibrary::SpawnSubtractive(UObject* WorldContextObject, FVector Location)
+{
+
+}
 
 #undef LOCTEXT_NAMESPACE
 

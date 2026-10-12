@@ -239,10 +239,6 @@
 			"Enabled": false
 		},
 		{
-			"Name": "EnhancedInput",
-			"Enabled": false
-		},
-		{
 			"Name": "ExampleDeviceProfileSelector",
 			"Enabled": false
 		},
