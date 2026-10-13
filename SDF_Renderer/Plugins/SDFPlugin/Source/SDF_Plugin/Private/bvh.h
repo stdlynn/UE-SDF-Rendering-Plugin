@@ -61,7 +61,7 @@ private:
 
 	void Subdivide( FNode& Node, const TMap<uint64, FSDF>& Edits );
 	void RefitNode( FNode& Node, const TMap<uint64, FSDF>& Edits ) const;
-	static uint32 NumNodesForNObjects( uint32 N ) { return 2 * N; }
+	static uint32 NumNodesForNObjects( uint32 N ) { return FMath::Min( 2u * N, 2u ); }
 
 	uint32* EditIndices{ nullptr };
 	FNode* Nodes{ nullptr };
