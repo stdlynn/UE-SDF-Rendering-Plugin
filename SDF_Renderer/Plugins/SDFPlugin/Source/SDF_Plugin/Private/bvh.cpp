@@ -97,30 +97,30 @@ float FSDFBVH::FNode::Intersect( const FRay& Ray ) const
 
 void FSDFBVH::Build( const TMap<uint64, FSDF>& Edits )
 {
-	// Reset resources
-	const bool bRealloc{ NumEdits != Edits.Num() };
-	if (bRealloc)
-	{
-		FMemory::Free( Nodes );
-		delete[] EditIndices;
-		Nodes = nullptr;
-		EditIndices = nullptr;
-		NumEdits = Edits.Num();
-	}
-	if (not NumEdits) { return; }
-	if (bRealloc)
-	{
-		Nodes = static_cast<FNode*>(FMemory::Malloc( NumNodesForNObjects( NumEdits ) * sizeof( FNode ), 64u ));
-		EditIndices = new uint32[NumEdits];
-	}
-	for (uint32 i{ 0 }; i < NumEdits; ++i) { EditIndices[i] = i; }
+	NumEdits = Edits.Num();
+	
+	// Delete old resources
+	FMemory::Free( Nodes );
+	delete[] EditIndices;
+	Nodes = nullptr;
+	EditIndices = nullptr;
+	
+	// Allocate nodes
+	Nodes = static_cast<FNode*>(FMemory::Malloc( NumNodesForNObjects( NumEdits ) * sizeof( FNode ), 64u ));
+	NodesUsed = 2u; // Skip the 2nd node so children share a cacheline
 
 	// Initialize root node
 	FNode& Root{ Nodes[ROOT_IDX] };
 	Root.LeftFirst = 0u;
 	Root.NumEdits = NumEdits;
-	NodesUsed = 2u; // Skip the 2nd node so children share a cacheline
 	RefitNode( Root, Edits );
+
+	// No need to subdivide if there's no edits
+	if (not NumEdits) { return; }
+
+	// Allocate and initialize the edit indices
+	EditIndices = new uint32[NumEdits];
+	for (uint32 i{ 0 }; i < NumEdits; ++i) { EditIndices[i] = i; }
 
 	// Recursively subdivide
 	Subdivide( Root, Edits );
@@ -192,7 +192,7 @@ void FSDFBVH::RefitNode( FNode& Node, const TMap<uint64, FSDF>& Edits ) const
 	const uint32 EndIdx{ Node.LeftFirst + Node.NumEdits };
 	for (uint32 i{ Node.LeftFirst }; i < EndIdx; ++i)
 	{
-		const FSetElementId BoundsIdx{ static_cast<FSetElementId>(EditIndices[i]) };
+		const FSetElementId BoundsIdx{ FSetElementId::FromInteger( EditIndices[i] ) };
 		Node.BoundsMin = Node.BoundsMin.ComponentMin( Edits.Get( BoundsIdx ).Value.Bounds.Min );
 		Node.BoundsMax = Node.BoundsMax.ComponentMin( Edits.Get( BoundsIdx ).Value.Bounds.Max );
 	}
@@ -200,25 +200,24 @@ void FSDFBVH::RefitNode( FNode& Node, const TMap<uint64, FSDF>& Edits ) const
 
 FSDFBVH& FSDFBVH::operator=( const FSDFBVH& Other )
 {
-	const uint32 NumNodes{ NumNodesForNObjects( NumEdits ) };
-	if (NumEdits != Other.NumEdits)
-	{
-		FMemory::Free( Nodes );
-		delete[] EditIndices;
-		Nodes = nullptr;
-		EditIndices = nullptr;
-		NodesUsed = Other.NodesUsed;
-		NumEdits = Other.NumEdits;
+	NumEdits = Other.NumEdits;
 
-		if (NumEdits)
-		{
-			Nodes = static_cast<FNode*>(FMemory::Malloc( NumNodes * sizeof( FNode ), 64u ));
-			EditIndices = new uint32[NumEdits];
-		}
-	}
-	if (NumEdits)
+	// Free old resources
+	FMemory::Free( Nodes );
+	delete[] EditIndices;
+	Nodes = nullptr;
+	EditIndices = nullptr;
+
+	// Allocate and copy nodes
+	const uint32 NumNodes{ NumNodesForNObjects( NumEdits ) };
+	Nodes = static_cast<FNode*>(FMemory::Malloc( NumNodes * sizeof( FNode ), 64u ));
+	FMemory::Memcpy( Nodes, Other.Nodes, NumNodes * sizeof( FNode ) );
+	NodesUsed = 2u; // Skip the 2nd node so children share a cacheline
+
+	// Allocate and copy edit indices (if applicable)
+	if (NumNodes)
 	{
-		FMemory::Memcpy( Nodes, Other.Nodes, NumNodes * sizeof( FNode ) );
+		EditIndices = new uint32[NumEdits];
 		FMemory::Memcpy( EditIndices, Other.EditIndices, NumEdits * sizeof( uint32 ) );
 	}
 
