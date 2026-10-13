@@ -1,3 +1,3 @@
 "./Dev/Windows/SDF_Renderer.exe" -windowed -ResX=2560 -ResY=1440 ^
   -ExecCmds="r.VSync 0, t.MaxFPS 0, r.ScreenPercentage 100, stat unit, setbind F9 ProfileGPU" ^
-  -DPCVars="r.SDF.ProfileCount=100"
+  -DPCVars="r.SDF.ProfileCount=0"
