@@ -52,8 +52,8 @@ void FSDF::CalcBounds()
 	{
 		case EPrimitive::Sphere: 
 		{
-			Bounds.Min = Pos - GetLineRadius();
-			Bounds.Max = Pos + GetLineRadius();
+			Bounds.Min = Pos - GetSphereRadius();
+			Bounds.Max = Pos + GetSphereRadius();
 			break;
 		}
 		case EPrimitive::Line: 
