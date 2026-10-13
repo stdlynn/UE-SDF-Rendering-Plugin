@@ -133,7 +133,7 @@ bool IsBrickAllocated( uint3 GridCell ) { return IsBrickAllocated( GridCellToGri
 FSDFMaterial SampleMaterial( float3 Pos )
 {
 	FSDFMaterial MatBlended = Materials[TerrainMatIdx];
-	float TerrainDist = DistFn::FBM( Pos, GetTerrainParams() );
+	float TerrainDist = DistFn::FBM( Pos );
 	float ClosestDist = TerrainDist;
 
 	for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)

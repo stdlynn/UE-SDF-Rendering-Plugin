@@ -19,48 +19,6 @@ float ClippingSmoothing;
 uint bSimplex;
 uint TerrainMatIdx;
 
-struct FTerrainParams
-{
-	float3 RotAxis;
-	float RotAngle;
-    float3 PlanePos;
-	float VerticalNoiseOffset;
-    float MinNoiseScale;
-    uint NumOctaves;
-    float Frequency;
-    float Lacunarity;
-    float Amplitude;
-    float Persistence;
-    float Inflation;
-    float InflationGain;
-	float SampleSmoothing;
-    float UnionSmoothing;
-    float ClippingSmoothing;
-	bool bSimplex;
-};
-
-FTerrainParams GetTerrainParams()
-{
-	FTerrainParams Params;
-	Params.RotAxis = RotAxis;
-	Params.RotAngle = RotAngle;
-	Params.PlanePos = PlanePos;
-	Params.VerticalNoiseOffset = VerticalNoiseOffset;
-	Params.NumOctaves = NumOctaves;
-	Params.Frequency = Frequency;
-	Params.Lacunarity = Lacunarity;
-	Params.Amplitude = Amplitude;
-	Params.Persistence = Persistence;
-	Params.Inflation = Inflation;
-	Params.InflationGain = InflationGain;
-	Params.SampleSmoothing = SampleSmoothing;
-	Params.UnionSmoothing = UnionSmoothing;
-	Params.ClippingSmoothing = ClippingSmoothing;
-	Params.MinNoiseScale = MinNoiseScale;
-	Params.bSimplex = bSimplex > 0;
-	return Params;
-}
-
 // [CREDITS] https://www.shadertoy.com/view/sfXXzX
 uint VMulU32U24( uint a, uint b ) { return (a & 0x00ffffffu) * (b & 0x00ffffffu); }
 float SimpleHash32V3( uint3 Seed )
@@ -166,7 +124,7 @@ float3x3 GetRowRotMatrix( float3 RotAxis, float RotAngle )
 
 namespace DistFn
 {
-	// Calculating the maximum (theoretical) height of the terrain
+	// Analytically calculating the maximum (theoretical) height of the terrain
 	// To reach this height:
 	// - A column of spheres needs to line up perfectly vertically
 	// - Each sphere must be exactly touching the ones below and above it
@@ -197,104 +155,106 @@ namespace DistFn
 	// (Persistence == 1) 'PersistenceN = N'
 	//
 	// The maximum height of the terrain is 'PlanePos.z + InflationN + SmoothingN'
-	float FBM( float3 Pos, FTerrainParams Params, float PixelSize = 0.0 )
+	float FBM( float3 Pos, float PixelSize = 0.0 )
     {
 		// Sample from a base (plane) SDF to get our initial distance field
 		// The octaves will subsequently add noise to said field
-		float Dist = Pos.z - Params.PlanePos.z;
+		float Dist = Pos.z - PlanePos.z;
 
 		// Changing the frequency should only scale the noise, not modify it
 		// Thus, we must make the amplitude relative to the frequency (and move it into world space)
 		// For (e.g.) half the frequency (double the space for a sphere), we have twice the diameter
-		Params.Amplitude /= Params.Frequency;
+		float AmplitudeN = Amplitude / Frequency;
 		// The distance between grid points is 1, but for Simplex noise the distance between the vertices is smaller,
 		// so we have to scale the amplitude by said distance to compensate, if we're using Simplex noise
-		if (Params.bSimplex) { Params.Amplitude *= sqrt( 3 ) / 2.0; }
+		if (bSimplex) { AmplitudeN *= sqrt( 3 ) / 2.0; }
 
 		// Move the sample position into the coordinate space of the plane
 		// We do this so the noise is stable when moving the plane
-		Pos -= Params.PlanePos;
+		Pos -= PlanePos;
 		
 		// Offset the noise vertically (the only axis on which it is not possible through 'PlanePos')
 		// The offset ranges [-0.5, 0.5], relative to the diameter for the first octave of noise
-		Pos.z -= Params.VerticalNoiseOffset * Params.Amplitude;
+		Pos.z -= VerticalNoiseOffset * AmplitudeN;
 		// The inflation ranges [0, 1] and should map to the minimum and maximum height of the first octave
 		// Adjust for/multiply by the percentage of the sphere above the terrain
-		Params.Inflation *= Params.VerticalNoiseOffset + 0.5;
+		float InflationN = Inflation * (VerticalNoiseOffset + 0.5);
 
 		// The sample position is scaled by 'Frequency * Lacunarity^i'
 		// Apply the frequency scaling, as it doesn't depend on the octave
-		Pos *= Params.Frequency;
+		Pos *= Frequency;
 
 		// Instead of directly applying the lacunarity,
 		// we integrate it into a matrix that also has rotation,
 		// to avoid patterns in our noise
-		const float3x3 RotMatrix = GetRowRotMatrix( Params.RotAxis, Params.RotAngle );
-		const float3x3 LacunarityMatrix = RotMatrix * Params.Lacunarity;
+		const float3x3 RotMatrix = GetRowRotMatrix( RotAxis, RotAngle );
+		const float3x3 LacunarityMatrix = RotMatrix * Lacunarity;
+		// Keep track of the current octave's frequency so we can convert noise to world space
+		float FrequencyN = Frequency;
 
 		// Apply a layer of noise for each octave
-		[loop] for (uint i = 0; i < Params.NumOctaves; ++i)
+		[loop] for (uint i = 0; i < NumOctaves; ++i)
 		{
 			// Band-limit the samples
 			// Attempting to render detail smaller than a pixel introduces aliasing,
 			// so stop adding octaves once the sphere diameter is smaller than a pixel to avoid artefacts
-			if (Params.Amplitude < PixelSize) { break; }
+			if (AmplitudeN < PixelSize) { break; }
 
 			// The local-space (maximum) sample diameter for this octave
-			const float LocalDiameter = Params.Amplitude * Params.Frequency;
+			const float LocalDiameterN = AmplitudeN * FrequencyN;
 
 			// We sample from an infinite grid of spheres, but only want those closest to the terrain to add to it
 			// Our inflation distance should therefore not be any higher than the maximum diameter of a sample sphere
 			// The base inflation ranges [0, 1], relative to the sphere diameter
 			// Therefore we multiply said base by this octave's (maximum) sphere diameter
-			const float Inflation = Params.Inflation * Params.Amplitude;
+			const float InflationDistN = InflationN * AmplitudeN;
 			// We want the smoothing factors/distances to apply similar smoothing regardless of the sphere diameter
 			// Therefore we multiply a base value by this octave's maximum sphere diameter
-			const float ClippingSmoothing = Params.ClippingSmoothing * Params.Amplitude;
-			const float UnionSmoothing = Params.UnionSmoothing * Params.Amplitude;
+			const float ClippingSmoothingN = ClippingSmoothing * AmplitudeN;
+			const float UnionSmoothingN = UnionSmoothing * AmplitudeN;
 			// 'SampleSmoothing' is used in local space, so multiply it by the local diameter instead
-			const float SampleSmoothing = Params.SampleSmoothing * LocalDiameter;
+			const float SampleSmoothingN = SampleSmoothing * LocalDiameterN;
 			
             // We simulate an infinite grid of spheres (through domain repetition)
 			// There is a sphere on every unit boundary in local space
 			// The local distance is scaled by 'Frequency * Lacunarity^i'
 			// The local unit scale has an inverse relationship with the frequency
 			// The higher the frequency, the smaller the local unit scale, resulting in more spheres per world-space unit
-			const float LocalSampleDist = Params.bSimplex
-											  ? SampleSimplexSpheres( Pos, LocalDiameter, Params.MinNoiseScale, SampleSmoothing )
-											  : SampleGridSpheres( Pos, LocalDiameter, Params.MinNoiseScale, SampleSmoothing );
+			const float LocalSampleDistN = (bSimplex > 0)
+										   ? SampleSimplexSpheres( Pos, LocalDiameterN, MinNoiseScale, SampleSmoothingN )
+										   : SampleGridSpheres( Pos, LocalDiameterN, MinNoiseScale, SampleSmoothingN );
 			// Convert the distance to world space
-			const float SampleDist = LocalSampleDist / Params.Frequency;
+			const float SampleDistN = LocalSampleDistN / FrequencyN;
 
 			// We cannot inflate the current distance field by a factor/through multiplication,
 			// since the result wouldn't be a true SDF, as the gradient's magnitude wouldn't be 1 at all points
 			// Thus, we must subtract the distance by a set amount as a way of inflating the SDF
-			const float InflatedDist = Dist - Inflation;
+			const float InflatedDist = Dist - InflationDistN;
 			// Calculate the distance field of the intersection between the sampled distance and the inflated terrain
 			// We use this to mask out any noise not within distance of the terrain (as per the previous octaves)
-			const float ClippedDist = OpSmoothIntersect( InflatedDist, SampleDist, ClippingSmoothing );
+			const float ClippedDist = OpSmoothIntersect( InflatedDist, SampleDistN, ClippingSmoothingN );
 			// Add the (masked-out) layer of noise onto our current terrain distance field
 			// We do this through by taking the minimum, as to not disturb the gradient's magnitude
-			Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothing );
+			Dist = OpSmoothUnion( Dist, ClippedDist, UnionSmoothingN );
 
 			// The sample position is scaled by 'Frequency * Lacunarity^i'
 			Pos = mul( Pos, LacunarityMatrix );
 			// Our sampled distance fields won't be true SDFs, 
 			// as scaling causes the gradient's magnitude to no longer be 1 at all points
 			// We keep track of the current scaling (frequency), so we can undo it after sampling
-			Params.Frequency *= Params.Lacunarity;
+			FrequencyN *= Lacunarity;
 			// The amplitude is the maximum diameter of a sample sphere
-			Params.Amplitude *= Params.Persistence;
+			AmplitudeN *= Persistence;
 			// Subsequent octaves have more frequent noise/spheres, so we need to adjust our clipping mask size
-			Params.Inflation *= Params.InflationGain;
+			InflationN *= InflationGain;
 			
 			// Visualizations (move above octave setup)
 			continue;
-			if (i == Params.NumOctaves - 1) { return SampleDist; } // Visualize the last set of spheres
-			if (i == Params.NumOctaves - 1) { return ClippedDist; } // Visualize the last layer of noise
-			if (i == Params.NumOctaves - 1) { return InflatedDist; } // Visualize the second to last layer inflated
+			if (i == NumOctaves - 1) { return SampleDistN; } // Visualize the last set of spheres
+			if (i == NumOctaves - 1) { return ClippedDist; } // Visualize the last layer of noise
+			if (i == NumOctaves - 1) { return InflatedDist; } // Visualize the second to last layer inflated
 			// The viewport and render resolutions need to be the same to make the band-limiting visualization work
-			if (Params.Amplitude < PixelSize * 200.0) { return ClippedDist; } // Visualize the band-limiting
+			if (AmplitudeN < PixelSize * 200.0) { return ClippedDist; } // Visualize the band-limiting
 		}
 		return Dist;
     }

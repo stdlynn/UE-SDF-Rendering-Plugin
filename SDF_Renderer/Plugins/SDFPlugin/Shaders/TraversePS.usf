@@ -42,18 +42,18 @@ float3 GetAtlasNormal( float3 Pos, float3 BoundsMin )
 					  K.yxy * GetAtlasDistClamped( Pos + (K.yxy * H), BoundsMin ) +
 					  K.xxx * GetAtlasDistClamped( Pos + (K.xxx * H), BoundsMin ) );
 }
-float3 GetTerrainNormal( float3 Pos, FTerrainParams Params, float PixelSize )
+float3 GetTerrainNormal( float3 Pos, float PixelSize )
 {
 	// TODO: this calculates the world-space diameter of the noise (for simplex it would be slightly smaller)
 	// TODO: use this to calculate H automatically
 	// TODO: I have no clue why the UnitScale x100 has to be here
-	const float NoiseSize = Params.Amplitude * pow( Params.Persistence, max( Params.NumOctaves, 1 ) - 1 ) / Params.Frequency / 100.;
+	const float NoiseSize = Amplitude * pow( Persistence, max( NumOctaves, 1 ) - 1 ) / Frequency / 100.;
 	
 	const float2 K = float2( 1, -1 );
-	return normalize( K.xyy * DistFn::FBM( Pos + (K.xyy * TerrainDerivativeH), Params, PixelSize ) +
-					  K.yyx * DistFn::FBM( Pos + (K.yyx * TerrainDerivativeH), Params, PixelSize ) +
-					  K.yxy * DistFn::FBM( Pos + (K.yxy * TerrainDerivativeH), Params, PixelSize ) +
-					  K.xxx * DistFn::FBM( Pos + (K.xxx * TerrainDerivativeH), Params, PixelSize ) );
+	return normalize( K.xyy * DistFn::FBM( Pos + (K.xyy * TerrainDerivativeH), PixelSize ) +
+					  K.yyx * DistFn::FBM( Pos + (K.yyx * TerrainDerivativeH), PixelSize ) +
+					  K.yxy * DistFn::FBM( Pos + (K.yxy * TerrainDerivativeH), PixelSize ) +
+					  K.xxx * DistFn::FBM( Pos + (K.xxx * TerrainDerivativeH), PixelSize ) );
 }
 float3 GetNormal( float3 Pos )
 {
@@ -63,26 +63,25 @@ float3 GetNormal( float3 Pos )
 					  K.yxy * MapScene( Pos + (K.yxy * DerivativeH) ) +
 					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH) ) );
 }
-float3 GetNormalCombined( float3 Pos, FTerrainParams Params )
+float3 GetNormalCombined( float3 Pos )
 {
 	const float2 K = float2( 1, -1 );
-	return normalize( K.xyy * MapScene( Pos + (K.xyy * DerivativeH), DistFn::FBM( Pos + (K.xyy * DerivativeH), Params ) ) +
-					  K.yyx * MapScene( Pos + (K.yyx * DerivativeH), DistFn::FBM( Pos + (K.yyx * DerivativeH), Params ) ) +
-					  K.yxy * MapScene( Pos + (K.yxy * DerivativeH), DistFn::FBM( Pos + (K.yxy * DerivativeH), Params ) ) +
-					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH), DistFn::FBM( Pos + (K.xxx * DerivativeH), Params ) ) );
+	return normalize( K.xyy * MapScene( Pos + (K.xyy * DerivativeH), DistFn::FBM( Pos + (K.xyy * DerivativeH) ) ) +
+					  K.yyx * MapScene( Pos + (K.yyx * DerivativeH), DistFn::FBM( Pos + (K.yyx * DerivativeH) ) ) +
+					  K.yxy * MapScene( Pos + (K.yxy * DerivativeH), DistFn::FBM( Pos + (K.yxy * DerivativeH) ) ) +
+					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH), DistFn::FBM( Pos + (K.xxx * DerivativeH) ) ) );
 }
 
 bool SphereTraceFBM( inout FRay Ray, inout float3 Normal, float PixelFootprint )
 {
 	float DistTravelled = 0.0;
-	FTerrainParams Params = GetTerrainParams();
 	for (uint Step = 0; Step < 256; ++Step)
 	{
 		// TODO: (see word doc) if we hit the max step count and never went under the epsilon,
 		// TODO: keep track of the smallest distance value and use that instead
 		// TODO: though tbh who cares about the brute-force rendering
 		const float PixelSize = PixelFootprint * (DistTravelled + Ray.T);
-		float ClosestDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), Params, (bBandLimiting == 0) ? 0.0 : PixelSize );
+		float ClosestDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), (bBandLimiting == 0) ? 0.0 : PixelSize );
 		DistTravelled += ClosestDist;
 		if (DistTravelled > Ray.RelativeMaxT) { break; }
 		// A lot of detail is lost at a higher epsilon
@@ -109,7 +108,7 @@ bool SphereTraceFBM( inout FRay Ray, inout float3 Normal, float PixelFootprint )
 			}
 #endif
 
-			Normal = GetTerrainNormal( Ray.GetHitPos(), Params, PixelSize );
+			Normal = GetTerrainNormal( Ray.GetHitPos(), PixelSize );
 			return true;
 		}
 	}
@@ -192,7 +191,6 @@ bool TracePtrGrid( inout FRay Ray, inout float3 Normal )
 
 bool TraceScene( inout FRay Ray, out float3 Normal, float PixelFootprint )
 {
-	FTerrainParams TerrainParams = GetTerrainParams();
 	// Brute-force sphere tracing
 	if (bBruteForceSphereTracing > 0)
     {
@@ -200,14 +198,14 @@ bool TraceScene( inout FRay Ray, out float3 Normal, float PixelFootprint )
 		for (uint Step = 0; Step < 256; ++Step)
 		{
 			const float PixelSize = (bBandLimiting == 0) ? 0.0 : PixelFootprint * (DistTravelled + Ray.T);
-			float TerrainDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), TerrainParams, PixelSize );
+			float TerrainDist = DistFn::FBM( Ray.GetPosAt( DistTravelled ), PixelSize );
 			float ClosestDist = MapScene( Ray.GetPosAt( DistTravelled ), TerrainDist );
 			DistTravelled += ClosestDist;
 			if (DistTravelled > Ray.RelativeMaxT) { break; }
 			if (ClosestDist < SurfaceEpsilon)
 			{
 				Ray.SetHitT( DistTravelled );
-				Normal = GetNormalCombined( Ray.GetHitPos(), TerrainParams );
+				Normal = GetNormalCombined( Ray.GetHitPos() );
 				break;
 			}
 		}

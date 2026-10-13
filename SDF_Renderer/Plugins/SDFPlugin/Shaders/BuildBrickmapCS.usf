@@ -50,11 +50,10 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 	uint AtlasIdx = PtrGrid[GridIdx];
 
 	// Find the closest SDF to the brick point
-	FTerrainParams Params = GetTerrainParams();
 #if TERRAIN
-	float Closest = DistFn::FBM( WorldPos, Params );
+	float Closest = DistFn::FBM( WorldPos );
 #else
-	float ClosestTerrain = DistFn::FBM( WorldPos, Params );
+	float ClosestTerrain = DistFn::FBM( WorldPos );
 	float Closest = MapScene( WorldPos, ClosestTerrain );
 #endif
 
