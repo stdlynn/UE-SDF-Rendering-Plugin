@@ -192,7 +192,7 @@ void FSDFBVH::RefitNode( FNode& Node, const TMap<uint64, FSDF>& Edits ) const
 	const uint32 EndIdx{ Node.LeftFirst + Node.NumEdits };
 	for (uint32 i{ Node.LeftFirst }; i < EndIdx; ++i)
 	{
-		const FSetElementId BoundsIdx{ static_cast<FSetElementId>(EditIndices[i]) };
+		const FSetElementId BoundsIdx{ FSetElementId::FromInteger(EditIndices[i]) };
 		Node.BoundsMin = Node.BoundsMin.ComponentMin( Edits.Get( BoundsIdx ).Value.Bounds.Min );
 		Node.BoundsMax = Node.BoundsMax.ComponentMin( Edits.Get( BoundsIdx ).Value.Bounds.Max );
 	}
