@@ -2,13 +2,17 @@
 
 #include "/Engine/Public/Platform.ush"
 #include "BrickmapCommon.ush"
+#include "Terrain.ush"
 #include "Common.ush"
 
 float3 PtrGridPos;
 float VoxSize;
 
 Buffer<uint> UpdateList;
-uint NumUpdated;
+uint BrickOffset;
+uint NumBricks;
+uint TerrainMinBrick;
+uint TerrainMaxBrick;
 RWBuffer<uint> FreedList;
 RWBuffer<uint> DeallocatedList;
 
@@ -24,7 +28,8 @@ groupshared uint AtlasIdxShared;
 [numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
 void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_GroupThreadID )
 {
-	if (GroupID.x >= NumUpdated) { return; }
+	const uint Idx = GroupID.x + BrickOffset;
+	if (Idx >= NumBricks) { return; }
 
 	// Start out assuming the brick contains no surfaces
 	// If any thread/brick point finds out the contrary, it sets the boolean to true
@@ -35,13 +40,23 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 	const FAABB GridAABB = AABB::PtrGrid( PtrGridPos, BrickSize );
 
 	// Get the data for this thread's brick point
-	const uint GridIdx = UpdateList[GroupID.x];
+#if TERRAIN
+	uint GridIdx = Idx + (TerrainMinBrick * PtrGridSize.x * PtrGridSize.y);
+#else
+	const uint GridIdx = UpdateList[Idx];
+#endif
 	const uint3 GridCell = GridIdxToGridCell( GridIdx );
 	const float3 WorldPos = GridCellToWorldPos( GridCell, GridAABB.Min, BrickSize ) + float3( GroupThreadID ) * VoxSize;
 	uint AtlasIdx = PtrGrid[GridIdx];
 
 	// Find the closest SDF to the brick point
-	float Closest = MapScene( WorldPos );
+	FTerrainParams Params = GetTerrainParams();
+#if TERRAIN
+	float Closest = DistFn::FBM( WorldPos, Params );
+#else
+	float ClosestTerrain = DistFn::FBM( WorldPos, Params );
+	float Closest = MapScene( WorldPos, ClosestTerrain );
+#endif
 
 	// Indicate if any geometry is within allocation distance
 	// Sync so any thread gets the chance to indicate a surface within range
@@ -56,6 +71,7 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 		// Deallocate if we own a brick but there is no longer any geometry in range
 		if (bDeallocate)
 		{
+#if !TERRAIN
 			if (AtlasIdx != Empty)
 			{
 				// Claim an index within the deallocation list
@@ -68,6 +84,7 @@ void BuildBrickmapCS( uint3 GroupID : SV_GroupID, uint3 GroupThreadID : SV_Group
 				PtrGrid[GridIdx] = Empty;
 				AtlasIdx = Empty;
 			}
+#endif
 		}
 		// Our grid cell contains geometry
 		// If we don't own a brick, allocate one

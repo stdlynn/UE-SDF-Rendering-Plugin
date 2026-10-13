@@ -8,11 +8,11 @@ void USDFSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChanged
 	if (PropertyChangedEvent.GetMemberPropertyName() ==
 		 GET_MEMBER_NAME_CHECKED(USDFSettings, Materials))
 	{
-		bMaterialsDirty = true;
+		MaterialsVersion++;
 	}
 	else
 	{
-		bSettingDirty = true;
+		SettingsVersion++;
 	}
 }
 #endif

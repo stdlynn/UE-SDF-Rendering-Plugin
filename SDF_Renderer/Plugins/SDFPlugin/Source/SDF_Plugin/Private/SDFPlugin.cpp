@@ -5,6 +5,7 @@
 
 // Plugin
 #include "SDFPlugin.h"
+#include "SDFExtension.h"
 
 // UE
 #include "Interfaces/IPluginManager.h"
@@ -55,9 +56,26 @@ void FSDFPlugin::StartupModule()
             }
         });
 #endif
-}
+    }
 
 void FSDFPlugin::ShutdownModule() {}
+
+void USDFPluginLibrary::SpawnSDF( const UObject* WorldContextObject, const FVector& Location, const FSDFEdit& Settings )
+{
+    UWorld* World = GEngine->GetWorldFromContextObject( WorldContextObject, EGetWorldErrorMode::LogAndReturnNull );
+    if (!World) return;
+
+    ASDFActor* Actor = World->SpawnActor<ASDFActor>( Location, FRotator::ZeroRotator );
+    USDFSubsystem* Subsystem = World->GetSubsystem<USDFSubsystem>();
+    if (Subsystem && Actor)
+    {
+        USDFComponent* Comp = Actor->GetSDFComponent();
+
+		Comp->SetAllEditProperties( Settings );
+        Comp->SetWorldLocation( Location );
+        Subsystem->RegisterSDF( *Comp );
+    }
+}
 
 #undef LOCTEXT_NAMESPACE
 

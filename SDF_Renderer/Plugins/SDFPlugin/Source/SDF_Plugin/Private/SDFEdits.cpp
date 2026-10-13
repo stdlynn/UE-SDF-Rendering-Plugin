@@ -1,4 +1,6 @@
 #include "SDFEdits.h"
+#include "BrickmapCommon.h"
+#include "SDFSettings.h"
 
 namespace
 {
@@ -8,6 +10,12 @@ namespace
 		TEXT(" 0: OFF;")
 		TEXT(" 1: Subtractive only;")
 		TEXT(" 2: ALL"));
+
+	TAutoConsoleVariable CVarDebugBounds(TEXT("r.SDF.Debug.Bounds"),
+		0,
+		TEXT("Enable debug view of the brickmap bounds \n")
+		TEXT(" 0: OFF;")
+		TEXT(" 1: ON"));
 }
 
 // Sets default values
@@ -142,7 +150,9 @@ void USDFComponent::OnUpdateTransform( EUpdateTransformFlags TransformFlags,
 
 void USDFComponent::SetDirty() const
 {
-	if (USDFSubsystem* SDFSubsystem{ GetWorld()->GetSubsystem<USDFSubsystem>() })
+	UWorld* World{ GetWorld() };
+	if (!World) return;
+	if (USDFSubsystem* SDFSubsystem{ World->GetSubsystem<USDFSubsystem>() })
 	{
 		SDFSubsystem->SetSDFDirty( *this );
 	}
@@ -159,7 +169,7 @@ void USDFSubsystem::RegisterSDF( const USDFComponent& Comp )
 {
 	const FVector3f Pos{ Comp.GetComponentTransform().GetLocation() };
 	const FQuat Quat{ Comp.GetComponentTransform().GetRotation() };
-	RenderSDFs.Add( Comp.GetID(), { Comp, Pos, Quat } );
+	RenderSDFs.Add( Comp.GetID(), { Comp.Edit, Pos, Quat } );
 	bDirty = true;
 }
 
@@ -173,29 +183,38 @@ void USDFSubsystem::SetSDFDirty( const USDFComponent& Comp )
 {
 	const FVector3f Pos{ Comp.GetComponentTransform().GetLocation() };
 	const FQuat Quat{ Comp.GetComponentTransform().GetRotation() };
-	RenderSDFs[Comp.GetID()] = FRenderSDF{ Comp, Pos, Quat };
+	RenderSDFs[Comp.GetID()] = FRenderSDF{ Comp.Edit, Pos, Quat };
 	bDirty = true;
 }
 
 // Render wireframe of subtractive edits so we can see them
 void USDFSubsystem::DrawDebug()
 {
-	int CVar = CVarDebugWireframe.GetValueOnGameThread();
-	if (!CVar) return;
 	UWorld* World = GetWorld();
 	if (!World) return;
 
+	if (CVarDebugBounds.GetValueOnGameThread())
+	{
+		USDFSettings* SDFSettings{ GetMutableDefault<USDFSettings>() };
+		FVector Center = static_cast<FVector>(SDFSettings->PtrGridPos);
+		FVector Extent = static_cast<FVector>(PtrGridSize * SDFSettings->VoxSize * VoxelResolution / 2.0);
+		DrawDebugBox( World, Center, Extent, FColor::Magenta );
+	}
+
+	int CVarWireframe = CVarDebugWireframe.GetValueOnGameThread();
+	if (!CVarWireframe) return;
+
 	for (const auto& [ID, Edit] : RenderSDFs)
 	{
-		float SizeEpsilon = 1e-2;
-		float SizeMult = 3.5e-2;
+		float SizeEpsilon = 1e-2f;
+		float SizeMult = 3.5e-2f;
 		FColor Color = FColor::Green;
 		EOperation Op = Edit.Operation;
 		
 		if (Op == EOperation::Add)
 		{
 			SizeMult += 1.0f;
-			if (CVar < 2) continue;
+			if (CVarWireframe < 2) continue;
 		}
 		else
 		{

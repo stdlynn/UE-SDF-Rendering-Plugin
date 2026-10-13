@@ -8,6 +8,30 @@
 #include "PixelShaderUtils.h"
 #include "DataDrivenShaderPlatformInfo.h"
 
+struct FTerrainParams
+{
+	FVector3f RotAxis;
+	float RotAngle;
+	FVector3f PlanePos;
+	float VerticalNoiseOffset;
+	float MinNoiseScale;
+	uint32 NumOctaves;
+	float Frequency;
+	float Lacunarity;
+	float Amplitude;
+	float Persistence;
+	float Inflation;
+	float InflationGain;
+	float SampleSmoothing;
+	float UnionSmoothing;
+	float ClippingSmoothing;
+	float Epsilon;
+	float DerivativeH;
+	bool bSimplex;
+	bool bBandLimiting;
+	uint32 MatIdx;
+};
+
 class FBrickmapBuilder
 {
 public:
@@ -21,6 +45,10 @@ public:
 	[[nodiscard]] FRDGPooledBuffer* GetDeallocatedList() const { return RT.DeallocatedListResource; }
 	[[nodiscard]] uint32 GetLastBuildFrame() const { return RT.LastBuildFrame; }
 	[[nodiscard]] uint32 GetNumUpdatedBricks() const { return RT.UpdateListCPU.Num(); }
+	[[nodiscard]] static float GetTerrainHeightMin( const FTerrainParams& Params );
+	[[nodiscard]] static float GetTerrainHeightMax( const FTerrainParams& Params );
+	[[nodiscard]] static uint32 GetTerrainBrickMin( const FTerrainParams& Params, float VoxSize, float PtrGridZ );
+	[[nodiscard]] static uint32 GetTerrainBrickMax( const FTerrainParams& Params, float VoxSize, float PtrGridZ );
 	void SetLastBuildFrame( const uint32 Frame ) { RT.LastBuildFrame = Frame; }
 
 	void AllocateResources();
@@ -36,6 +64,7 @@ public:
 	FRDGBufferRef RegisterBrickListBuffer( FRDGBuilder& GraphBuilder ) const;
 
 	bool bReset = true;
+	bool bTerrainDirty = true;
 
 private:
 
