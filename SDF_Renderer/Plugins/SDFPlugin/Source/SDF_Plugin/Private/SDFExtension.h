@@ -35,10 +35,18 @@ public:
 		bool bUnitScaleDirty{ true };
 	};
 
-	struct FSDFResources
+	struct FSDFResource
 	{
 		TRefCountPtr<FRDGPooledBuffer> Buff{ nullptr };
 		bool bDirty{ true }; // True to always allocate the buffer the first frame
+		bool bUpload{ false };
+	};
+
+	struct FBVHResources
+	{
+		TRefCountPtr<FRDGPooledBuffer> Buff{ nullptr };
+		FSDFBVH BVH;
+		bool bDirty{ true };
 		bool bUpload{ false };
 	};
 
@@ -73,9 +81,10 @@ private:
 	void TransferSDFsToRenderThread();
 	void UpdateSDFBuffer();
 	void UpdateMaterialBuffer();
-	void UpdateBVHBuffer();
+	void UpdateNodeBuffer();
 	FRDGBufferRef RegisterSDFBuffer( FRDGBuilder& GraphBuilder );
 	FRDGBufferRef RegisterMaterialBuffer( FRDGBuilder& GraphBuilder );
+	FRDGBufferRef RegisterNodeBuffer( FRDGBuilder& GraphBuilder );
 
 	// Game thread
 	struct
@@ -90,12 +99,11 @@ private:
 	{
 		FSettings Settings;
 		TArray<FSDFMaterial> Materials;
-		FSDFResources MaterialsResource;
+		FSDFResource MaterialsResource;
 		TArray<FGPUSDF> SDFs;
-		FSDFResources SDFResources;
+		FSDFResource SDFResources;
 		FBrickmapBuilder BrickmapBuilder;
-		FSDFBVH BVH;
-		bool bDirtyBVH{ true };
+		FBVHResources BVHResources;
 	} RT{};
 
 }; // FSDFExtension
@@ -178,6 +186,7 @@ public:
 		SHADER_PARAMETER(uint32, BrickOffset)
 		SHADER_PARAMETER(uint32, NumEdits)
 		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FGPUSDF>, SDFEdits)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<FSDFBVH::FNode>, Nodes)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(Texture3D<float>, BrickAtlas)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint>, MaterialAtlas)
 		SHADER_PARAMETER_RDG_BUFFER_UAV(Buffer<uint32>, PtrGrid)

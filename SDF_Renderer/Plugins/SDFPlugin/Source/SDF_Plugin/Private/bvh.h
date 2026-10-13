@@ -52,6 +52,8 @@ public:
 	void Build( const TMap<uint64, FSDF>& Edits );
 	void Refit( const TMap<uint64, FSDF>& Edits );
 
+	[[nodiscard]] const FNode* GetNodes() const { return Nodes; }
+	[[nodiscard]] uint32 GetNumNodes() const { return NodesUsed; }
 	void ScaleBVH( float UnitScale ) const;
 
 private:
@@ -66,7 +68,7 @@ private:
 
 	uint32* EditIndices{ nullptr };
 	FNode* Nodes{ nullptr };
-	uint32 NodesUsed{ 1u };
+	uint32 NodesUsed{ 2u };
 	uint32 NumEdits{ 0u };
 
 }; // SDFBVH
