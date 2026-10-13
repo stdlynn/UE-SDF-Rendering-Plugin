@@ -45,6 +45,9 @@ public:
 	~FSDFBVH();
 	FSDFBVH& operator=( const FSDFBVH& Other );
 
+	[[nodiscard]] const FNode* GetNodes() const { return Nodes; }
+	[[nodiscard]] uint32 GetNumNodes() const { return NodesUsed; }
+
 	FHitResult Intersect( FRay Ray, const TMap<uint64, FSDF>& Edits ) const;
 	void Build( const TMap<uint64, FSDF>& Edits );
 	void Refit( const TMap<uint64, FSDF>& Edits );

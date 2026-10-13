@@ -278,7 +278,8 @@ public:
 		RETURN_QUICK_DECLARE_CYCLE_STAT(USDFSubsystem, STATGROUP_Tickables);
 	}
 	virtual bool IsTickableInEditor() const override { return true; }
-	void DrawDebug();
+	void DrawDebugWireframe();
+	void DrawDebugBVH( ) const;
 
 	void RegisterSDF( const USDFComponent& Comp );
 	void UnregisterSDF( const USDFComponent& Comp );

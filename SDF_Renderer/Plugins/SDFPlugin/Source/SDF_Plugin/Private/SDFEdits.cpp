@@ -16,6 +16,12 @@ namespace
 		TEXT("Enable debug view of the brickmap bounds \n")
 		TEXT(" 0: OFF;")
 		TEXT(" 1: ON"));
+
+	TAutoConsoleVariable CVarDebugBVH(TEXT("r.SDF.Debug.BVH"),
+		0,
+		TEXT("Enable debug view of the BVH nodes \n")
+		TEXT(" 0: OFF;")
+		TEXT(" 1: ON"));
 }
 
 // Sets default values
@@ -33,9 +39,11 @@ void USDFSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	BVH.Build( Edits.Num(),  )
+	BVH.Build( Edits );
 
-	DrawDebug();
+	DrawDebugWireframe();
+
+	DrawDebugBVH( );
 }
 
 void FSDF::CalcBounds()
@@ -229,7 +237,7 @@ void USDFSubsystem::SetSDFDirty( const USDFComponent& Comp )
 }
 
 // Render wireframe of subtractive edits so we can see them
-void USDFSubsystem::DrawDebug()
+void USDFSubsystem::DrawDebugWireframe()
 {
 	UWorld* World = GetWorld();
 	if (!World) return;
@@ -300,5 +308,27 @@ void USDFSubsystem::DrawDebug()
 				break;
 			}
 		}
+	}
+}
+
+void USDFSubsystem::DrawDebugBVH( ) const
+{
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	int CVarBVH = CVarDebugBVH.GetValueOnGameThread();
+	if (!CVarBVH) return;
+
+	uint32 NumNodes = BVH.GetNumNodes();
+	const FSDFBVH::FNode* Nodes = BVH.GetNodes();
+	for (uint32 i = 0; i < NumNodes; i++)
+	{
+		if (i == 1) continue;
+		const FSDFBVH::FNode& Node = Nodes[i];
+
+		const FVector Center = static_cast<FVector>((Node.BoundsMin + Node.BoundsMax) / 2.0f);
+		const FVector Extent = static_cast<FVector>((Node.BoundsMin - Node.BoundsMax) / 2.0f).GetAbs();
+
+		DrawDebugBox( World, Center, Extent, FColor::White );
 	}
 }
