@@ -153,8 +153,8 @@ void FSDFBVH::Subdivide( FNode& Node, const TMap<uint64, FSDF>& Edits )
 	// While there are primitives left to be sorted
 	while (LeftMostToSort <= RightMostToSort)
 	{
-		const FSetElementId EditIdx{ FSetElementId::FromInteger(EditIndices[LeftMostToSort]) };
 		// Keep edits on the left side of the split plane at the start of the index buffer
+		const FSetElementId EditIdx{ FSetElementId::FromInteger( EditIndices[LeftMostToSort] ) };
 		if (Edits.Get( EditIdx ).Value.Centroid[Axis] < SplitPos) { LeftMostToSort++; }
 		// Move edits on the right side of the split plane to the end of the index buffer
 		else
@@ -195,14 +195,14 @@ void FSDFBVH::Subdivide( FNode& Node, const TMap<uint64, FSDF>& Edits )
 
 void FSDFBVH::RefitNode( FNode& Node, const TMap<uint64, FSDF>& Edits ) const
 {
-	Node.BoundsMin = FVector3f{ TNumericLimits<float>::Lowest() };
-	Node.BoundsMax = FVector3f{ TNumericLimits<float>::Max() };
+	Node.BoundsMin = FVector3f{ TNumericLimits<float>::Max() };
+	Node.BoundsMax = FVector3f{ TNumericLimits<float>::Lowest() };
 	const uint32 EndIdx{ Node.LeftFirst + Node.NumEdits };
 	for (uint32 i{ Node.LeftFirst }; i < EndIdx; ++i)
 	{
 		const FSetElementId BoundsIdx{ FSetElementId::FromInteger( EditIndices[i] ) };
 		Node.BoundsMin = Node.BoundsMin.ComponentMin( Edits.Get( BoundsIdx ).Value.Bounds.Min );
-		Node.BoundsMax = Node.BoundsMax.ComponentMin( Edits.Get( BoundsIdx ).Value.Bounds.Max );
+		Node.BoundsMax = Node.BoundsMax.ComponentMax( Edits.Get( BoundsIdx ).Value.Bounds.Max );
 	}
 }
 
