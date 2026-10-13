@@ -386,9 +386,9 @@ float OpSmoothSubtract( float a, float b, float k )
     return -OpSmoothUnion(a,-b,k);
 }
 
-float MapScene( float3 Pos, float MaxT = 1e35 )
+float MapScene( float3 Pos )
 {
-	float ClosestDist = MaxT;
+	float ClosestDist = 1e35;
 
 	for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
 	{
@@ -397,6 +397,7 @@ float MapScene( float3 Pos, float MaxT = 1e35 )
 		bool bSmooth = Edit.GetSDFSmooths();
 		// Evaluate the distance to the SDF
 		const float Dist = DistFn::DistOrigin( Edit, Pos - Edit.Pos );
+		const float PrevDist = ClosestDist;
 		if (bSmooth)
 		{
 			if (Op == Union)
@@ -461,4 +462,70 @@ FSDFMaterial InterpolateMaterial(FSDFMaterial A, FSDFMaterial B, float T)
 	R.Metalness = lerp(A.Metalness, B.Metalness, S);
 	R.Emission = lerp(A.Emission, B.Emission, S);
 	return R;
+}
+
+FSDFMaterial SampleMaterial( float3 Pos )
+{
+	FSDFMaterial MatBlended = (FSDFMaterial)0;
+	float ClosestDist = 1e35;
+
+	for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
+	{
+		const FSDFEdit Edit = SDFEdits[EditIdx];
+		const EOperation Op = Edit.GetSDFOperation();
+		const bool bColorsSubtraction = Edit.GetColorsSubtraction();
+		const float Smoothing = Edit.GetSDFSmooths() ? Edit.Smoothing : 0.0;
+		// Evaluate the distance to the SDF
+		const float Dist = DistFn::DistOrigin(Edit, Pos - Edit.Pos);
+
+		// Blending factor to replace previous material with new one
+		// Depends on the difference between the previous and new distance (and operation)
+		float Blend = 0.0;
+
+		if (Op == Union)
+		{
+			if (Smoothing > 0.0)
+			{
+				// Function derived from derivative of the smoothing function
+				Blend = saturate(0.5 + 0.5 * ((ClosestDist - Dist) / (Smoothing * 4.0)));
+				ClosestDist = OpSmoothUnion(Dist, ClosestDist, Smoothing);
+			}
+			else
+			{
+				// Unsmoothed edits either completely replace or keep the previous material
+				Blend = (Dist < ClosestDist) ? 1.0 : 0.0;
+				ClosestDist = OpUnion(Dist, ClosestDist);
+			}
+		}
+		else if (Op == Subtract)
+		{
+			if (bColorsSubtraction)
+			{
+				// Use the subtractive edit's material to shade the subtracted region
+				if (Smoothing > 0.0)
+				{
+					Blend = saturate(0.5 - 0.5 * (ClosestDist + Dist) / (Smoothing * 4.0));
+					ClosestDist = OpSmoothSubtract(Dist, ClosestDist, Smoothing);
+				}
+				else
+				{
+					Blend = (-Dist > ClosestDist) ? 1.0 : 0.0;
+					ClosestDist = OpSubtract(Dist, ClosestDist);
+				}
+			}
+			else
+			{
+				// Don't use the subtractive edit's material for shading
+				Blend = 0.0;
+			}
+		}
+
+		// Update the blended material based on the blending factor
+		if (Blend > 0.0)
+		{
+			MatBlended = InterpolateMaterial(MatBlended, Materials[Edit.MatIdx], Blend);
+		}
+	}
+
+	return MatBlended;
 }

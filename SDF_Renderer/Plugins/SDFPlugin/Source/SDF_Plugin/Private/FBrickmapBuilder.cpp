@@ -4,50 +4,6 @@
 #include "SDFEdits.h"
 #include "SDFFunctions.h"
 
-float FBrickmapBuilder::GetTerrainHeightMin( const FTerrainParams& Params )
-{
-	// Minimum height the terrain can reach in world space
-	return Params.PlanePos.Z;
-}
-
-float FBrickmapBuilder::GetTerrainHeightMax( const FTerrainParams& Params )
-{
-	const FTerrainParams& P = Params;
-	const float Amplitude0 = P.Amplitude / P.Frequency * (P.bSimplex ? sqrt(3.0f) / 2.0f : 1.0f);
-	const float Inflation0 = P.Inflation * (P.VerticalNoiseOffset + 0.5f) * Amplitude0;
-	const float Smoothing0 = P.UnionSmoothing * Amplitude0;
-	const float Gain = P.InflationGain * P.Persistence;
-	const float GainN = (Gain == 1.0f) ? P.NumOctaves : (1.0f - pow(Gain, P.NumOctaves)) / (1.0f - Gain);
-	const float InflationN = Inflation0 * GainN;
-	const float PersistenceN = (P.Persistence == 1.0f) ? P.NumOctaves : (1.0f - pow(P.Persistence, P.NumOctaves)) / (1.0f - P.Persistence);
-	const float SmoothingN = Smoothing0 * PersistenceN;
-
-	// Maximum height the terrain can reach in world space
-	const float MaxHeight = P.PlanePos.Z + InflationN + SmoothingN;
-	return MaxHeight;
-}
-
-uint32 FBrickmapBuilder::GetTerrainBrickMin( const FTerrainParams& Params, const float VoxSize, const float PtrGridZ )
-{
-	const float BrickSize = GetBrickSize( VoxSize );
-	// Height of the PtrGrid's bottom in world space
-	const float GridMin = PtrGridZ - (PtrGridSize.Z) * BrickSize * 0.5f;
-	// Lowest brick the terrain can be in
-	const int32 BrickMin = FMath::Clamp( FMath::FloorToInt32( (GetTerrainHeightMin( Params ) - GridMin) / BrickSize) - 1, 0, PtrGridSize.Z - 1 );
-	return BrickMin;
-}
-
-
-uint32 FBrickmapBuilder::GetTerrainBrickMax( const FTerrainParams& Params, const float VoxSize, const float PtrGridZ )
-{
-	const float BrickSize = GetBrickSize( VoxSize );
-	// Height of the PtrGrid's bottom in world space
-	const float GridMin = PtrGridZ - (PtrGridSize.Z) * BrickSize * 0.5f;
-	// Highest brick the terrain can be in
-	const int32 BrickMax = FMath::Clamp( FMath::FloorToInt32( (GetTerrainHeightMax( Params ) - GridMin) / BrickSize) - 1, 0, PtrGridSize.Z - 1 );
-	return BrickMax;
-}
-
 void FBrickmapBuilder::AllocateResources()
 {
 	check( IsInRenderingThread() );
@@ -116,7 +72,6 @@ void FBrickmapBuilder::ClearBrickmap(FRDGBuilder& GraphBuilder )
 	AddClearUAVPass(GraphBuilder, DeallocatedListUAV, 0xFFFFFFFFu);
 	AddClearUAVPass(GraphBuilder, AllocCountersUAV, 0u);
 	bReset = false;
-	bTerrainDirty = true;
 }
 
 void FBrickmapBuilder::SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FVector3f& PtrGridPos, float VoxSize )
@@ -137,12 +92,12 @@ void FBrickmapBuilder::SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FV
 		const FVector3f MinF = ( AABB.Min - GridMin - Thickness ) / BrickSize;
 		const FVector3f MaxF = ( AABB.Max - GridMin + Thickness ) / BrickSize;
 
-		const FIntVector3 MinCell(FMath::Clamp( FMath::FloorToInt32( MinF.X ), 0, GridMax.X - 1 ),
-								  FMath::Clamp( FMath::FloorToInt32( MinF.Y ), 0, GridMax.Y - 1 ),
-								  FMath::Clamp( FMath::FloorToInt32( MinF.Z ), 0, GridMax.Z - 1 ));
-		const FIntVector3 MaxCell(FMath::Clamp( FMath::FloorToInt32( MaxF.X ), 0, GridMax.X - 1 ),
-								  FMath::Clamp( FMath::FloorToInt32( MaxF.Y ), 0, GridMax.Y - 1 ),
-								  FMath::Clamp( FMath::FloorToInt32( MaxF.Z ), 0, GridMax.Z - 1 ));
+		const FIntVector3 MinCell(FMath::Clamp( FMath::FloorToInt32( MinF.X ), 0, GridMax.X ),
+								  FMath::Clamp( FMath::FloorToInt32( MinF.Y ), 0, GridMax.Y ),
+								  FMath::Clamp( FMath::FloorToInt32( MinF.Z ), 0, GridMax.Z ));
+		const FIntVector3 MaxCell(FMath::Clamp( FMath::FloorToInt32( MaxF.X ), 0, GridMax.X ),
+								  FMath::Clamp( FMath::FloorToInt32( MaxF.Y ), 0, GridMax.Y ),
+								  FMath::Clamp( FMath::FloorToInt32( MaxF.Z ), 0, GridMax.Z ));
 
 		// @formatter:off
 		for ( int32 z = MinCell.Z; z <= MaxCell.Z; z++ )

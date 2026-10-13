@@ -2,6 +2,7 @@
 #include "SDFExtension.h"
 #include "SceneViewExtension.h"
 #include "HAL/IConsoleManager.h"
+#include "Editor.h"
 
 static FAutoConsoleCommandWithWorld GSDFDebugClearCmd(
 	TEXT("r.SDF.Debug.Clear"),
