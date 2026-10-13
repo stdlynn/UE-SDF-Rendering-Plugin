@@ -285,6 +285,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 	ParametersBuild->ClippingSmoothing = RT.Settings.Terrain.ClippingSmoothing;
 	ParametersBuild->bSimplex = RT.Settings.Terrain.bSimplex;
 	ParametersBuild->bBandLimiting = RT.Settings.Terrain.bBandLimiting;
+	ParametersBuild->PixelEpsilon = RT.Settings.Terrain.PixelEpsilon;
 	ParametersBuild->TerrainEpsilon = RT.Settings.Terrain.Epsilon;
 	ParametersBuild->TerrainDerivativeH = RT.Settings.Terrain.DerivativeH;
 	ParametersBuild->TerrainMatIdx = RT.Settings.Terrain.MatIdx;

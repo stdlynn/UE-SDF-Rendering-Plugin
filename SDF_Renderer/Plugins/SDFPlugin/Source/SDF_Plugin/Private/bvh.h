@@ -33,7 +33,7 @@ public:
 	struct alignas( 32 ) FNode
 	{
 		float Intersect( const FRay& Ray ) const;
-		bool IsLeaf() const { return NumEdits; }
+		bool IsLeaf() const { return NumEdits > 0; }
 
 		FVector3f BoundsMin;
 		uint32 LeftFirst;

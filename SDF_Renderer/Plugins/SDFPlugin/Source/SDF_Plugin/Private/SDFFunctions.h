@@ -80,12 +80,6 @@ namespace DistFn
 	}
 } // SDF
 
-struct FAABB
-{
-	FVector3f Min;
-	FVector3f Max;
-};
-
 // Bounding boxes
 // From https://iquilezles.org/articles/bboxes3d/
 namespace AABB

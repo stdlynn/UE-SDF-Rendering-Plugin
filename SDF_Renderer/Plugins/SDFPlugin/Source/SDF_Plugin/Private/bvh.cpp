@@ -33,7 +33,7 @@ FSDFBVH::FHitResult FSDFBVH::Intersect( FRay Ray, const TArray<FGPUSDF>& Edits )
 			{
 				// Intersect
 				const uint32 EditIdx{ EditIndices[i] };
-				if (Edits[EditIdx]) // TODO: intersect SDFs (modify Ray.T)
+				if (false /*Edits[EditIdx]*/) // TODO: intersect SDFs (modify Ray.T)
 				{
 					HitResult.EditIdx = EditIdx;
 					HitResult.T = Ray.T;
@@ -88,8 +88,8 @@ float FSDFBVH::FNode::Intersect( const FRay& Ray ) const
 {
 	const FVector3f TToMin = (BoundsMin - Ray.Pos) * Ray.InvDir;
 	const FVector3f TToMax = (BoundsMax - Ray.Pos) * Ray.InvDir;
-	const FVector3f TMin = FMath::Min( TToMin, TToMax );
-	const FVector3f TMax = FMath::Max( TToMin, TToMax );
+	const FVector3f TMin = TToMin.ComponentMin( TToMax );
+	const FVector3f TMax = TToMin.ComponentMax( TToMax );
 	const float TNear = FMath::Max( FMath::Max3( TMin.X, TMin.Y, TMin.Z ), 0.0f );
 	const float TFar = FMath::Min( FMath::Min3( TMax.X, TMax.Y, TMax.Z ), Ray.T );
 	return (TNear <= TFar) ? TNear : MAX_T;
@@ -194,7 +194,7 @@ void FSDFBVH::RefitNode( FNode& Node, const TArray<FSDFBounds>& EditsBounds ) co
 	{
 		const uint32 BoundsIdx{ EditIndices[i] };
 		const FSDFBounds& Bounds{ EditsBounds[BoundsIdx] };
-		Node.BoundsMin = FMath::Min( Node.BoundsMin, Bounds.AABB.Min );
-		Node.BoundsMax = FMath::Max( Node.BoundsMax, Bounds.AABB.Max );
+		Node.BoundsMin = Node.BoundsMin.ComponentMin( Bounds.AABB.Min );
+		Node.BoundsMax = Node.BoundsMax.ComponentMin( Bounds.AABB.Max );
 	}
 }

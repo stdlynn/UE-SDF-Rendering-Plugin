@@ -25,6 +25,7 @@ struct FTerrainParams
 	float SampleSmoothing;
 	float UnionSmoothing;
 	float ClippingSmoothing;
+	float PixelEpsilon;
 	float Epsilon;
 	float DerivativeH;
 	bool bSimplex;

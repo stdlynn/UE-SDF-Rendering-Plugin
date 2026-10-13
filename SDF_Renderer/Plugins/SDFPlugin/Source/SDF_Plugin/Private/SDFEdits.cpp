@@ -48,8 +48,8 @@ void FSDF::CalcBounds()
 		}
 		case EPrimitive::Line: 
 		{
-			Bounds.Min = FMath::Min( Pos, GetLinePosB() ) - GetLineRadius();
-			Bounds.Max = FMath::Max( Pos, GetLinePosB() ) + GetLineRadius();
+			Bounds.Min = Pos.ComponentMin( GetLinePosB() ) - GetLineRadius();
+			Bounds.Max = Pos.ComponentMin( GetLinePosB() ) + GetLineRadius();
 			break;
 		}
 		case EPrimitive::Box:
@@ -61,9 +61,9 @@ void FSDF::CalcBounds()
 			// [CREDITS] Graphics Gems by Jim Arvo
 			// Rotate locally (note that Unreal Engine uses row-major)
 			const FMatrix Mat{ Quat.ToMatrix() };
-			const FVector3f Col0{ FMath::Abs( FVector3f{ Mat.GetColumn( 0 ) } ) * HalfExtent };
-			const FVector3f Col1{ FMath::Abs( FVector3f{ Mat.GetColumn( 1 ) } ) * HalfExtent };
-			const FVector3f Col2{ FMath::Abs( FVector3f{ Mat.GetColumn( 2 ) } ) * HalfExtent };
+			const FVector3f Col0{ FVector3f{ Mat.GetColumn( 0 ) }.GetAbs() * HalfExtent };
+			const FVector3f Col1{ FVector3f{ Mat.GetColumn( 1 ) }.GetAbs() * HalfExtent };
+			const FVector3f Col2{ FVector3f{ Mat.GetColumn( 2 ) }.GetAbs() * HalfExtent };
 			const FVector3f WorldSpaceHalfExtent{ (Col0.X + Col0.Y + Col0.Z), (Col1.X + Col1.Y + Col1.Z), (Col2.X + Col2.Y + Col2.Z) };
 			// Set world-space bounds
 			Bounds.Min = Pos - WorldSpaceHalfExtent;
@@ -243,10 +243,10 @@ void USDFSubsystem::DrawDebug()
 	int CVarWireframe = CVarDebugWireframe.GetValueOnGameThread();
 	if (!CVarWireframe) return;
 
-	for (const auto& [ID, Edit] : RenderSDFs)
+	for (const auto& [ID, Edit] : Edits)
 	{
-		float SizeEpsilon = 1e-2;
-		float SizeMult = 3.5e-2;
+		float SizeEpsilon = 1e-2f;
+		float SizeMult = 3.5e-2f;
 		FColor Color = FColor::Green;
 		EOperation Op = Edit.Operation;
 		

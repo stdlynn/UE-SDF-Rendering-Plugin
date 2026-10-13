@@ -207,6 +207,7 @@ public:
 		SHADER_PARAMETER(float, SampleSmoothing)
 		SHADER_PARAMETER(float, UnionSmoothing)
 		SHADER_PARAMETER(float, ClippingSmoothing)
+		SHADER_PARAMETER(float, PixelEpsilon)
 		SHADER_PARAMETER(float, TerrainEpsilon)
 		SHADER_PARAMETER(float, TerrainDerivativeH)
 		SHADER_PARAMETER(uint32, bSimplex)
