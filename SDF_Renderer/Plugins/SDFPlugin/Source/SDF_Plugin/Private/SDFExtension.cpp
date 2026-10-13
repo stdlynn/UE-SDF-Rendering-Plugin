@@ -204,7 +204,9 @@ void FSDFExtension::TransferSDFsToRenderThread()
 
 void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily )
 {
-	if (CVarShadersOn.GetValueOnRenderThread() == 0)
+	int ShadersOn = CVarShadersOn.GetValueOnRenderThread();
+	int BruteForce = CVarBruteForceSphereTracing.GetValueOnRenderThread();
+	if (ShadersOn == 0 || BruteForce)
 	{
 		return;
 	}
