@@ -155,6 +155,7 @@ void FSDFExtension::TransferSettingsToRenderThread()
 	GT.Settings.Terrain.bSimplex = SDFSettings->bSimplex;
 	GT.Settings.Terrain.Epsilon = SDFSettings->TerrainEpsilon * SDFSettings->GPUUnitScale;
 	GT.Settings.Terrain.DerivativeH = SDFSettings->TerrainDerivativeH * SDFSettings->GPUUnitScale;
+	GT.Settings.Terrain.MatIdx = SDFSettings->TerrainMatIdx;
 	GT.Settings.bUnitScaleDirty = true;
 
 	// Transfer lambda
@@ -221,43 +222,140 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 		RT.BrickmapBuilder.AllocateResources();
 	}
 
+	const FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(InViewFamily.GetFeatureLevel());
+
+	const FRDGBufferRef BrickListRDG = RT.BrickmapBuilder.RegisterBrickListBuffer(GraphBuilder);
+	const FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture(RT.BrickmapBuilder.GetBrickAtlas(), ERDGTextureFlags::MultiFrame);
+	const FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer(RT.BrickmapBuilder.GetPtrGrid(), ERDGBufferFlags::MultiFrame);
+	const FRDGBufferRef AllocCountersRDG = GraphBuilder.RegisterExternalBuffer(RT.BrickmapBuilder.GetBrickAllocCounter(), ERDGBufferFlags::MultiFrame);
+	const FRDGBufferRef FreedListRDG = GraphBuilder.RegisterExternalBuffer(RT.BrickmapBuilder.GetFreedList(), ERDGBufferFlags::MultiFrame);
+	const FRDGBufferRef DeallocatedListRDG = GraphBuilder.RegisterExternalBuffer(RT.BrickmapBuilder.GetDeallocatedList(), ERDGBufferFlags::MultiFrame);
+
+	const FRDGBufferRef SDFBuffRDG{ RegisterSDFBuffer(GraphBuilder) };
+	const FRDGBufferUAVRef FreedListUAV = GraphBuilder.CreateUAV(FreedListRDG, PF_R32_UINT);
+	const FRDGBufferUAVRef DeallocatedListUAV = GraphBuilder.CreateUAV(DeallocatedListRDG, PF_R32_UINT);
+	const FRDGBufferUAVRef AllocCountersUAV = GraphBuilder.CreateUAV(AllocCountersRDG, PF_R32_UINT);
+
+	if (RT.BrickmapBuilder.bReset)
+	{
+		RT.BrickmapBuilder.ClearBrickmap(GraphBuilder);
+	}
+
+	FBuildBrickmapShader::FPermutationDomain PermutationVector;
+
+	// Min and max height of terrain in SceneUnit-space
+	const uint32 BrickMin = RT.BrickmapBuilder.GetTerrainBrickMin( RT.Settings.Terrain, RT.Settings.VoxSize, RT.Settings.PtrGridPos.Z );
+	const uint32 BrickMax = RT.BrickmapBuilder.GetTerrainBrickMax( RT.Settings.Terrain, RT.Settings.VoxSize, RT.Settings.PtrGridPos.Z );
+	
+	FBuildBrickmapShader::FParameters* ParametersBuild = GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
+	ParametersBuild->NumEdits = RT.SDFs.Num();
+	ParametersBuild->SDFEdits = GraphBuilder.CreateSRV( SDFBuffRDG );
+	ParametersBuild->PtrGrid = GraphBuilder.CreateUAV( PtrBufferRDG, PF_R32_UINT );
+	ParametersBuild->BrickAtlas = GraphBuilder.CreateUAV( BrickAtlasRDG );
+	ParametersBuild->GridSize = FIntVector3(PtrGridSize);
+	ParametersBuild->AtlasSize = FIntVector3(AtlasSize);
+	ParametersBuild->PtrGridPos = RT.Settings.PtrGridPos;
+	ParametersBuild->VoxSize = RT.Settings.VoxSize;
+	ParametersBuild->UnitScale = RT.Settings.GPUUnitScale;
+	ParametersBuild->NumBricks = RT.BrickmapBuilder.GetNumUpdatedBricks();
+	ParametersBuild->UpdateList = GraphBuilder.CreateSRV( BrickListRDG, PF_R32_UINT );
+	ParametersBuild->FreedList = FreedListUAV;
+	ParametersBuild->DeallocatedList = DeallocatedListUAV;
+	ParametersBuild->BrickAllocCounters = AllocCountersUAV;
+	// Terrain
+	ParametersBuild->RotAxis = RT.Settings.Terrain.RotAxis;
+	ParametersBuild->RotAngle = RT.Settings.Terrain.RotAngle;
+	ParametersBuild->PlanePos = RT.Settings.Terrain.PlanePos;
+	ParametersBuild->VerticalNoiseOffset = RT.Settings.Terrain.VerticalNoiseOffset;
+	ParametersBuild->MinNoiseScale = RT.Settings.Terrain.MinNoiseScale;
+	ParametersBuild->NumOctaves = RT.Settings.Terrain.NumOctaves;
+	ParametersBuild->Frequency = RT.Settings.Terrain.Frequency;
+	ParametersBuild->Lacunarity = RT.Settings.Terrain.Lacunarity;
+	ParametersBuild->Amplitude = RT.Settings.Terrain.Amplitude;
+	ParametersBuild->Persistence = RT.Settings.Terrain.Persistence;
+	ParametersBuild->Inflation = RT.Settings.Terrain.Inflation;
+	ParametersBuild->InflationGain = RT.Settings.Terrain.InflationGain;
+	ParametersBuild->SampleSmoothing = RT.Settings.Terrain.SampleSmoothing;
+	ParametersBuild->UnionSmoothing = RT.Settings.Terrain.UnionSmoothing;
+	ParametersBuild->ClippingSmoothing = RT.Settings.Terrain.ClippingSmoothing;
+	ParametersBuild->bSimplex = RT.Settings.Terrain.bSimplex;
+	ParametersBuild->bBandLimiting = RT.Settings.Terrain.bBandLimiting;
+	ParametersBuild->TerrainEpsilon = RT.Settings.Terrain.Epsilon;
+	ParametersBuild->TerrainDerivativeH = RT.Settings.Terrain.DerivativeH;
+	ParametersBuild->TerrainMatIdx = RT.Settings.Terrain.MatIdx;
+	ParametersBuild->TerrainMinBrick = BrickMin;
+	ParametersBuild->TerrainMaxBrick = BrickMax;
+
+	if (RT.BrickmapBuilder.bTerrainDirty)
+	{
+		RDG_EVENT_SCOPE(GraphBuilder, "SDF_Brickmap_Terrain");
+		{
+			RT.BrickmapBuilder.bTerrainDirty = false;
+
+			FIntVector Dimensions = static_cast<FIntVector>(PtrGridSize);
+
+			UE_LOG(LogTemp, Log, TEXT("Bricks: %d, %d"), BrickMin, BrickMax);
+
+			Dimensions.Z = BrickMax - BrickMin + 1;
+			const int32 TotalBricks = Dimensions.X * Dimensions.Y * Dimensions.Z;
+
+			constexpr int MaxBricksPerDispatch = 32768;
+			const int32 NumDispatches = FMath::DivideAndRoundUp( TotalBricks, MaxBricksPerDispatch );
+
+			PermutationVector.Set<FBuildBrickmapShader::FTerrainPerm>( true );
+			TShaderMapRef<FBuildBrickmapShader> ComputeTerrain(GlobalShaderMap, PermutationVector);
+
+			for (int32 i = 0; i < NumDispatches; i++)
+			{
+				const int32 BrickOffset = i * MaxBricksPerDispatch;
+				const int32 NumBricks = FMath::Min( MaxBricksPerDispatch, TotalBricks - BrickOffset );
+
+				FBuildBrickmapShader::FParameters* ParametersTerrain =
+					GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
+				*ParametersTerrain = *ParametersBuild;
+				ParametersTerrain->BrickOffset = BrickOffset;
+				ParametersTerrain->NumBricks = TotalBricks;
+
+				FComputeShaderUtils::AddPass( GraphBuilder,
+											  RDG_EVENT_NAME( "Brickmap_Build_Terrain %d/%d", i + 1, NumDispatches ),
+											  ComputeTerrain,
+											  ParametersTerrain,
+											  FIntVector( NumBricks, 1, 1 ));
+			}
+
+			GEngine->AddOnScreenDebugMessage( -1, 2.0f, FColor::Green, TEXT( "Generated Terrain" ) );
+		}
+	}
+
 	RDG_EVENT_SCOPE( GraphBuilder, "SDF_Brickmap" );
 	{
-		const FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap( InViewFamily.GetFeatureLevel() );
+		// BUILD
+		const int NumUpdated = RT.BrickmapBuilder.GetNumUpdatedBricks();
+		constexpr int MaxBricksPerDispatch = 65024; // 2^16 - 8^3
+		const int32 NumDispatches = FMath::DivideAndRoundUp(NumUpdated, MaxBricksPerDispatch);
 
-		const FRDGBufferRef BrickListRDG = RT.BrickmapBuilder.RegisterBrickListBuffer( GraphBuilder );
-		const FRDGTextureRef BrickAtlasRDG = GraphBuilder.RegisterExternalTexture( RT.BrickmapBuilder.GetBrickAtlas(), ERDGTextureFlags::MultiFrame );
-		const FRDGBufferRef PtrBufferRDG = GraphBuilder.RegisterExternalBuffer( RT.BrickmapBuilder.GetPtrGrid(), ERDGBufferFlags::MultiFrame );
-		const FRDGBufferRef AllocCountersRDG = GraphBuilder.RegisterExternalBuffer( RT.BrickmapBuilder.GetBrickAllocCounter(), ERDGBufferFlags::MultiFrame );
-		const FRDGBufferRef FreedListRDG = GraphBuilder.RegisterExternalBuffer( RT.BrickmapBuilder.GetFreedList(), ERDGBufferFlags::MultiFrame );
-		const FRDGBufferRef DeallocatedListRDG = GraphBuilder.RegisterExternalBuffer( RT.BrickmapBuilder.GetDeallocatedList(), ERDGBufferFlags::MultiFrame );
+		PermutationVector.Set<FBuildBrickmapShader::FTerrainPerm>(false);
+		TShaderMapRef<FBuildBrickmapShader> ComputeTerrain(GlobalShaderMap, PermutationVector);
 
-		const FRDGBufferRef SDFBuffRDG{ RegisterSDFBuffer( GraphBuilder ) };
-		const FRDGBufferUAVRef FreedListUAV = GraphBuilder.CreateUAV( FreedListRDG, PF_R32_UINT );
-		const FRDGBufferUAVRef DeallocatedListUAV = GraphBuilder.CreateUAV( DeallocatedListRDG, PF_R32_UINT );
-		const FRDGBufferUAVRef AllocCountersUAV = GraphBuilder.CreateUAV( AllocCountersRDG, PF_R32_UINT );
-
-		if (RT.BrickmapBuilder.bReset)
+		for (int32 i = 0; i < NumDispatches; i++)
 		{
-			RT.BrickmapBuilder.ClearBrickmap( GraphBuilder );
+			const int32 BrickOffset = MaxBricksPerDispatch * i;
+			const int32 NumBricks = FMath::Min(MaxBricksPerDispatch, NumUpdated - BrickOffset);
+
+			FBuildBrickmapShader::FParameters* ParametersTerrain =
+				GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
+			*ParametersTerrain = *ParametersBuild;
+			ParametersTerrain->BrickOffset = BrickOffset;
+			ParametersTerrain->NumBricks = NumUpdated;
+
+			FComputeShaderUtils::AddPass(GraphBuilder,
+				RDG_EVENT_NAME("Brickmap_Build %d/%d", i + 1, NumDispatches),
+				ComputeTerrain,
+				ParametersTerrain,
+				FIntVector(NumBricks, 1, 1));
 		}
 
-		FBuildBrickmapShader::FParameters* ParametersBuild = GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
-		ParametersBuild->NumEdits = RT.SDFs.Num();
-		ParametersBuild->SDFEdits = GraphBuilder.CreateSRV( SDFBuffRDG );
-		ParametersBuild->PtrGrid = GraphBuilder.CreateUAV( PtrBufferRDG, PF_R32_UINT );
-		ParametersBuild->BrickAtlas = GraphBuilder.CreateUAV( BrickAtlasRDG );
-		ParametersBuild->GridSize = FIntVector3( PtrGridSize );
-		ParametersBuild->AtlasSize = FIntVector3( AtlasSize );
-		ParametersBuild->PtrGridPos = RT.Settings.PtrGridPos;
-		ParametersBuild->VoxSize = RT.Settings.VoxSize;
-		ParametersBuild->UnitScale = RT.Settings.GPUUnitScale;
-		ParametersBuild->NumUpdated = RT.BrickmapBuilder.GetNumUpdatedBricks();
-		ParametersBuild->UpdateList = GraphBuilder.CreateSRV( BrickListRDG, PF_R32_UINT );
-		ParametersBuild->FreedList = FreedListUAV;
-		ParametersBuild->DeallocatedList = DeallocatedListUAV;
-		ParametersBuild->BrickAllocCounters = AllocCountersUAV;
-
+		// TRANSFER + RESET
 		FTransferDeallocatedShader::FParameters* ParametersTransfer = GraphBuilder.AllocParameters<FTransferDeallocatedShader::FParameters>();
 		ParametersTransfer->FreedList = FreedListUAV;
 		ParametersTransfer->DeallocatedList = DeallocatedListUAV;
@@ -268,27 +366,14 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 		ParametersReset->DeallocatedList = DeallocatedListUAV;
 		ParametersReset->BrickAllocCounters = AllocCountersUAV;
 
-		const FIntVector GroupCountBuild
-		{
-			FMath::DivideAndRoundUp( static_cast<int>(ParametersBuild->NumUpdated * BrickResolution), 8 ),
-			FMath::DivideAndRoundUp( static_cast<int>(BrickResolution), 8 ),
-			FMath::DivideAndRoundUp( static_cast<int>(BrickResolution), 8 )
-		};
 		const FIntVector GroupCountTransfer
 		{
-			FMath::DivideAndRoundUp( static_cast<int>(RT.BrickmapBuilder.GetNumUpdatedBricks()), 64 ), 1, 1
+			FMath::DivideAndRoundUp(static_cast<int>(RT.BrickmapBuilder.GetNumUpdatedBricks()), 64), 1, 1
 		};
 		const FIntVector GroupCountReset{ 1, 1, 1 };
 
-		const TShaderMapRef<FBuildBrickmapShader> ComputeBuild( GlobalShaderMap );
-		const TShaderMapRef<FTransferDeallocatedShader> ComputeTransfer( GlobalShaderMap );
-		const TShaderMapRef<FResetCountersShader> ComputeReset( GlobalShaderMap );
-
-		FComputeShaderUtils::AddPass( GraphBuilder,
-									  RDG_EVENT_NAME( "Brickmap_Build" ),
-									  ComputeBuild,
-									  ParametersBuild,
-									  GroupCountBuild );
+		const TShaderMapRef<FTransferDeallocatedShader> ComputeTransfer(GlobalShaderMap);
+		const TShaderMapRef<FResetCountersShader> ComputeReset(GlobalShaderMap);
 
 		FComputeShaderUtils::AddPass( GraphBuilder,
 									  RDG_EVENT_NAME( "Brickmap_Transfer" ),
@@ -464,6 +549,7 @@ void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphB
 		PassParameters->bBandLimiting = RT.Settings.Terrain.bBandLimiting;
 		PassParameters->TerrainEpsilon = RT.Settings.Terrain.Epsilon;
 		PassParameters->TerrainDerivativeH = RT.Settings.Terrain.DerivativeH;
+		PassParameters->TerrainMatIdx = RT.Settings.Terrain.MatIdx;
 		PassParameters->RenderTargets = RenderTargets;
 		PassParameters->RenderTargets.DepthStencil = FDepthStencilBinding( DepthTexture,
 																		   ERenderTargetLoadAction::ELoad, // Depth
