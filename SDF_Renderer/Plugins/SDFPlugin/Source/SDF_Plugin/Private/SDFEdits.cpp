@@ -341,6 +341,8 @@ void USDFSubsystem::DrawDebugBVH() const
 
 	uint32 NumNodes = BVH.GetNumNodes();
 	const FSDFBVH::FNode* Nodes = BVH.GetNodes();
+	if (Nodes[0].IsLeaf()) { return; }
+
 	for (uint32 i = 0; i < NumNodes; i++)
 	{
 		if (i == 1) continue;

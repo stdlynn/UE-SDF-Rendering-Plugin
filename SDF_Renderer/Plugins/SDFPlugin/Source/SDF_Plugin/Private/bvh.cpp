@@ -113,7 +113,6 @@ void FSDFBVH::Build( const TMap<uint64, FSDF>& Edits )
 	FNode& Root{ Nodes[ROOT_IDX] };
 	Root.LeftFirst = 0u;
 	Root.NumEdits = NumEdits;
-	RefitNode( Root, Edits );
 
 	// No need to subdivide if there's no edits
 	if (not NumEdits) { return; }
@@ -121,6 +120,9 @@ void FSDFBVH::Build( const TMap<uint64, FSDF>& Edits )
 	// Allocate and initialize the edit indices
 	EditIndices = new uint32[NumEdits];
 	for (uint32 i{ 0 }; i < NumEdits; ++i) { EditIndices[i] = i; }
+	
+	// Calculate the BVH bounds
+	RefitNode( Root, Edits );
 
 	// Recursively subdivide
 	Subdivide( Root, Edits );
@@ -151,10 +153,16 @@ void FSDFBVH::Subdivide( FNode& Node, const TMap<uint64, FSDF>& Edits )
 	// While there are primitives left to be sorted
 	while (LeftMostToSort <= RightMostToSort)
 	{
+		const FSetElementId EditIdx{ FSetElementId::FromInteger(EditIndices[LeftMostToSort]) };
 		// Keep edits on the left side of the split plane at the start of the index buffer
-		if (Edits[EditIndices[LeftMostToSort]].Centroid[Axis] < SplitPos) { LeftMostToSort++; }
+		if (Edits.Get( EditIdx ).Value.Centroid[Axis] < SplitPos) { LeftMostToSort++; }
 		// Move edits on the right side of the split plane to the end of the index buffer
-		else { Swap( EditIndices[LeftMostToSort], EditIndices[RightMostToSort--] ); }
+		else
+		{
+			Swap( EditIndices[LeftMostToSort], EditIndices[RightMostToSort] );
+			if (RightMostToSort == 0) { break; }
+			RightMostToSort--;
+		}
 	}
 
 	// Stop subdivision if the left or right side of the split plane doesn't contain any edits
