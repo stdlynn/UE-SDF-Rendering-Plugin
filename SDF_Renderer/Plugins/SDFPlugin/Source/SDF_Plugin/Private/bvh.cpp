@@ -113,7 +113,6 @@ void FSDFBVH::Build( const TMap<uint64, FSDF>& Edits )
 	FNode& Root{ Nodes[ROOT_IDX] };
 	Root.LeftFirst = 0u;
 	Root.NumEdits = NumEdits;
-	RefitNode( Root, Edits );
 
 	// No need to subdivide if there's no edits
 	if (not NumEdits) { return; }
@@ -121,6 +120,9 @@ void FSDFBVH::Build( const TMap<uint64, FSDF>& Edits )
 	// Allocate and initialize the edit indices
 	EditIndices = new uint32[NumEdits];
 	for (uint32 i{ 0 }; i < NumEdits; ++i) { EditIndices[i] = i; }
+	
+	// Calculate the bounds of the BVH
+	RefitNode( Root, Edits );
 
 	// Recursively subdivide
 	Subdivide( Root, Edits );
@@ -193,14 +195,14 @@ void FSDFBVH::Subdivide( FNode& Node, const TMap<uint64, FSDF>& Edits )
 
 void FSDFBVH::RefitNode( FNode& Node, const TMap<uint64, FSDF>& Edits ) const
 {
-	Node.BoundsMin = FVector3f{ TNumericLimits<float>::Lowest() };
-	Node.BoundsMax = FVector3f{ TNumericLimits<float>::Max() };
+	Node.BoundsMin = FVector3f{ TNumericLimits<float>::Max() };
+	Node.BoundsMax = FVector3f{ TNumericLimits<float>::Lowest() };
 	const uint32 EndIdx{ Node.LeftFirst + Node.NumEdits };
 	for (uint32 i{ Node.LeftFirst }; i < EndIdx; ++i)
 	{
 		const FSetElementId BoundsIdx{ FSetElementId::FromInteger( EditIndices[i] ) };
 		Node.BoundsMin = Node.BoundsMin.ComponentMin( Edits.Get( BoundsIdx ).Value.Bounds.Min );
-		Node.BoundsMax = Node.BoundsMax.ComponentMin( Edits.Get( BoundsIdx ).Value.Bounds.Max );
+		Node.BoundsMax = Node.BoundsMax.ComponentMax( Edits.Get( BoundsIdx ).Value.Bounds.Max );
 	}
 }
 
