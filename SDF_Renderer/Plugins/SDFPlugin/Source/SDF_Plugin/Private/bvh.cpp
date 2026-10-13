@@ -8,66 +8,112 @@ FSDFBVH::~FSDFBVH()
 	delete[] EditIndices;
 }
 
-bool FSDFBVH::Intersect( const FRay3f& Ray, const TArray<FGPUSDF>& Edits ) const
+uint32 FSDFBVH::TempIntersect( const FRay& Ray, 
+											const TArray<FGPUSDF>& Edits, 
+											uint32 NodeIdx ) const
 {
-	// Don't do intersection tests if there are no primitives
-	if (not NumEdits) { return false; }
-
-	// TODO: prevent NaN?
-	const FVector3f InvDir
-	{ 
-		1.0f / Ray.Direction.X,
-		1.0f / Ray.Direction.Y,
-		1.0f / Ray.Direction.Z
-	};
-
-	uint32 LeftChildIdx{};
-	uint32 RightChildIdx{};
-	float LeftT{ Nodes[LeftChildIdx].Intersect( Ray, InvDir ) };
-	float RightT{ Nodes[RightChildIdx].Intersect( Ray, InvDir ) };
-	if (LeftT > RightT)
+	FNode& Node{ Nodes[NodeIdx] };
+	if (not Node.Intersect( Ray )) { return { 0u, 0.0f, false }; }
+	if (Node.IsLeaf())
 	{
-		Swap( LeftT, RightT );
-		Swap( LeftChildIdx, RightChildIdx );
-	}
-	if (LeftT == MAX_T)
-	{
-		
+		const uint32 EndIdx{ Node.LeftFirst + Node.NumEdits };
+		for (uint32 i{ Node.LeftFirst }; i < EndIdx; ++i)
+		{
+			// TODO: intersect SDFs (modify Ray.T)
+			Edits[EditIndices[i]];
+		}
 	}
 	else
 	{
-		if (RightT < MAX_T)
-		{
-			
-		}
+		TempIntersect( Ray, Edits, Node.LeftFirst );
+		TempIntersect( Ray, Edits, Node.LeftFirst + 1u );
 	}
-
-	//const FNode* Node{ &Nodes[ROOT_IDX] };
-	//while (true)
-	//{
-	//	if (not Node->Intersect( Ray ).bHit) { continue; }
-	//	if (Node->IsLeaf())
-	//	{
-	//		for (uint32 i{ 0 }; i < Node->NumEdits; ++i)
-	//		{
-	//			// TODO: Intersect SDFs
-	//		}
-	//	}
-	//	else
-	//	{
-	//		// intersect both children
-	//	}
-	//}
 }
 
-float FSDFBVH::FNode::Intersect( const FRay3f& Ray, const FVector3f& InvDir ) const
+FSDFBVH::FHitResult FSDFBVH::Intersect( FRay Ray, const TArray<FGPUSDF>& Edits ) const
 {
-	const FVector3f TToMin = (BoundsMin - Ray.Origin) * InvDir;
-	const FVector3f TToMax = (BoundsMax - Ray.Origin) * InvDir;
+	FHitResult HitResult{ TNumericLimits<uint32>::Max(), MAX_T, false };
+
+	// Don't do intersection tests if there are no primitives
+	if (not NumEdits) { return HitResult; }
+
+	// Keep a stack of notes to be processed
+	uint32 NodeIdx{ ROOT_IDX };
+	uint32 NodeIdxStack[NODE_STACK_CAPACITY];
+	uint32 StackPtr{ 0u };
+	while (true)
+	{
+		// Grab the node to process
+		const FNode& Node{ Nodes[NodeIdx] };
+
+		// If the node has no children
+		if (Node.IsLeaf())
+		{
+			// Go over the node's edits
+			const uint32 EndIdx{ Node.LeftFirst + Node.NumEdits };
+			for (uint32 i{ Node.LeftFirst }; i < EndIdx; ++i)
+			{
+				// Intersect
+				const uint32 EditIdx{ EditIndices[i] };
+				if (Edits[EditIdx]) // TODO: intersect SDFs (modify Ray.T)
+				{
+					HitResult.EditIdx = EditIdx;
+					HitResult.T = Ray.T;
+					HitResult.bHit = true;
+				}
+			}
+		}
+		// If the node has children
+		else
+		{
+			// Retrieve the distance to the children
+			uint32 LeftChildIdx{ Node.LeftFirst };
+			uint32 RightChildIdx{ Node.LeftFirst + 1u };
+			float LeftT{ Nodes[LeftChildIdx].Intersect( Ray ) };
+			float RightT{ Nodes[RightChildIdx].Intersect( Ray ) };
+			
+			// Order the children by intersection distance
+			if (LeftT > RightT)
+			{
+				Swap( LeftT, RightT );
+				Swap( LeftChildIdx, RightChildIdx );
+			}
+
+			// If the ray intersects at least one child
+			if (LeftT < MAX_T)
+			{
+				// Process said child next
+				NodeIdx = LeftChildIdx;
+
+				// If the ray also intersects the other child,
+				// put it in the queue for processing
+				if (RightT < MAX_T)
+				{
+					NodeIdxStack[StackPtr++] = RightChildIdx;
+				}
+
+				// Don't advance the stack pointer
+				continue;
+			}
+		}
+
+		// Break if there are no more nodes to process
+		if (StackPtr == 0u) { break; }
+		// Otherwise, continue with the next node on the stack
+		NodeIdx = NodeIdxStack[--StackPtr];
+	}
+
+	return HitResult;
+}
+
+float FSDFBVH::FNode::Intersect( const FRay& Ray ) const
+{
+	const FVector3f TToMin = (BoundsMin - Ray.Pos) * Ray.InvDir;
+	const FVector3f TToMax = (BoundsMax - Ray.Pos) * Ray.InvDir;
 	const FVector3f TMin = FMath::Min( TToMin, TToMax );
 	const FVector3f TMax = FMath::Max( TToMin, TToMax );
 	const float TNear = FMath::Max( FMath::Max3( TMin.X, TMin.Y, TMin.Z ), 0.0f );
-	const float TFar = FMath::Min( FMath::Min3( TMax.X, TMax.Y, TMax.Z ), MAX_T );
+	const float TFar = FMath::Min( FMath::Min3( TMax.X, TMax.Y, TMax.Z ), Ray.T );
 	return (TNear <= TFar) ? TNear : MAX_T;
 }
 

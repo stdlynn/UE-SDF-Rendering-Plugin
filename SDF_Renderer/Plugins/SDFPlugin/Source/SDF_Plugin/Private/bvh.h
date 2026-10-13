@@ -6,11 +6,33 @@ class FSDFBVH
 {
 public:
 
-	~FSDFBVH();
+	struct FRay
+	{
+		FRay( const FVector3f& Pos, const FVector3f& Dir )
+			: Pos{ Pos }
+			, Dir{ Dir }
+			// TODO: prevent NaN?
+			, InvDir{ FVector3f::OneVector / Dir }
+		{}
+
+		bool Hit() const { return T != MAX_T; }
+
+		FVector3f Pos;
+		FVector3f Dir;
+		FVector3f InvDir;
+		float T{ MAX_T };
+	};
+
+	struct FHitResult
+	{
+		uint32 EditIdx;
+		float T;
+		bool bHit;
+	};
 
 	struct alignas( 32 ) FNode
 	{
-		float Intersect( const FRay3f& Ray, const FVector3f& InvDir ) const;
+		float Intersect( const FRay& Ray ) const;
 		bool IsLeaf() const { return NumEdits; }
 
 		FVector3f BoundsMin;
@@ -20,12 +42,15 @@ public:
 	};
 	static_assert( sizeof( FNode ) == 32 );
 
-	bool Intersect( const FRay3f& Ray, const TArray<FGPUSDF>& Edits ) const;
+	~FSDFBVH();
+
+	FHitResult Intersect( FRay Ray, const TArray<FGPUSDF>& Edits ) const;
 	void Build( const TArray<FGPUSDF>& Edits, const TArray<FSDFBounds>& EditsBounds );
 
 private:
 
 	static constexpr float MAX_T{ TNumericLimits<float>::Max() };
+	static constexpr size_t NODE_STACK_CAPACITY{ 64ull };
 	static constexpr uint32 ROOT_IDX{ 0u };
 
 	void Subdivide( FNode& Node, const TArray<FSDFBounds>& EditsBounds );
