@@ -176,12 +176,9 @@ void FSDFExtension::TransferSDFsToRenderThread()
 	USDFSubsystem* SDFSubsystem{ GT.World->GetSubsystem<USDFSubsystem>() };
 	if (not SDFSubsystem->GetAndResetDirty() && not GT.Settings.bUnitScaleDirty) { return; }
 
-	// Grab the game thread's SDFs
-	const auto& SDFs{ SDFSubsystem->GetEdits() };
-
 	// Transfer lambda
 	// Capture the parameters by copy, their state on the game thread might change before the lambda runs
-	auto TransferParams{ [this, SDFs = SDFs]( FRHICommandList& ) mutable
+	auto TransferParams{ [this, SDFs = SDFSubsystem->GetEdits(), BVH = GT.BVH]( FRHICommandList& ) mutable
 	{
 		// Copy the SDF data over to the render thread
 		RT.SDFs.Empty();
@@ -196,6 +193,10 @@ void FSDFExtension::TransferSDFsToRenderThread()
 			RT.SDFBounds.Emplace( Pair.Value.Bounds * RT.Settings.GPUUnitScale );
 		}
 		RT.SDFResources.bDirty = true;
+
+		// Copy and scale the BVH
+		RT.BVH = BVH;
+		RT.BVH.ScaleBVH( RT.Settings.GPUUnitScale );
 	} };
 
 	// Perform the transfer safely on the render thread

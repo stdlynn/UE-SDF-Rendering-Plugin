@@ -82,6 +82,7 @@ private:
 		TWeakObjectPtr<UWorld> World;
 		FSettings Settings;
 		TArray<FSDFMaterial> Materials;
+		FSDFBVH BVH;
 	} GT{};
 
 	// Render thread
@@ -94,6 +95,7 @@ private:
 		TArray<FSDFBounds> SDFBounds;
 		FSDFResources SDFResources;
 		FBrickmapBuilder BrickmapBuilder;
+		FSDFBVH BVH;
 	} RT{};
 
 }; // FSDFExtension
