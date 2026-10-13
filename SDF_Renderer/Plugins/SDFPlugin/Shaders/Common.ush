@@ -386,9 +386,9 @@ float OpSmoothSubtract( float a, float b, float k )
     return -OpSmoothUnion(a,-b,k);
 }
 
-float MapScene( float3 Pos )
+float MapScene( float3 Pos, float MaxT = 1e35 )
 {
-	float ClosestDist = 1e35;
+	float ClosestDist = MaxT;
 
 	for (uint EditIdx = 0; EditIdx < NumEdits; ++EditIdx)
 	{
@@ -397,7 +397,6 @@ float MapScene( float3 Pos )
 		bool bSmooth = Edit.GetSDFSmooths();
 		// Evaluate the distance to the SDF
 		const float Dist = DistFn::DistOrigin( Edit, Pos - Edit.Pos );
-		const float PrevDist = ClosestDist;
 		if (bSmooth)
 		{
 			if (Op == Union)

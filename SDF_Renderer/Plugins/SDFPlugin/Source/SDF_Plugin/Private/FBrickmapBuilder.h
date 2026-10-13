@@ -36,6 +36,7 @@ public:
 	FRDGBufferRef RegisterBrickListBuffer( FRDGBuilder& GraphBuilder ) const;
 
 	bool bReset = true;
+	bool bTerrainDirty = true;
 
 private:
 

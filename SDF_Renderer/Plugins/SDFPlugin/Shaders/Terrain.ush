@@ -1,5 +1,23 @@
 #pragma once
 
+// Terrain bindings
+float3 RotAxis;
+float RotAngle;
+float3 PlanePos;
+float VerticalNoiseOffset;
+float MinNoiseScale;
+uint NumOctaves;
+float Frequency;
+float Lacunarity;
+float Amplitude;
+float Persistence;
+float Inflation;
+float InflationGain;
+float SampleSmoothing;
+float UnionSmoothing;
+float ClippingSmoothing;
+uint bSimplex;
+
 struct FTerrainParams
 {
 	float3 RotAxis;
@@ -19,6 +37,28 @@ struct FTerrainParams
     float ClippingSmoothing;
 	bool bSimplex;
 };
+
+FTerrainParams GetTerrainParams()
+{
+	FTerrainParams Params;
+	Params.RotAxis = RotAxis;
+	Params.RotAngle = RotAngle;
+	Params.PlanePos = PlanePos;
+	Params.VerticalNoiseOffset = VerticalNoiseOffset;
+	Params.NumOctaves = NumOctaves;
+	Params.Frequency = Frequency;
+	Params.Lacunarity = Lacunarity;
+	Params.Amplitude = Amplitude;
+	Params.Persistence = Persistence;
+	Params.Inflation = Inflation;
+	Params.InflationGain = InflationGain;
+	Params.SampleSmoothing = SampleSmoothing;
+	Params.UnionSmoothing = UnionSmoothing;
+	Params.ClippingSmoothing = ClippingSmoothing;
+	Params.MinNoiseScale = MinNoiseScale;
+	Params.bSimplex = bSimplex > 0;
+	return Params;
+}
 
 // [CREDITS] https://www.shadertoy.com/view/sfXXzX
 uint VMulU32U24( uint a, uint b ) { return (a & 0x00ffffffu) * (b & 0x00ffffffu); }
