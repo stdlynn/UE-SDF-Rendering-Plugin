@@ -8,28 +8,6 @@ FSDFBVH::~FSDFBVH()
 	delete[] EditIndices;
 }
 
-uint32 FSDFBVH::TempIntersect( const FRay& Ray, 
-											const TArray<FGPUSDF>& Edits, 
-											uint32 NodeIdx ) const
-{
-	FNode& Node{ Nodes[NodeIdx] };
-	if (not Node.Intersect( Ray )) { return { 0u, 0.0f, false }; }
-	if (Node.IsLeaf())
-	{
-		const uint32 EndIdx{ Node.LeftFirst + Node.NumEdits };
-		for (uint32 i{ Node.LeftFirst }; i < EndIdx; ++i)
-		{
-			// TODO: intersect SDFs (modify Ray.T)
-			Edits[EditIndices[i]];
-		}
-	}
-	else
-	{
-		TempIntersect( Ray, Edits, Node.LeftFirst );
-		TempIntersect( Ray, Edits, Node.LeftFirst + 1u );
-	}
-}
-
 FSDFBVH::FHitResult FSDFBVH::Intersect( FRay Ray, const TArray<FGPUSDF>& Edits ) const
 {
 	FHitResult HitResult{ TNumericLimits<uint32>::Max(), MAX_T, false };
@@ -117,17 +95,17 @@ float FSDFBVH::FNode::Intersect( const FRay& Ray ) const
 	return (TNear <= TFar) ? TNear : MAX_T;
 }
 
-void FSDFBVH::Build( const TArray<FGPUSDF>& Edits, const TArray<FSDFBounds>& EditsBounds )
+void FSDFBVH::Build( uint32 NewNumEdits, const TArray<FSDFBounds>& EditsBounds )
 {
 	// Reset resources
-	const bool bRealloc{ NumEdits != Edits.Num() };
+	const bool bRealloc{ NumEdits != NewNumEdits };
 	if (bRealloc)
 	{
 		FMemory::Free( Nodes );
 		delete[] EditIndices;
 		Nodes = nullptr;
 		EditIndices = nullptr;
-		NumEdits = Edits.Num();
+		NumEdits = NewNumEdits;
 	}
 	if (not NumEdits) { return; }
 	if (bRealloc)

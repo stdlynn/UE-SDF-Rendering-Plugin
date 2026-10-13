@@ -45,7 +45,8 @@ public:
 	~FSDFBVH();
 
 	FHitResult Intersect( FRay Ray, const TArray<FGPUSDF>& Edits ) const;
-	void Build( const TArray<FGPUSDF>& Edits, const TArray<FSDFBounds>& EditsBounds );
+	void Build( uint32 NewNumEdits, const TArray<FSDFBounds>& EditsBounds );
+	void Refit( const TArray<FSDFBounds>& EditsBounds );
 
 private:
 
