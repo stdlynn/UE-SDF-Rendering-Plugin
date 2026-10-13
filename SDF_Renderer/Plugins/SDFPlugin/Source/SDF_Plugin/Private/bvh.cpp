@@ -152,9 +152,15 @@ void FSDFBVH::Subdivide( FNode& Node, const TMap<uint64, FSDF>& Edits )
 	while (LeftMostToSort <= RightMostToSort)
 	{
 		// Keep edits on the left side of the split plane at the start of the index buffer
-		if (Edits[EditIndices[LeftMostToSort]].Centroid[Axis] < SplitPos) { LeftMostToSort++; }
+		const FSetElementId EditIdx{ FSetElementId::FromInteger( EditIndices[LeftMostToSort] ) };
+		if (Edits.Get( EditIdx ).Value.Centroid[Axis] < SplitPos) { LeftMostToSort++; }
 		// Move edits on the right side of the split plane to the end of the index buffer
-		else { Swap( EditIndices[LeftMostToSort], EditIndices[RightMostToSort--] ); }
+		else
+		{
+			Swap( EditIndices[LeftMostToSort], EditIndices[RightMostToSort] );
+			if (RightMostToSort == 0) { break; }
+			RightMostToSort--;
+		}
 	}
 
 	// Stop subdivision if the left or right side of the split plane doesn't contain any edits
