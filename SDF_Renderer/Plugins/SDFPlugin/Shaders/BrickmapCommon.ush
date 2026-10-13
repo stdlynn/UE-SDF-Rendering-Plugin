@@ -30,10 +30,10 @@ Buffer<uint> PtrGrid;
 static const uint BrickRes = 8;
 static const uint VoxRes = BrickRes - 1;
 
-static const uint3 NumAtlasBricks = uint3( 256, 256, 8 );
+static const uint3 NumAtlasBricks = uint3( 256, 256, 2 );
 static const uint3 AtlasSize = NumAtlasBricks * BrickRes;
 
-static const uint3 PtrGridSize = uint3( 256, 256, 64 );
+static const uint3 PtrGridSize = uint3( 256, 256, 256 );
 static const uint3 MaxGridIdx = PtrGridSize - 1;
 
 static const uint Empty = 0xFFFFFFFFu;
