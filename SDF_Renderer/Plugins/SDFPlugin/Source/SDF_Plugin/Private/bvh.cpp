@@ -33,7 +33,7 @@ FSDFBVH::FHitResult FSDFBVH::Intersect( FRay Ray, const TMap<uint64, FSDF>& Edit
 			{
 				// Intersect
 				const uint32 EditIdx{ EditIndices[i] };
-				if (false /*Edits[EditIdx]*/) // TODO: intersect SDFs (modify Ray.T)
+				if (false /*Edits.Get( EditIdx )*/) // TODO: intersect SDFs (modify Ray.T)
 				{
 					HitResult.EditIdx = EditIdx;
 					HitResult.T = Ray.T;
@@ -192,9 +192,9 @@ void FSDFBVH::RefitNode( FNode& Node, const TMap<uint64, FSDF>& Edits ) const
 	const uint32 EndIdx{ Node.LeftFirst + Node.NumEdits };
 	for (uint32 i{ Node.LeftFirst }; i < EndIdx; ++i)
 	{
-		const uint32 BoundsIdx{ EditIndices[i] };
-		Node.BoundsMin = Node.BoundsMin.ComponentMin( Edits[BoundsIdx].Bounds.Min );
-		Node.BoundsMax = Node.BoundsMax.ComponentMin( Edits[BoundsIdx].Bounds.Max );
+		const FSetElementId BoundsIdx{ static_cast<FSetElementId>(EditIndices[i]) };
+		Node.BoundsMin = Node.BoundsMin.ComponentMin( Edits.Get( BoundsIdx ).Value.Bounds.Min );
+		Node.BoundsMax = Node.BoundsMax.ComponentMin( Edits.Get( BoundsIdx ).Value.Bounds.Max );
 	}
 }
 

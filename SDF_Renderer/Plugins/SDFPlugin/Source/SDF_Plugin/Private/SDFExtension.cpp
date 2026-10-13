@@ -191,9 +191,9 @@ void FSDFExtension::TransferSDFsToRenderThread()
 		RT.SDFResources.bDirty = true;
 
 		// Copy and scale the BVH
-		RT.BVH = BVH;
-		RT.BVH.ScaleBVH( RT.Settings.GPUUnitScale );
-		RT.bDirtyBVH = true;
+		RT.BVHResources.BVH = BVH;
+		RT.BVHResources.BVH.ScaleBVH( RT.Settings.GPUUnitScale );
+		RT.BVHResources.bDirty = true;
 	} };
 
 	// Perform the transfer safely on the render thread
@@ -220,7 +220,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 	// Update upload buffers
 	UpdateSDFBuffer();
 	UpdateMaterialBuffer();
-	UpdateBVHBuffer();
+	UpdateNodeBuffer();
 	RT.BrickmapBuilder.AllocateBrickList();
 
 	if (! RT.BrickmapBuilder.AreResourcesValid())
@@ -238,6 +238,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 	const FRDGBufferRef DeallocatedListRDG = GraphBuilder.RegisterExternalBuffer(RT.BrickmapBuilder.GetDeallocatedList(), ERDGBufferFlags::MultiFrame);
 
 	const FRDGBufferRef SDFBuffRDG{ RegisterSDFBuffer(GraphBuilder) };
+	const FRDGBufferRef NodeBuffRDG{ RegisterNodeBuffer(GraphBuilder) };
 	const FRDGBufferUAVRef FreedListUAV = GraphBuilder.CreateUAV(FreedListRDG, PF_R32_UINT);
 	const FRDGBufferUAVRef DeallocatedListUAV = GraphBuilder.CreateUAV(DeallocatedListRDG, PF_R32_UINT);
 	const FRDGBufferUAVRef AllocCountersUAV = GraphBuilder.CreateUAV(AllocCountersRDG, PF_R32_UINT);
@@ -256,6 +257,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 	FBuildBrickmapShader::FParameters* ParametersBuild = GraphBuilder.AllocParameters<FBuildBrickmapShader::FParameters>();
 	ParametersBuild->NumEdits = RT.SDFs.Num();
 	ParametersBuild->SDFEdits = GraphBuilder.CreateSRV( SDFBuffRDG );
+	ParametersBuild->Nodes = GraphBuilder.CreateSRV( NodeBuffRDG );
 	ParametersBuild->PtrGrid = GraphBuilder.CreateUAV( PtrBufferRDG, PF_R32_UINT );
 	ParametersBuild->BrickAtlas = GraphBuilder.CreateUAV( BrickAtlasRDG );
 	ParametersBuild->GridSize = FIntVector3(PtrGridSize);
@@ -427,6 +429,7 @@ void FSDFExtension::UpdateMaterialBuffer()
 {
 	// The buffer is not up-to-date (or doesn't exist)
 	if (not RT.MaterialsResource.bDirty) { return; }
+	RT.MaterialsResource.bDirty = false;
 
 	// We need to upload the updated Material buffer
 	RT.MaterialsResource.bUpload = true;
@@ -450,9 +453,19 @@ void FSDFExtension::UpdateMaterialBuffer()
 	}
 }
 
-void FSDFExtension::UpdateBVHBuffer()
+void FSDFExtension::UpdateNodeBuffer()
 {
-	
+	if (not RT.BVHResources.bDirty) { return; }
+	RT.BVHResources.bDirty = true;
+	RT.BVHResources.bUpload = true;
+
+	if (not RT.BVHResources.Buff.IsValid()
+		 || (RT.BVHResources.Buff->GetSize() / sizeof( FSDFBVH::FNode )) < RT.BVHResources.BVH.GetNumNodes())
+	{
+		const uint32 Capacity{ FMath::Max( RT.BVHResources.BVH.GetNumNodes(), 1u ) };
+		const FRDGBufferDesc Desc{ FRDGBufferDesc::CreateStructuredUploadDesc( sizeof( FSDFBVH::FNode ), Capacity ) };
+		RT.BVHResources.Buff = AllocatePooledBuffer( Desc, TEXT( "SDF BVH Node Buffer" ) );
+	}
 }
 
 FRDGBufferRef FSDFExtension::RegisterSDFBuffer( FRDGBuilder& GraphBuilder )
@@ -483,6 +496,20 @@ FRDGBufferRef FSDFExtension::RegisterMaterialBuffer(FRDGBuilder& GraphBuilder)
 		RT.MaterialsResource.bUpload = false;
 	}
 	return MaterialBuffRDG;
+}
+
+FRDGBufferRef FSDFExtension::RegisterNodeBuffer( FRDGBuilder& GraphBuilder )
+{
+	const FRDGBufferRef NodeBufferRDG{ GraphBuilder.RegisterExternalBuffer( RT.BVHResources.Buff, ERDGBufferFlags::MultiFrame ) };
+	if (RT.BVHResources.bUpload)
+	{
+		GraphBuilder.QueueBufferUpload( NodeBufferRDG,
+										RT.BVHResources.BVH.GetNodes(),
+										sizeof( FSDFBVH::FNode ) * RT.BVHResources.BVH.GetNumNodes(),
+										ERDGInitialDataFlags::NoCopy );
+		RT.BVHResources.bUpload = false;
+	}
+	return NodeBufferRDG;
 }
 
 void FSDFExtension::PostRenderBasePassDeferred_RenderThread( FRDGBuilder& GraphBuilder,
