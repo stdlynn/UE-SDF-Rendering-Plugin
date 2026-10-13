@@ -1,4 +1,6 @@
 #include "SDFEdits.h"
+#include "BrickmapCommon.h"
+#include "SDFSettings.h"
 
 namespace
 {
@@ -8,6 +10,12 @@ namespace
 		TEXT(" 0: OFF;")
 		TEXT(" 1: Subtractive only;")
 		TEXT(" 2: ALL"));
+
+	TAutoConsoleVariable CVarDebugBounds(TEXT("r.SDF.Debug.Bounds"),
+		0,
+		TEXT("Enable debug view of the brickmap bounds \n")
+		TEXT(" 0: OFF;")
+		TEXT(" 1: ON"));
 }
 
 // Sets default values
@@ -221,17 +229,21 @@ void USDFSubsystem::SetSDFDirty( const USDFComponent& Comp )
 // Render wireframe of subtractive edits so we can see them
 void USDFSubsystem::DrawDebug()
 {
-	// TODO:
-	// TODO: LYNN PLS
-	// TODO: MAKE A CVAR FOR RENDERING BOUNDING BOXES AS WELL
-	// TODO:
-
-	int CVar = CVarDebugWireframe.GetValueOnGameThread();
-	if (!CVar) return;
 	UWorld* World = GetWorld();
 	if (!World) return;
 
-	for (const auto& [ID, Edit] : Edits)
+	if (CVarDebugBounds.GetValueOnGameThread())
+	{
+		USDFSettings* SDFSettings{ GetMutableDefault<USDFSettings>() };
+		FVector Center = static_cast<FVector>(SDFSettings->PtrGridPos);
+		FVector Extent = static_cast<FVector>(PtrGridSize * SDFSettings->VoxSize * VoxelResolution / 2.0);
+		DrawDebugBox( World, Center, Extent, FColor::Magenta );
+	}
+
+	int CVarWireframe = CVarDebugWireframe.GetValueOnGameThread();
+	if (!CVarWireframe) return;
+
+	for (const auto& [ID, Edit] : RenderSDFs)
 	{
 		float SizeEpsilon = 1e-2;
 		float SizeMult = 3.5e-2;
@@ -241,7 +253,7 @@ void USDFSubsystem::DrawDebug()
 		if (Op == EOperation::Add)
 		{
 			SizeMult += 1.0f;
-			if (CVar < 2) continue;
+			if (CVarWireframe < 2) continue;
 		}
 		else
 		{

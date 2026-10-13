@@ -6,10 +6,10 @@
 static constexpr uint32 BrickResolution = 8;
 static constexpr uint32 VoxelResolution = BrickResolution - 1;
 
-static const FUintVector3 NumAtlasBricks = FUintVector3( 256, 256, 2 );
+static const FUintVector3 NumAtlasBricks = FUintVector3( 256, 256, 8 );
 static const FUintVector3 AtlasSize = NumAtlasBricks * BrickResolution;
 
-static const FUintVector3 PtrGridSize = FUintVector3( 256, 256, 256 );
+static const FUintVector3 PtrGridSize = FUintVector3( 256, 256, 64 );
 
 // TODO move to separate SDFCommon.h file
 inline float SDFSphere( const FVector3f& Point, const FVector3f& Center, float Radius )
