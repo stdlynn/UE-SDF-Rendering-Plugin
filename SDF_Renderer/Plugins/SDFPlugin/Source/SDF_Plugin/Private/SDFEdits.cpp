@@ -311,7 +311,27 @@ void USDFSubsystem::DrawDebugWireframe()
 	}
 }
 
-void USDFSubsystem::DrawDebugBVH( ) const
+static void TraverseBVHDebug( UWorld* World, const FSDFBVH::FNode* Nodes, const FSDFBVH::FNode& Node )
+{
+	if (Node.IsLeaf()) return;
+
+	// Loop over all child nodes of this node
+	for (uint32 i = 0; i < 2; i++)
+	{
+		const uint32 ChildIdx = Node.LeftFirst + i;
+		const FSDFBVH::FNode& ChildNode = Nodes[ChildIdx];
+
+		// Draw debug arrow
+		const FVector StartPos = static_cast<FVector>((Node.BoundsMin + Node.BoundsMax) / 2.0f);
+		const FVector EndPos = static_cast<FVector>((ChildNode.BoundsMin + ChildNode.BoundsMax) / 2.0f);
+		DrawDebugDirectionalArrow( World, StartPos, EndPos, 100.0f, FColor::Cyan );
+
+		// Recursively traverse the BVH
+		TraverseBVHDebug( World, Nodes, ChildNode );
+	}
+}
+
+void USDFSubsystem::DrawDebugBVH() const
 {
 	UWorld* World = GetWorld();
 	if (!World) return;
@@ -331,4 +351,7 @@ void USDFSubsystem::DrawDebugBVH( ) const
 
 		DrawDebugBox( World, Center, Extent, FColor::White );
 	}
+
+	const FSDFBVH::FNode& RootNode = Nodes[0];
+	TraverseBVHDebug( World, Nodes, RootNode );
 }
