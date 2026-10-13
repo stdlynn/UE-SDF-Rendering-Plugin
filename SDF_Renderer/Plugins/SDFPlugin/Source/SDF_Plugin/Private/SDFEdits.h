@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
+#include "bvh.h"
 #include "SDFEdits.generated.h"
 
 struct FAABB
@@ -13,17 +14,6 @@ struct FAABB
 
 	FVector3f Min;
 	FVector3f Max;
-};
-
-struct FSDFBounds
-{
-	FSDFBounds( const FAABB& AABB )
-		: AABB{ AABB }
-		, Centroid{ (AABB.Min + AABB.Max) / 2.0f }
-	{}
-
-	FAABB AABB;
-	FVector3f Centroid;
 };
 
 UENUM( BlueprintType )
@@ -199,6 +189,7 @@ struct FSDF
 			default: Data = FVector4f(0.f, 0.f, 0.f, 0.f); break;
 		}
 		CalcBounds();
+		Centroid = (Bounds.Min + Bounds.Max) / 2.0f;
 	}
 	
 	void CalcBounds();
@@ -218,6 +209,7 @@ struct FSDF
 	uint32 MatIdx;
 	FQuat Quat; // Data1 in FGPUSDF
 	FVector4f Data; // Data0 in FGPUSDF
+	FVector3f Centroid;
 };
 
 // GPU SDF edits
@@ -293,6 +285,7 @@ public:
 	void SetSDFDirty( const USDFComponent& Comp );
 
 	const auto& GetEdits() const { return Edits; }
+	const auto& GetBVH() const { return BVH; }
 	bool GetAndResetDirty()
 	{
 		const bool bWasDirty{ bDirty };
@@ -308,6 +301,7 @@ private:
 
 	// Render params, game thread
 	TMap<uint64, FSDF> Edits;
+	FSDFBVH BVH;
 	bool bDirty{ true };
 
 }; // USDFSubsystem

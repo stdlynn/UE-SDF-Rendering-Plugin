@@ -178,25 +178,22 @@ void FSDFExtension::TransferSDFsToRenderThread()
 
 	// Transfer lambda
 	// Capture the parameters by copy, their state on the game thread might change before the lambda runs
-	auto TransferParams{ [this, SDFs = SDFSubsystem->GetEdits(), BVH = GT.BVH]( FRHICommandList& ) mutable
+	auto TransferParams{ [this, SDFs = SDFSubsystem->GetEdits(), BVH = SDFSubsystem->GetBVH()]( FRHICommandList& ) mutable
 	{
 		// Copy the SDF data over to the render thread
 		RT.SDFs.Empty();
 		RT.SDFs.Reserve( SDFs.Num() );
-		RT.SDFBounds.Empty();
-		RT.SDFBounds.Reserve( SDFs.Num() );
 		for (const auto& Pair : SDFs)
 		{
 			// Copy over the SDF
-			const int32 Idx{ RT.SDFs.Emplace( Pair.Value, Pair.Key, RT.Settings.GPUUnitScale ) };
-			// Copy over the AABB
-			RT.SDFBounds.Emplace( Pair.Value.Bounds * RT.Settings.GPUUnitScale );
+			RT.SDFs.Emplace( Pair.Value, Pair.Key, RT.Settings.GPUUnitScale );
 		}
 		RT.SDFResources.bDirty = true;
 
 		// Copy and scale the BVH
 		RT.BVH = BVH;
 		RT.BVH.ScaleBVH( RT.Settings.GPUUnitScale );
+		RT.bDirtyBVH = true;
 	} };
 
 	// Perform the transfer safely on the render thread
@@ -223,6 +220,7 @@ void FSDFExtension::PreRenderViewFamily_RenderThread( FRDGBuilder& GraphBuilder,
 	// Update upload buffers
 	UpdateSDFBuffer();
 	UpdateMaterialBuffer();
+	UpdateBVHBuffer();
 	RT.BrickmapBuilder.AllocateBrickList();
 
 	if (! RT.BrickmapBuilder.AreResourcesValid())
@@ -450,6 +448,11 @@ void FSDFExtension::UpdateMaterialBuffer()
 		// If we already have a buffer allocated, it will be deallocated by the RDG when it goes out of scope
 		RT.MaterialsResource.Buff = AllocatePooledBuffer( Desc, TEXT( "SDF Material Upload Buffer" ) );
 	}
+}
+
+void FSDFExtension::UpdateBVHBuffer()
+{
+	
 }
 
 FRDGBufferRef FSDFExtension::RegisterSDFBuffer( FRDGBuilder& GraphBuilder )

@@ -1,6 +1,6 @@
 #pragma once
 
-struct FGPUSDF;
+struct FSDF;
 struct FSDFBounds;
 class FSDFBVH
 {
@@ -45,9 +45,9 @@ public:
 	~FSDFBVH();
 	FSDFBVH& operator=( const FSDFBVH& Other );
 
-	FHitResult Intersect( FRay Ray, const TArray<FGPUSDF>& Edits ) const;
-	void Build( uint32 NewNumEdits, const TArray<FSDFBounds>& EditsBounds );
-	void Refit( const TArray<FSDFBounds>& EditsBounds );
+	FHitResult Intersect( FRay Ray, const TMap<uint64, FSDF>& Edits ) const;
+	void Build( const TMap<uint64, FSDF>& Edits );
+	void Refit( const TMap<uint64, FSDF>& Edits );
 
 	void ScaleBVH( float UnitScale ) const;
 
@@ -57,8 +57,8 @@ private:
 	static constexpr size_t NODE_STACK_CAPACITY{ 64ull };
 	static constexpr uint32 ROOT_IDX{ 0u };
 
-	void Subdivide( FNode& Node, const TArray<FSDFBounds>& EditsBounds );
-	void RefitNode( FNode& Node, const TArray<FSDFBounds>& EditsBounds ) const;
+	void Subdivide( FNode& Node, const TMap<uint64, FSDF>& Edits );
+	void RefitNode( FNode& Node, const TMap<uint64, FSDF>& Edits ) const;
 	static uint32 NumNodesForNObjects( uint32 N ) { return 2 * N; }
 
 	uint32* EditIndices{ nullptr };

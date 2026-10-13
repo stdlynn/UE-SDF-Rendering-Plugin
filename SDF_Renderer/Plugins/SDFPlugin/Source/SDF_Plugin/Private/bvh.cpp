@@ -8,7 +8,7 @@ FSDFBVH::~FSDFBVH()
 	delete[] EditIndices;
 }
 
-FSDFBVH::FHitResult FSDFBVH::Intersect( FRay Ray, const TArray<FGPUSDF>& Edits ) const
+FSDFBVH::FHitResult FSDFBVH::Intersect( FRay Ray, const TMap<uint64, FSDF>& Edits ) const
 {
 	FHitResult HitResult{ TNumericLimits<uint32>::Max(), MAX_T, false };
 
@@ -95,17 +95,17 @@ float FSDFBVH::FNode::Intersect( const FRay& Ray ) const
 	return (TNear <= TFar) ? TNear : MAX_T;
 }
 
-void FSDFBVH::Build( uint32 NewNumEdits, const TArray<FSDFBounds>& EditsBounds )
+void FSDFBVH::Build( const TMap<uint64, FSDF>& Edits )
 {
 	// Reset resources
-	const bool bRealloc{ NumEdits != NewNumEdits };
+	const bool bRealloc{ NumEdits != Edits.Num() };
 	if (bRealloc)
 	{
 		FMemory::Free( Nodes );
 		delete[] EditIndices;
 		Nodes = nullptr;
 		EditIndices = nullptr;
-		NumEdits = NewNumEdits;
+		NumEdits = Edits.Num();
 	}
 	if (not NumEdits) { return; }
 	if (bRealloc)
@@ -120,13 +120,13 @@ void FSDFBVH::Build( uint32 NewNumEdits, const TArray<FSDFBounds>& EditsBounds )
 	Root.LeftFirst = 0u;
 	Root.NumEdits = NumEdits;
 	NodesUsed = 2u; // Skip the 2nd node so children share a cacheline
-	RefitNode( Root, EditsBounds );
+	RefitNode( Root, Edits );
 
 	// Recursively subdivide
-	Subdivide( Root, EditsBounds );
+	Subdivide( Root, Edits );
 }
 
-void FSDFBVH::Subdivide( FNode& Node, const TArray<FSDFBounds>& EditsBounds )
+void FSDFBVH::Subdivide( FNode& Node, const TMap<uint64, FSDF>& Edits )
 {
 	// Stop subdividing once there's less than 2 edits left in a node
 	if (Node.NumEdits <= 2) { return; }
@@ -152,7 +152,7 @@ void FSDFBVH::Subdivide( FNode& Node, const TArray<FSDFBounds>& EditsBounds )
 	while (LeftMostToSort <= RightMostToSort)
 	{
 		// Keep edits on the left side of the split plane at the start of the index buffer
-		if (EditsBounds[EditIndices[LeftMostToSort]].Centroid[Axis] < SplitPos) { LeftMostToSort++; }
+		if (Edits[EditIndices[LeftMostToSort]].Centroid[Axis] < SplitPos) { LeftMostToSort++; }
 		// Move edits on the right side of the split plane to the end of the index buffer
 		else { Swap( EditIndices[LeftMostToSort], EditIndices[RightMostToSort--] ); }
 	}
@@ -177,15 +177,15 @@ void FSDFBVH::Subdivide( FNode& Node, const TArray<FSDFBounds>& EditsBounds )
 	Node.NumEdits = 0u;
 
 	// Set the bounds for the child nodes
-	RefitNode( LeftChild, EditsBounds );
-	RefitNode( RightChild, EditsBounds );
+	RefitNode( LeftChild, Edits );
+	RefitNode( RightChild, Edits );
 
 	// Further subdivide both children
-	Subdivide( LeftChild, EditsBounds );
-	Subdivide( RightChild, EditsBounds );
+	Subdivide( LeftChild, Edits );
+	Subdivide( RightChild, Edits );
 }
 
-void FSDFBVH::RefitNode( FNode& Node, const TArray<FSDFBounds>& EditsBounds ) const
+void FSDFBVH::RefitNode( FNode& Node, const TMap<uint64, FSDF>& Edits ) const
 {
 	Node.BoundsMin = FVector3f{ TNumericLimits<float>::Lowest() };
 	Node.BoundsMax = FVector3f{ TNumericLimits<float>::Max() };
@@ -193,9 +193,8 @@ void FSDFBVH::RefitNode( FNode& Node, const TArray<FSDFBounds>& EditsBounds ) co
 	for (uint32 i{ Node.LeftFirst }; i < EndIdx; ++i)
 	{
 		const uint32 BoundsIdx{ EditIndices[i] };
-		const FSDFBounds& Bounds{ EditsBounds[BoundsIdx] };
-		Node.BoundsMin = Node.BoundsMin.ComponentMin( Bounds.AABB.Min );
-		Node.BoundsMax = Node.BoundsMax.ComponentMin( Bounds.AABB.Max );
+		Node.BoundsMin = Node.BoundsMin.ComponentMin( Edits[BoundsIdx].Bounds.Min );
+		Node.BoundsMax = Node.BoundsMax.ComponentMin( Edits[BoundsIdx].Bounds.Max );
 	}
 }
 

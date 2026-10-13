@@ -33,6 +33,8 @@ void USDFSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	BVH.Build( Edits.Num(),  )
+
 	DrawDebug();
 }
 

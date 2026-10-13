@@ -73,6 +73,7 @@ private:
 	void TransferSDFsToRenderThread();
 	void UpdateSDFBuffer();
 	void UpdateMaterialBuffer();
+	void UpdateBVHBuffer();
 	FRDGBufferRef RegisterSDFBuffer( FRDGBuilder& GraphBuilder );
 	FRDGBufferRef RegisterMaterialBuffer( FRDGBuilder& GraphBuilder );
 
@@ -82,7 +83,6 @@ private:
 		TWeakObjectPtr<UWorld> World;
 		FSettings Settings;
 		TArray<FSDFMaterial> Materials;
-		FSDFBVH BVH;
 	} GT{};
 
 	// Render thread
@@ -92,10 +92,10 @@ private:
 		TArray<FSDFMaterial> Materials;
 		FSDFResources MaterialsResource;
 		TArray<FGPUSDF> SDFs;
-		TArray<FSDFBounds> SDFBounds;
 		FSDFResources SDFResources;
 		FBrickmapBuilder BrickmapBuilder;
 		FSDFBVH BVH;
+		bool bDirtyBVH{ true };
 	} RT{};
 
 }; // FSDFExtension
