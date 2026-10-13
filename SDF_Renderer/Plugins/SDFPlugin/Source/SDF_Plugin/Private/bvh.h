@@ -43,10 +43,13 @@ public:
 	static_assert( sizeof( FNode ) == 32 );
 
 	~FSDFBVH();
+	FSDFBVH& operator=( const FSDFBVH& Other );
 
 	FHitResult Intersect( FRay Ray, const TArray<FGPUSDF>& Edits ) const;
 	void Build( uint32 NewNumEdits, const TArray<FSDFBounds>& EditsBounds );
 	void Refit( const TArray<FSDFBounds>& EditsBounds );
+
+	void ScaleBVH( float UnitScale ) const;
 
 private:
 

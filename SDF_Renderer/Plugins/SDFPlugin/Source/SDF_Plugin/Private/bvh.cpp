@@ -198,3 +198,40 @@ void FSDFBVH::RefitNode( FNode& Node, const TArray<FSDFBounds>& EditsBounds ) co
 		Node.BoundsMax = Node.BoundsMax.ComponentMin( Bounds.AABB.Max );
 	}
 }
+
+FSDFBVH& FSDFBVH::operator=( const FSDFBVH& Other )
+{
+	const uint32 NumNodes{ NumNodesForNObjects( NumEdits ) };
+	if (NumEdits != Other.NumEdits)
+	{
+		FMemory::Free( Nodes );
+		delete[] EditIndices;
+		Nodes = nullptr;
+		EditIndices = nullptr;
+		NodesUsed = Other.NodesUsed;
+		NumEdits = Other.NumEdits;
+
+		if (NumEdits)
+		{
+			Nodes = static_cast<FNode*>(FMemory::Malloc( NumNodes * sizeof( FNode ), 64u ));
+			EditIndices = new uint32[NumEdits];
+		}
+	}
+	if (NumEdits)
+	{
+		FMemory::Memcpy( Nodes, Other.Nodes, NumNodes * sizeof( FNode ) );
+		FMemory::Memcpy( EditIndices, Other.EditIndices, NumEdits * sizeof( uint32 ) );
+	}
+
+	return *this;
+}
+
+void FSDFBVH::ScaleBVH( float UnitScale ) const
+{
+	const uint32 NumNodes{ NumNodesForNObjects( NumEdits ) };
+	for (uint32 i{ 0 }; i < NumNodes; ++i)
+	{
+		Nodes[i].BoundsMin *= UnitScale;
+		Nodes[i].BoundsMax *= UnitScale;
+	}
+}
