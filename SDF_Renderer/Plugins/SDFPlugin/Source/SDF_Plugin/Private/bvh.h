@@ -42,7 +42,9 @@ public:
 	};
 	static_assert( sizeof( FNode ) == 32 );
 
+	FSDFBVH() = default;
 	~FSDFBVH();
+	FSDFBVH( const FSDFBVH& Other );
 	FSDFBVH& operator=( const FSDFBVH& Other );
 
 	FHitResult Intersect( FRay Ray, const TMap<uint64, FSDF>& Edits ) const;
@@ -61,11 +63,11 @@ private:
 
 	void Subdivide( FNode& Node, const TMap<uint64, FSDF>& Edits );
 	void RefitNode( FNode& Node, const TMap<uint64, FSDF>& Edits ) const;
-	static uint32 NumNodesForNObjects( uint32 N ) { return FMath::Min( 2u * N, 2u ); }
+	static uint32 NumNodesForNObjects( uint32 N ) { return FMath::Max( 2u * N, 2u ); }
 
 	uint32* EditIndices{ nullptr };
 	FNode* Nodes{ nullptr };
-	uint32 NodesUsed{ 2u };
+	uint32 NodesUsed{ 0u };
 	uint32 NumEdits{ 0u };
 
 }; // SDFBVH
