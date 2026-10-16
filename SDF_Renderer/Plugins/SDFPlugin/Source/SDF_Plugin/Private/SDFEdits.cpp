@@ -313,21 +313,31 @@ void USDFSubsystem::DrawDebugWireframe()
 
 static void TraverseBVHDebug( UWorld* World, const FSDFBVH::FNode* Nodes, const FSDFBVH::FNode& Node )
 {
-	if (Node.IsLeaf()) return;
+	// Draw a box over the AABB of this node
+	FVector Center = static_cast<FVector>((Node.BoundsMin + Node.BoundsMax) / 2.0f);
+	FVector Extent = static_cast<FVector>((Node.BoundsMin - Node.BoundsMax) / 2.0f).GetAbs();
+	FColor  Color = Node.IsLeaf() ? FColor(224, 224, 224) : FColor(255, 255, 255);
+	DrawDebugBox( World, Center, Extent, Color );
 
 	// Loop over all child nodes of this node
-	for (uint32 i = 0; i < 2; i++)
+	if (not Node.IsLeaf())
 	{
-		const uint32 ChildIdx = Node.LeftFirst + i;
-		const FSDFBVH::FNode& ChildNode = Nodes[ChildIdx];
+		for (uint32 i = 0; i < 2; i++)
+		{
+			const uint32 ChildIdx = Node.LeftFirst + i;
+			const FSDFBVH::FNode& ChildNode = Nodes[ChildIdx];
 
-		// Draw debug arrow
-		const FVector StartPos = static_cast<FVector>((Node.BoundsMin + Node.BoundsMax) / 2.0f);
-		const FVector EndPos = static_cast<FVector>((ChildNode.BoundsMin + ChildNode.BoundsMax) / 2.0f);
-		DrawDebugDirectionalArrow( World, StartPos, EndPos, 100.0f, FColor::Cyan );
+			// Draw debug arrow towards child nodes
+			if (not ChildNode.IsLeaf())
+			{
+				const FVector StartPos = static_cast<FVector>((Node.BoundsMin + Node.BoundsMax) / 2.0f);
+				const FVector EndPos = static_cast<FVector>((ChildNode.BoundsMin + ChildNode.BoundsMax) / 2.0f);
+				DrawDebugDirectionalArrow( World, StartPos, EndPos, 500.0f, FColor::Cyan, false, -1, SDPG_MAX );
+			}
 
-		// Recursively traverse the BVH
-		TraverseBVHDebug( World, Nodes, ChildNode );
+			// Recurse further into the BVH
+			TraverseBVHDebug( World, Nodes, ChildNode );
+		}
 	}
 }
 
@@ -339,21 +349,7 @@ void USDFSubsystem::DrawDebugBVH() const
 	int CVarBVH = CVarDebugBVH.GetValueOnGameThread();
 	if (!CVarBVH) return;
 
-	uint32 NumNodes = BVH.GetNumNodes();
 	const FSDFBVH::FNode* Nodes = BVH.GetNodes();
-	if (Nodes[0].IsLeaf()) { return; }
-
-	for (uint32 i = 0; i < NumNodes; i++)
-	{
-		if (i == 1) continue;
-		const FSDFBVH::FNode& Node = Nodes[i];
-
-		const FVector Center = static_cast<FVector>((Node.BoundsMin + Node.BoundsMax) / 2.0f);
-		const FVector Extent = static_cast<FVector>((Node.BoundsMin - Node.BoundsMax) / 2.0f).GetAbs();
-
-		DrawDebugBox( World, Center, Extent, FColor::White );
-	}
-
 	const FSDFBVH::FNode& RootNode = Nodes[0];
 	TraverseBVHDebug( World, Nodes, RootNode );
 }
