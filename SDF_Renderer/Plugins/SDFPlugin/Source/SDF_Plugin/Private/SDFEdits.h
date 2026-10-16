@@ -279,7 +279,7 @@ public:
 	}
 	virtual bool IsTickableInEditor() const override { return true; }
 	void DrawDebugWireframe();
-	void DrawDebugBVH( ) const;
+	void DrawDebugBVH() const;
 
 	void RegisterSDF( const USDFComponent& Comp );
 	void UnregisterSDF( const USDFComponent& Comp );
@@ -299,6 +299,8 @@ protected:
 	virtual bool DoesSupportWorldType( const EWorldType::Type WorldType ) const override;
 
 private:
+
+	void TraverseBVHDebug( UWorld* World, const FSDFBVH::FNode& Node ) const;
 
 	// Render params, game thread
 	TMap<uint64, FSDF> Edits;

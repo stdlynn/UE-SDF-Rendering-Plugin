@@ -57,6 +57,8 @@ public:
 
 private:
 
+	friend class USDFSubsystem;
+
 	static constexpr float MAX_T{ TNumericLimits<float>::Max() };
 	static constexpr size_t NODE_STACK_CAPACITY{ 64ull };
 	static constexpr uint32 ROOT_IDX{ 0u };

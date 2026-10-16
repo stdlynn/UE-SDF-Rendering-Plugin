@@ -323,32 +323,45 @@ void USDFSubsystem::DrawDebugWireframe()
 	}
 }
 
-static void TraverseBVHDebug( UWorld* World, const FSDFBVH::FNode* Nodes, const FSDFBVH::FNode& Node )
+void USDFSubsystem::TraverseBVHDebug( UWorld* World, const FSDFBVH::FNode& Node ) const
 {
 	// Draw a box over the AABB of this node
-	FVector Center = static_cast<FVector>((Node.BoundsMin + Node.BoundsMax) / 2.0f);
-	FVector Extent = static_cast<FVector>((Node.BoundsMin - Node.BoundsMax) / 2.0f).GetAbs();
-	FColor  Color = Node.IsLeaf() ? FColor(224, 224, 224) : FColor(255, 255, 255);
-	DrawDebugBox( World, Center, Extent, Color );
+	FVector Center = static_cast<FVector>((Node.BoundsMax + Node.BoundsMin) / 2.0f);
+	FVector Extent = static_cast<FVector>((Node.BoundsMax - Node.BoundsMin) / 2.0f);
+	DrawDebugBox( World, Center, Extent, FColor(255, 255, 255));
 
-	// Loop over all child nodes of this node
-	if (not Node.IsLeaf())
+	if (Node.IsLeaf())
 	{
+		// Render each Edit's AABB
+		for (uint32 i = 0; i < Node.NumEdits; i++)
+		{
+			const FSetElementId EditIdx{ FSetElementId::FromInteger(BVH.EditIndices[Node.LeftFirst + i]) };
+			const FSDF& Edit = Edits.Get(EditIdx).Value;
+
+			FVector EditCenter = static_cast<FVector>((Edit.Bounds.Max + Edit.Bounds.Min) / 2.0f);
+			FVector EditExtent = static_cast<FVector>((Edit.Bounds.Max - Edit.Bounds.Min) / 2.0f);
+
+			DrawDebugBox(World, EditCenter, EditExtent, FColor(59, 85, 217));
+		}
+	}
+	else
+	{
+		// Keep traversing all child nodes
 		for (uint32 i = 0; i < 2; i++)
 		{
 			const uint32 ChildIdx = Node.LeftFirst + i;
-			const FSDFBVH::FNode& ChildNode = Nodes[ChildIdx];
+			const FSDFBVH::FNode& ChildNode = BVH.Nodes[ChildIdx];
 
 			// Draw debug arrow towards child nodes
 			if (not ChildNode.IsLeaf())
 			{
 				const FVector StartPos = static_cast<FVector>((Node.BoundsMin + Node.BoundsMax) / 2.0f);
 				const FVector EndPos = static_cast<FVector>((ChildNode.BoundsMin + ChildNode.BoundsMax) / 2.0f);
-				DrawDebugDirectionalArrow( World, StartPos, EndPos, 500.0f, FColor::Cyan, false, -1, SDPG_MAX );
+				DrawDebugDirectionalArrow(World, StartPos, EndPos, 500.0f, FColor::Cyan, false, -1, SDPG_MAX);
 			}
 
 			// Recurse further into the BVH
-			TraverseBVHDebug( World, Nodes, ChildNode );
+			TraverseBVHDebug(World, ChildNode);
 		}
 	}
 }
@@ -361,7 +374,6 @@ void USDFSubsystem::DrawDebugBVH() const
 	int CVarBVH = CVarDebugBVH.GetValueOnGameThread();
 	if (!CVarBVH) return;
 
-	const FSDFBVH::FNode* Nodes = BVH.GetNodes();
-	const FSDFBVH::FNode& RootNode = Nodes[0];
-	TraverseBVHDebug( World, Nodes, RootNode );
+	const FSDFBVH::FNode& RootNode = BVH.Nodes[0];
+	TraverseBVHDebug( World, RootNode );
 }
