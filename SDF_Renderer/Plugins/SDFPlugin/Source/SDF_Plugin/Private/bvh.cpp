@@ -206,9 +206,30 @@ void FSDFBVH::RefitNode( FNode& Node, const TMap<uint64, FSDF>& Edits ) const
 	}
 }
 
+FSDFBVH::FSDFBVH( const FSDFBVH& Other )
+	: NodesUsed{ Other.NodesUsed }
+	, NumEdits{ Other.NumEdits }
+{
+	// Allocate and copy nodes
+	if (NodesUsed)
+	{
+		const uint32 NumNodes{ NumNodesForNObjects( NumEdits ) };
+		Nodes = static_cast<FNode*>(FMemory::Malloc( NumNodes * sizeof( FNode ), 64u ));
+		FMemory::Memcpy( Nodes, Other.Nodes, NumNodes * sizeof( FNode ) );
+	}
+
+	// Allocate and copy edit indices (if applicable)
+	if (NumEdits)
+	{
+		EditIndices = new uint32[NumEdits];
+		FMemory::Memcpy( EditIndices, Other.EditIndices, NumEdits * sizeof( uint32 ) );
+	}
+}
+
 FSDFBVH& FSDFBVH::operator=( const FSDFBVH& Other )
 {
 	NumEdits = Other.NumEdits;
+	NodesUsed = Other.NodesUsed;
 
 	// Free old resources
 	FMemory::Free( Nodes );
@@ -217,13 +238,15 @@ FSDFBVH& FSDFBVH::operator=( const FSDFBVH& Other )
 	EditIndices = nullptr;
 
 	// Allocate and copy nodes
-	const uint32 NumNodes{ NumNodesForNObjects( NumEdits ) };
-	Nodes = static_cast<FNode*>(FMemory::Malloc( NumNodes * sizeof( FNode ), 64u ));
-	FMemory::Memcpy( Nodes, Other.Nodes, NumNodes * sizeof( FNode ) );
-	NodesUsed = 2u; // Skip the 2nd node so children share a cacheline
+	if (NodesUsed)
+	{
+		const uint32 NumNodes{ NumNodesForNObjects( NumEdits ) };
+		Nodes = static_cast<FNode*>(FMemory::Malloc( NumNodes * sizeof( FNode ), 64u ));
+		FMemory::Memcpy( Nodes, Other.Nodes, NumNodes * sizeof( FNode ) );
+	}
 
 	// Allocate and copy edit indices (if applicable)
-	if (NumNodes)
+	if (NumEdits)
 	{
 		EditIndices = new uint32[NumEdits];
 		FMemory::Memcpy( EditIndices, Other.EditIndices, NumEdits * sizeof( uint32 ) );
@@ -234,10 +257,13 @@ FSDFBVH& FSDFBVH::operator=( const FSDFBVH& Other )
 
 void FSDFBVH::ScaleBVH( float UnitScale ) const
 {
-	const uint32 NumNodes{ NumNodesForNObjects( NumEdits ) };
-	for (uint32 i{ 0 }; i < NumNodes; ++i)
+	if (Nodes)
 	{
-		Nodes[i].BoundsMin *= UnitScale;
-		Nodes[i].BoundsMax *= UnitScale;
+		const uint32 NumNodes{ NumNodesForNObjects( NumEdits ) };
+		for (uint32 i{ 0 }; i < NumNodes; ++i)
+		{
+			Nodes[i].BoundsMin *= UnitScale;
+			Nodes[i].BoundsMax *= UnitScale;
+		}
 	}
 }
