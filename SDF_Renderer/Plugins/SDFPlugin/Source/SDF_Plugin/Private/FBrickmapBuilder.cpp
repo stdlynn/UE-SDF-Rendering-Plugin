@@ -164,7 +164,18 @@ void FBrickmapBuilder::SetBrickUpdateList( const TArray<FGPUSDF>& SDFs, const FV
 
 			const float ClosestDist = DistFn::DistOrigin(SDF, ClosestPoint - SDF.Pos);
 			const float FarthestDist = DistFn::DistOrigin(SDF, FarthestPoint - SDF.Pos);
-			if (ClosestDist <= Thickness && FarthestDist >= -Thickness)
+
+			bool bOverlaps = false;
+			if (SDF.GetSDFOperation() == EOperation::Add)
+			{
+				bOverlaps = (ClosestDist <= Thickness && FarthestDist >= -Thickness);
+			}
+			else
+			{
+				bOverlaps = (ClosestDist <= Thickness);
+			}
+
+			if (bOverlaps)
 			{
 				RT.UpdateListCPU.Add( GridCellToGridIdx( FUintVector3{ GridCell } ) );
 			}
