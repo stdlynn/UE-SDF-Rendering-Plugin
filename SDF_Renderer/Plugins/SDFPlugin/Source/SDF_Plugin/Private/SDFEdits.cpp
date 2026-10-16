@@ -51,7 +51,7 @@ void FSDF::CalcBounds()
 		case EPrimitive::Line: 
 		{
 			Bounds.Min = Pos.ComponentMin( GetLinePosB() ) - GetLineRadius();
-			Bounds.Max = Pos.ComponentMin( GetLinePosB() ) + GetLineRadius();
+			Bounds.Max = Pos.ComponentMax( GetLinePosB() ) + GetLineRadius();
 			break;
 		}
 		case EPrimitive::Box:
