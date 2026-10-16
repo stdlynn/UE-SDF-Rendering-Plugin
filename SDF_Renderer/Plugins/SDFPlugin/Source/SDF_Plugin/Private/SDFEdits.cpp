@@ -50,23 +50,28 @@ void FSDF::CalcBounds()
 {
 	switch (Primitive)
 	{
+			// TODO: smoothing
 		case EPrimitive::Sphere: 
 		{
 			Bounds.Min = Pos - GetSphereRadius();
 			Bounds.Max = Pos + GetSphereRadius();
 			break;
 		}
+			// TODO: smoothing
 		case EPrimitive::Line: 
 		{
-			Bounds.Min = Pos.ComponentMin( GetLinePosB() ) - GetLineRadius();
-			Bounds.Max = Pos.ComponentMin( GetLinePosB() ) + GetLineRadius();
+			Bounds.Min = Pos.ComponentMin( Pos + GetLinePosB() ) - GetLineRadius();
+			Bounds.Max = Pos.ComponentMax( Pos + GetLinePosB() ) + GetLineRadius();
 			break;
 		}
+			// TODO: rounding
 		case EPrimitive::Box:
 		{
-			// Scale the box down by the smoothing radius
-			const float SmoothDist = bSmooths ? SmoothingStrength : 0.0f;
-			const FVector3f HalfExtent{ GetBoxHalfExtent() - SmoothDist };
+			
+
+			// Scale the box down by the rounding distance
+			const float RoundingDist = GetBoxRounding();
+			const FVector3f HalfExtent{ GetBoxHalfExtent() - RoundingDist };
 
 			// [CREDITS] Graphics Gems by Jim Arvo
 			// Rotate locally (note that Unreal Engine uses row-major)
@@ -79,11 +84,18 @@ void FSDF::CalcBounds()
 			Bounds.Min = Pos - WorldSpaceHalfExtent;
 			Bounds.Max = Pos + WorldSpaceHalfExtent;
 
-			// Expand the AABB in all directions by the smoothing distance
-			Bounds.Min -= FVector3f{ SmoothDist };
-			Bounds.Max += FVector3f{ SmoothDist };
+			// Expand the AABB in all directions by the rounding distance
+			Bounds.Min -= FVector3f{ RoundingDist };
+			Bounds.Max += FVector3f{ RoundingDist };
 			break;
 		}
+	}
+
+	// Inflate by twice the smoothing distance
+	if (bSmooths)
+	{
+		Bounds.Min -= FVector3f{ SmoothingStrength } * 2;
+		Bounds.Max += FVector3f{ SmoothingStrength } * 2;
 	}
 }
 
