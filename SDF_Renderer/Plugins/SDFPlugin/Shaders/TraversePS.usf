@@ -203,7 +203,8 @@ bool TraceScene( inout FRay Ray, out float3 Normal, float PixelFootprint )
 			float ClosestDist = MapScene( Ray.GetPosAt( DistTravelled ), TerrainDist );
 			DistTravelled += ClosestDist;
 			if (DistTravelled > Ray.RelativeMaxT) { break; }
-			if (ClosestDist < SurfaceEpsilon)
+			if (ClosestDist < SurfaceEpsilon
+				|| TerrainDist < max(TerrainEpsilon, PixelSize * 0.5))
 			{
 				Ray.SetHitT( DistTravelled );
 				Normal = GetNormalCombined( Ray.GetHitPos(), TerrainParams );
