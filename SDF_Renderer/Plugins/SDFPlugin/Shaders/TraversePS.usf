@@ -16,7 +16,7 @@ float UnitScale;
 // Brute-force terrain rendering
 uint bBandLimiting;
 float TerrainEpsilon;
-float TerrainDerivativeH;
+float TerrainDerivativeH; // TODO: remove
 
 // TODO: make this clamped
 // TODO: if outside of bounds, return Diagonal? Unsure
@@ -49,10 +49,10 @@ float3 GetTerrainNormal( float3 Pos, FTerrainParams Params, float PixelSize )
 	const float NoiseSize = Params.Amplitude * pow( Params.Persistence, max( Params.NumOctaves, 1 ) - 1 ) / Params.Frequency / 100.;
 	
 	const float2 K = float2( 1, -1 );
-	return normalize( K.xyy * DistFn::FBM( Pos + (K.xyy * TerrainDerivativeH), Params, PixelSize ) +
-					  K.yyx * DistFn::FBM( Pos + (K.yyx * TerrainDerivativeH), Params, PixelSize ) +
-					  K.yxy * DistFn::FBM( Pos + (K.yxy * TerrainDerivativeH), Params, PixelSize ) +
-					  K.xxx * DistFn::FBM( Pos + (K.xxx * TerrainDerivativeH), Params, PixelSize ) );
+	return normalize( K.xyy * DistFn::FBM( Pos + (K.xyy * NoiseSize), Params, PixelSize ) +
+					  K.yyx * DistFn::FBM( Pos + (K.yyx * NoiseSize), Params, PixelSize ) +
+					  K.yxy * DistFn::FBM( Pos + (K.yxy * NoiseSize), Params, PixelSize ) +
+					  K.xxx * DistFn::FBM( Pos + (K.xxx * NoiseSize), Params, PixelSize ) );
 }
 float3 GetNormal( float3 Pos )
 {
@@ -64,11 +64,14 @@ float3 GetNormal( float3 Pos )
 }
 float3 GetNormalCombined( float3 Pos, FTerrainParams Params )
 {
+	// TODO:
+	const float NoiseSize = Params.Amplitude * pow( Params.Persistence, max( Params.NumOctaves, 1 ) - 1 ) / Params.Frequency / 100.;
+
 	const float2 K = float2( 1, -1 );
-	return normalize( K.xyy * MapScene( Pos + (K.xyy * DerivativeH), DistFn::FBM( Pos + (K.xyy * DerivativeH), Params ) ) +
-					  K.yyx * MapScene( Pos + (K.yyx * DerivativeH), DistFn::FBM( Pos + (K.yyx * DerivativeH), Params ) ) +
-					  K.yxy * MapScene( Pos + (K.yxy * DerivativeH), DistFn::FBM( Pos + (K.yxy * DerivativeH), Params ) ) +
-					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH), DistFn::FBM( Pos + (K.xxx * DerivativeH), Params ) ) );
+	return normalize( K.xyy * MapScene( Pos + (K.xyy * DerivativeH), DistFn::FBM( Pos + (K.xyy * NoiseSize), Params ) ) +
+					  K.yyx * MapScene( Pos + (K.yyx * DerivativeH), DistFn::FBM( Pos + (K.yyx * NoiseSize), Params ) ) +
+					  K.yxy * MapScene( Pos + (K.yxy * DerivativeH), DistFn::FBM( Pos + (K.yxy * NoiseSize), Params ) ) +
+					  K.xxx * MapScene( Pos + (K.xxx * DerivativeH), DistFn::FBM( Pos + (K.xxx * NoiseSize), Params ) ) );
 }
 
 bool SphereTraceFBM( inout FRay Ray, inout float3 Normal, float PixelFootprint )
